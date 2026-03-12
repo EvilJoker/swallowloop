@@ -1,0 +1,25 @@
+[project]
+name = "swallowloop"
+version = "0.1.0"
+description = "SwallowLoop - 燕子回环：围绕代码仓的智能维护Agent"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "aider-chat>=0.86.0",
+    "psutil>=6.1.0",
+    "pygithub>=2.8.1",
+    "transitions>=0.9.3",
+]
+
+[project.scripts]
+swallowloop = "swallowloop.main:main"
+
+[tool.uv]
+package = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/swallowloop"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
