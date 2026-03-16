@@ -1,7 +1,6 @@
 """任务相关领域事件"""
 
 from dataclasses import dataclass
-from datetime import datetime
 from typing import TYPE_CHECKING
 
 from .base import DomainEvent
@@ -10,7 +9,7 @@ if TYPE_CHECKING:
     from ..model import TaskId, PullRequest, Comment
 
 
-@dataclass
+@dataclass(kw_only=True)
 class TaskAssigned(DomainEvent):
     """任务已分配工作空间"""
     task_id: "TaskId"
@@ -23,7 +22,7 @@ class TaskAssigned(DomainEvent):
         }
 
 
-@dataclass
+@dataclass(kw_only=True)
 class TaskStarted(DomainEvent):
     """任务开始执行"""
     task_id: "TaskId"
@@ -34,7 +33,7 @@ class TaskStarted(DomainEvent):
         }
 
 
-@dataclass
+@dataclass(kw_only=True)
 class TaskSubmitted(DomainEvent):
     """任务已提交 PR"""
     task_id: "TaskId"
@@ -48,7 +47,7 @@ class TaskSubmitted(DomainEvent):
         }
 
 
-@dataclass
+@dataclass(kw_only=True)
 class TaskRevised(DomainEvent):
     """任务根据反馈修改"""
     task_id: "TaskId"
@@ -61,7 +60,7 @@ class TaskRevised(DomainEvent):
         }
 
 
-@dataclass
+@dataclass(kw_only=True)
 class TaskCompleted(DomainEvent):
     """任务完成"""
     task_id: "TaskId"
@@ -72,7 +71,7 @@ class TaskCompleted(DomainEvent):
         }
 
 
-@dataclass
+@dataclass(kw_only=True)
 class TaskAborted(DomainEvent):
     """任务终止"""
     task_id: "TaskId"

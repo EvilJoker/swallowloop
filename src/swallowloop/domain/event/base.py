@@ -1,13 +1,12 @@
 """领域事件基类"""
 
-from abc import ABC
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
 
-@dataclass
-class DomainEvent(ABC):
+@dataclass(kw_only=True)
+class DomainEvent:
     """领域事件基类"""
     
     occurred_at: datetime = field(default_factory=datetime.now)

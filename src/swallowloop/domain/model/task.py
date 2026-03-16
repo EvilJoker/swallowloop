@@ -98,17 +98,17 @@ class Task:
         self._events: list[Any] = []
         
         # 初始化状态机
-        self._state = TaskState.NEW.value
         self._machine: Machine | None = None
+        self._init_machine()
     
     def _init_machine(self) -> None:
-        """初始化状态机（延迟初始化）"""
+        """初始化状态机"""
         if self._machine is None:
             self._machine = Machine(
                 model=self,
                 states=[s.value for s in TaskState],
                 transitions=self.TRANSITIONS,
-                initial=self._state,
+                initial=TaskState.NEW.value,
                 send_event=True,
                 after_state_change='_update_timestamp',
                 model_attribute='state',
@@ -129,34 +129,34 @@ class Task:
             raise InvalidStateTransition(f"Cannot assign workspace from state: {self.state}")
         self._workspace = workspace
         self.assign()  # 状态机：new → assigned
-        self._events.append(TaskAssigned(self._id, workspace.id))
+        self._events.append(TaskAssigned(task_id=self._id, workspace_id=workspace.id))
     
-    def prepare(self) -> None:
-        """准备就绪"""
+    def mark_ready(self) -> None:
+        """准备就绪（调用状态机 prepare 触发器）"""
         self._init_machine()
         self.prepare()  # 状态机：assigned → pending
     
-    def start(self) -> None:
-        """开始执行"""
+    def begin_execution(self) -> None:
+        """开始执行（调用状态机 start 触发器）"""
         from ..event import TaskStarted
         
         self._init_machine()
         self._started_at = datetime.now()
         self.start()  # 状态机：pending → in_progress
-        self._events.append(TaskStarted(self._id))
+        self._events.append(TaskStarted(task_id=self._id))
     
-    def submit(self, pr: PullRequest) -> None:
-        """提交 PR"""
+    def submit_pr(self, pr: PullRequest) -> None:
+        """提交 PR（调用状态机 submit 触发器）"""
         from ..event import TaskSubmitted
         
         self._init_machine()
         self._pr = pr
         self._submission_count += 1
         self.submit()  # 状态机：in_progress → submitted
-        self._events.append(TaskSubmitted(self._id, pr))
+        self._events.append(TaskSubmitted(task_id=self._id, pull_request=pr))
     
-    def revise(self, comment: Comment) -> None:
-        """根据评论修改"""
+    def apply_revision(self, comment: Comment) -> None:
+        """根据评论修改（调用状态机 revise 触发器）"""
         from ..event import TaskRevised
         
         self._init_machine()
@@ -164,10 +164,10 @@ class Task:
         self._task_type = TaskType.REVISION
         self._retry_count = 0
         self.revise()  # 状态机：submitted → pending
-        self._events.append(TaskRevised(self._id, comment))
+        self._events.append(TaskRevised(task_id=self._id, comment=comment))
     
-    def complete(self) -> None:
-        """完成任务"""
+    def mark_completed(self) -> None:
+        """完成任务（调用状态机 complete 触发器）"""
         self._init_machine()
         self.complete()  # 状态机：submitted → completed
     
@@ -179,8 +179,8 @@ class Task:
         """增加重试计数"""
         self._retry_count += 1
     
-    def abort(self) -> None:
-        """终止任务"""
+    def do_abort(self) -> None:
+        """终止任务（调用状态机 abort 触发器）"""
         self._init_machine()
         self.abort()  # 状态机：in_progress → aborted
     

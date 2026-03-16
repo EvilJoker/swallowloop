@@ -98,7 +98,7 @@ class TaskService:
                 continue
             
             # 用户反馈 → 触发 revise
-            task.revise(comment)
+            task.apply_revision(comment)
             self._task_repo.save(task)
             self._processed_comments.add(comment.id)
     
@@ -122,7 +122,7 @@ class TaskService:
         
         # 分配工作空间
         task.assign_workspace(workspace)
-        task.prepare()
+        task.mark_ready()
         
         # 保存
         self._workspace_repo.save(workspace)
@@ -132,7 +132,7 @@ class TaskService:
     
     def start_task(self, task: Task) -> None:
         """开始任务"""
-        task.start()
+        task.begin_execution()
         self._task_repo.save(task)
     
     def submit_task(self, task: Task, pr_number: int, pr_url: str) -> None:
@@ -145,24 +145,24 @@ class TaskService:
             branch_name=task.branch_name,
             title=task.title,
         )
-        task.submit(pr)
+        task.submit_pr(pr)
         self._task_repo.save(task)
     
     def complete_task(self, task: Task) -> None:
         """完成任务"""
-        task.complete()
+        task.mark_completed()
         self._task_repo.save(task)
     
     def abort_task(self, task: Task, reason: str) -> None:
         """终止任务"""
-        task.abort()
+        task.do_abort()
         self._task_repo.save(task)
     
     def get_pending_tasks(self) -> list[Task]:
         """获取待执行任务"""
         return [
             task for task in self._task_repo.list_active()
-            if task.state == TaskState.PENDING.value
+            if task.state in (TaskState.NEW.value, TaskState.PENDING.value)
         ]
     
     def get_in_progress_tasks(self) -> list[Task]:
