@@ -16,6 +16,7 @@ class SourceControlPort(Protocol):
     def get_issue_comments(self, issue_number: int) -> list[Comment]: ...
     def comment_on_issue(self, issue_number: int, body: str) -> None: ...
     def get_clone_url(self) -> str: ...
+    def get_pull_request(self, pr_number: int): ...
 
 
 class TaskService:
@@ -40,31 +41,62 @@ class TaskService:
         self._base_branch = base_branch
         self._processed_comments: set[int] = set()
     
-    def scan_issues(self) -> list[Task]:
-        """扫描 Issue 并创建/更新任务"""
-        issues = self._source_control.get_labeled_issues(self._issue_label)
-        tasks = []
+    def scan_issues(self) -> tuple[list[Task], list[Task]]:
+        """
+        扫描 Issue 并创建/更新任务
         
-        for issue in issues:
-            # 检查是否已有任务
+        Returns:
+            tuple: (新任务列表, 需要中止的任务列表)
+        """
+        # 1. 获取远端打开的 Issue 列表
+        open_issues = self._source_control.get_labeled_issues(self._issue_label)
+        open_issue_numbers = {issue.number for issue in open_issues}
+        
+        # 2. 获取本地活跃任务
+        local_tasks = self._task_repo.list_active()
+        
+        tasks = []
+        tasks_to_abort = []
+        
+        # 3. 检查本地任务：如果 Issue 已关闭（不在打开列表中），则需要处理
+        for task in local_tasks:
+            if task.issue_number not in open_issue_numbers:
+                # Issue 已关闭
+                if task.state == TaskState.SUBMITTED.value:
+                    # 检查 PR 是否合并
+                    if task.pr and self._is_pr_merged(task.pr.number):
+                        # PR 已合并，任务完成
+                        task.complete()
+                        self._task_repo.save(task)
+                    else:
+                        # PR 未合并，中止任务
+                        tasks_to_abort.append(task)
+                elif task.state in (TaskState.IN_PROGRESS.value, TaskState.PENDING.value, 
+                                    TaskState.NEW.value, TaskState.ASSIGNED.value):
+                    # 任务执行中或待执行，需要中止
+                    tasks_to_abort.append(task)
+        
+        # 4. 检查远端 Issue：创建新任务或检查评论
+        for issue in open_issues:
             task = self._task_repo.get_by_issue(issue.number)
             
-            if issue.state == "closed":
-                # Issue 已关闭，完成任务
-                if task and task.state == TaskState.SUBMITTED.value:
-                    task.complete()
-                    self._task_repo.save(task)
-                continue
-            
             if task is None:
-                # 创建新任务
+                # 本地无此任务，创建新任务
                 task = self._create_task_from_issue(issue)
                 tasks.append(task)
             else:
-                # 检查评论
+                # 本地已有任务，检查评论
                 self._check_comments(task, issue.number)
         
-        return tasks
+        return tasks, tasks_to_abort
+    
+    def _is_pr_merged(self, pr_number: int) -> bool:
+        """检查 PR 是否已合并"""
+        try:
+            pr = self._source_control.get_pull_request(pr_number)
+            return pr.merged
+        except Exception:
+            return False
     
     def _create_task_from_issue(self, issue: IssueDTO) -> Task:
         """从 Issue 创建任务"""
@@ -156,6 +188,12 @@ class TaskService:
     def abort_task(self, task: Task, reason: str) -> None:
         """终止任务"""
         task.do_abort()
+        self._task_repo.save(task)
+    
+    def retry_task(self, task: Task, reason: str) -> None:
+        """重试任务"""
+        task.increment_retry()
+        task.do_retry()
         self._task_repo.save(task)
     
     def get_pending_tasks(self) -> list[Task]:

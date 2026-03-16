@@ -138,6 +138,7 @@ class GitHubSourceControl(SourceControl):
             title=pr.title,
             body=pr.body or "",
             state=pr.state,
+            merged=pr.merged or False,
         )
     
     def comment_on_issue(self, issue_number: int, body: str) -> None:

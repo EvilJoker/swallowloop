@@ -109,6 +109,9 @@ class JsonTaskRepository(TaskRepository):
     
     def _deserialize(self, data: dict) -> Task:
         """反序列化任务"""
+        # 先设置状态，再创建 Task（状态机会读取这个值）
+        saved_state = data.get("state", TaskState.NEW.value)
+        
         task = Task(
             task_id=TaskId(data["task_id"]),
             issue_number=data["issue_number"],
@@ -117,10 +120,8 @@ class JsonTaskRepository(TaskRepository):
             task_type=TaskType(data.get("task_type", "new_task")),
             branch_name=data.get("branch_name"),
             repo_url=data.get("repo_url"),
+            initial_state=saved_state,
         )
-        
-        # 恢复状态
-        task._state = data.get("state", TaskState.NEW.value)
         
         # 恢复工作空间
         if data.get("workspace_id"):
