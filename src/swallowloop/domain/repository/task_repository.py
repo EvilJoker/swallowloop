@@ -1,7 +1,6 @@
 """任务仓库接口"""
 
 from abc import ABC, abstractmethod
-from typing import Protocol
 
 from ..model import Task, TaskId
 

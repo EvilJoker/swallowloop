@@ -1,7 +1,6 @@
 """工作空间仓库接口"""
 
 from abc import ABC, abstractmethod
-from typing import Protocol
 
 from ..model import Workspace
 

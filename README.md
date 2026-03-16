@@ -142,20 +142,36 @@ LLM_MODEL=gpt-4o
 ```
 swallowloop/
 ├── src/swallowloop/
-│   ├── main.py              # 主入口
-│   ├── config.py            # 配置管理
-│   ├── models.py            # 数据模型 + 状态机
-│   ├── orchestrator.py      # 调度器
-│   ├── worker.py            # 执行器
-│   ├── task_manager.py      # 任务持久化
-│   ├── workspace_manager.py # 工作空间管理
-│   └── github_client.py     # GitHub API 封装
+│   ├── main.py                    # 主入口
+│   ├── application/               # 应用层
+│   │   ├── dto/                   # 数据传输对象
+│   │   └── service/               # 应用服务
+│   │       ├── task_service.py    # 任务服务
+│   │       └── execution_service.py # 执行服务
+│   ├── domain/                    # 领域层
+│   │   ├── model/                 # 领域模型
+│   │   │   ├── task.py            # 任务聚合根
+│   │   │   ├── workspace.py       # 工作空间
+│   │   │   └── enums.py           # 枚举定义
+│   │   ├── event/                 # 领域事件
+│   │   └── repository/            # 仓库接口
+│   ├── infrastructure/            # 基础设施层
+│   │   ├── agent/                 # Agent 实现
+│   │   │   ├── aider/             # Aider Agent
+│   │   │   └── iflow/             # IFlow Agent
+│   │   ├── config/                # 配置管理
+│   │   ├── persistence/           # 持久化实现
+│   │   └── source_control/        # 源码控制
+│   │       └── github/            # GitHub API
+│   └── interfaces/                # 接口层
+│       └── cli/                   # CLI 入口
+│           └── orchestrator.py    # 主调度器
 ├── docs/
-│   ├── architecture.md      # 架构文档
-│   ├── data_models.md       # 数据模型文档
-│   └── vision.md            # 项目愿景
-├── .env_template            # 配置模板
-└── pyproject.toml           # 项目配置
+│   ├── architecture.md            # 架构文档
+│   ├── data_models.md             # 数据模型文档
+│   └── vision.md                  # 项目愿景
+├── .env_template                  # 配置模板
+└── pyproject.toml                 # 项目配置
 ```
 
 ## 开发路线

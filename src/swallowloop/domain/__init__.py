@@ -1,7 +1,15 @@
 """领域层"""
 
 from .model import Task, TaskId, TaskState, TaskType, Workspace, Comment, PullRequest
-from .event import DomainEvent, TaskAssigned, TaskStarted, TaskSubmitted, TaskRevised
+from .event import (
+    DomainEvent,
+    TaskAssigned,
+    TaskStarted,
+    TaskSubmitted,
+    TaskRevised,
+    TaskCompleted,
+    TaskAborted,
+)
 from .repository import TaskRepository, WorkspaceRepository
 
 __all__ = [
@@ -19,6 +27,8 @@ __all__ = [
     "TaskStarted",
     "TaskSubmitted",
     "TaskRevised",
+    "TaskCompleted",
+    "TaskAborted",
     # 仓库接口
     "TaskRepository",
     "WorkspaceRepository",
