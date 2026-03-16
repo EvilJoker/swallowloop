@@ -320,27 +320,28 @@ class AiderAgent(Agent):
             )
     
     def _get_changed_files(self, repo_path: Path) -> list[str]:
-        """获取已修改但未提交的文件"""
+        """获取所有变化的文件（包括未跟踪的）"""
         try:
+            # git status --porcelain 输出格式: XY filename
+            # X = 索引状态, Y = 工作树状态
+            # ?? = 未跟踪文件, A = 新增, M = 修改, D = 删除
             result = subprocess.run(
-                ["git", "diff", "--name-only"],
+                ["git", "status", "--porcelain"],
                 cwd=repo_path,
                 capture_output=True,
                 text=True,
                 check=True
             )
-            files = [f.strip() for f in result.stdout.strip().split("\n") if f.strip()]
-            
-            result2 = subprocess.run(
-                ["git", "diff", "--cached", "--name-only"],
-                cwd=repo_path,
-                capture_output=True,
-                text=True,
-                check=True
-            )
-            staged = [f.strip() for f in result2.stdout.strip().split("\n") if f.strip()]
-            
-            return list(set(files + staged))
+            files = []
+            for line in result.stdout.strip().split("\n"):
+                if line:
+                    # 格式: "XY filename" 或 "XY old -> new" (重命名)
+                    parts = line[3:].split(" -> ")
+                    if len(parts) == 2:
+                        files.append(parts[1].strip())
+                    else:
+                        files.append(line[3:].strip())
+            return [f for f in files if f]
         except subprocess.CalledProcessError:
             return []
     

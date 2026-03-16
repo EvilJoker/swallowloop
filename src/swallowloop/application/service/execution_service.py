@@ -1,23 +1,20 @@
 """执行应用服务"""
 
 import multiprocessing
-import os
-import re
-import shutil
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Protocol
 
-from ...domain.model import Task, TaskState, Workspace, PullRequest
+from ...domain.model import Task, Workspace, PullRequest
 from ...domain.repository import TaskRepository, WorkspaceRepository
-from ..dto import IssueDTO
+from ...infrastructure.agent import ExecutionResult
 
 
 class AgentPort(Protocol):
     """Agent 端口"""
     @property
     def name(self) -> str: ...
-    def execute(self, task: Task, workspace_path: Path) -> "ExecutionResult": ...
+    def execute(self, task: Task, workspace_path: Path) -> ExecutionResult: ...
     @staticmethod
     def check_available() -> tuple[bool, str]: ...
 
@@ -32,21 +29,6 @@ class SourceControlPort(Protocol):
         base_branch: str = "main",
     ) -> "PullRequestInfo": ...
     def get_pull_request(self, pr_number: int) -> "PullRequestInfo": ...
-
-
-class ExecutionResult:
-    """执行结果"""
-    def __init__(
-        self,
-        success: bool,
-        message: str,
-        files_changed: list[str] | None = None,
-        output: str = "",
-    ):
-        self.success = success
-        self.message = message
-        self.files_changed = files_changed or []
-        self.output = output
 
 
 class PullRequestInfo:

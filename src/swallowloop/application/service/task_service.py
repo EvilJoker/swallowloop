@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Protocol
 
-from ...domain.model import Task, TaskId, TaskState, TaskType, Workspace, Comment
+from ...domain.model import Task, TaskId, TaskState, Workspace, Comment
 from ...domain.repository import TaskRepository, WorkspaceRepository
 from ..dto import IssueDTO, TaskDTO, WorkspaceDTO
 
@@ -136,8 +136,6 @@ class TaskService:
     
     def assign_workspace(self, task: Task) -> Workspace:
         """为任务分配工作空间"""
-        from datetime import datetime
-        
         # 创建工作空间
         workspace_id = f"issue{task.issue_number}_{datetime.now().strftime('%Y%m%d')}"
         workspace_path = self._get_workspace_path(workspace_id)

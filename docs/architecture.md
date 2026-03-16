@@ -19,54 +19,85 @@
 
 ## 系统架构
 
+采用 **领域驱动设计 (DDD)** 分层架构：
+
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                         SwallowLoop System                          │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
-│  ┌─────────────┐    ┌─────────────────┐    ┌─────────────────┐     │
-│  │   GitHub    │───▶│   Orchestrator  │───▶│     Worker      │     │
-│  │   Issues    │    │    (调度器)      │    │    (执行器)      │     │
-│  └─────────────┘    └─────────────────┘    └─────────────────┘     │
-│         │                   │                      │               │
-│         │                   ▼                      │               │
-│         │          ┌─────────────────┐             │               │
-│         │          │  TaskManager    │             │               │
-│         │          │  (任务持久化)    │             │               │
-│         │          └─────────────────┘             │               │
-│         │                   │                      │               │
-│         │                   ▼                      ▼               │
-│         │          ┌─────────────────────────────────┐             │
-│         │          │       WorkspaceManager          │             │
-│         │          │         (工作空间管理)           │             │
-│         │          └─────────────────────────────────┘             │
-│         │                                           │               │
-│         ▼                                           ▼               │
-│  ┌─────────────────────────────────────────────────────────┐       │
-│  │                     GitHub API                          │       │
-│  │   (Issues, Comments, Branches, Pull Requests)           │       │
-│  └─────────────────────────────────────────────────────────┘       │
+│  interfaces/cli/                                                    │
+│  ┌─────────────────┐                                               │
+│  │  Orchestrator   │ ──────────────────────────────────────────┐   │
+│  │  (主调度器)      │                                           │   │
+│  └─────────────────┘                                           │   │
+│           │                                                    │   │
+│           ▼                                                    │   │
+│  application/service/                                          │   │
+│  ┌─────────────────┐    ┌─────────────────┐                    │   │
+│  │  TaskService    │    │ExecutionService │                    │   │
+│  │  (任务管理)      │    │  (执行管理)      │                    │   │
+│  └─────────────────┘    └─────────────────┘                    │   │
+│           │                      │                              │   │
+│           ▼                      ▼                              │   │
+│  domain/                                                        │   │
+│  ┌─────────────────────────────────────────┐                    │   │
+│  │ model: Task, Workspace, Comment, PR     │                    │   │
+│  │ event: TaskAssigned, TaskStarted, etc.  │                    │   │
+│  │ repository: TaskRepo, WorkspaceRepo     │                    │   │
+│  └─────────────────────────────────────────┘                    │   │
+│           │                      │                              │   │
+│           ▼                      ▼                              │   │
+│  infrastructure/                                                 │   │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌───────────┐  │   │
+│  │ persistence │ │   agent     │ │source_control│ │  config   │  │   │
+│  │ (JSON Repo) │ │(IFlow/Aider)│ │  (GitHub)    │ │ (Settings)│◀─┘   │
+│  └─────────────┘ └─────────────┘ └─────────────┘ └───────────┘      │
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 模块说明
+## 分层说明
 
-### 1. Orchestrator (调度器)
+### 1. Interfaces 层 (接口层)
 
-**文件**: `src/swallowloop/orchestrator.py`
+**目录**: `src/swallowloop/interfaces/`
 
-**职责**:
-- 扫描 GitHub Issues（带 `swallow` 标签）
-- 创建任务并分配工作空间
-- 启动 Worker 进程执行任务
-- 监控任务状态变化
-- 处理用户评论反馈
-- 提交 PR 并通知
+负责接收外部请求，协调应用服务完成任务。
 
-**状态流转**:
+| 文件 | 职责 |
+|-----|------|
+| `cli/orchestrator.py` | 主调度器，协调 TaskService 和 ExecutionService |
+
+### 2. Application 层 (应用层)
+
+**目录**: `src/swallowloop/application/`
+
+负责用例编排，协调领域对象完成业务逻辑。
+
+| 文件 | 职责 |
+|-----|------|
+| `service/task_service.py` | 任务生命周期管理：扫描 Issue、创建任务、状态流转 |
+| `service/execution_service.py` | 任务执行管理：Worker 进程管理、结果检查 |
+| `dto/issue_dto.py` | Issue 数据传输对象 |
+
+### 3. Domain 层 (领域层)
+
+**目录**: `src/swallowloop/domain/`
+
+核心业务逻辑，不依赖任何外部框架。
+
+| 目录 | 文件 | 职责 |
+|-----|------|------|
+| `model/` | `task.py` | Task 聚合根，状态机管理 |
+| `model/` | `workspace.py` | 工作空间实体 |
+| `model/` | `enums.py` | TaskState、TaskType 枚举 |
+| `event/` | `task_events.py` | 领域事件定义 |
+| `repository/` | `task_repository.py` | 任务仓库接口 |
+
+**任务状态流转**:
 ```
 new → assign → assigned → prepare → pending → start → in_progress
                                                               │
@@ -80,71 +111,19 @@ new → assign → assigned → prepare → pending → start → in_progress
                     └──────→ pending (用户反馈)
 ```
 
-### 2. Worker (执行器)
+### 4. Infrastructure 层 (基础设施层)
 
-**文件**: `src/swallowloop/worker.py`
+**目录**: `src/swallowloop/infrastructure/`
 
-**职责**:
-- 克隆/更新仓库代码
-- 创建/切换任务分支
-- 调用 Aider 进行代码修改
-- Git 提交和推送
-- 创建/更新 Pull Request
+负责技术实现细节，如数据库、外部 API、Agent 等。
 
-**工作流程**:
-```
-clone/pull repo → checkout/create branch → run aider → commit → push → create PR
-```
-
-### 3. TaskManager (任务管理)
-
-**文件**: `src/swallowloop/task_manager.py`
-
-**职责**:
-- 任务持久化存储（JSON 格式）
-- 任务的 CRUD 操作
-- 任务状态恢复（重启后）
-
-### 4. WorkspaceManager (工作空间管理)
-
-**文件**: `src/swallowloop/workspace_manager.py`
-
-**职责**:
-- 工作空间目录创建/分配
-- 工作空间命名规范
-- 工作空间清理
-
-**命名规则**: `issue{issue_number}_{repo_name}_{date}`
-
-### 5. GitHubClient (GitHub API 封装)
-
-**文件**: `src/swallowloop/github_client.py`
-
-**职责**:
-- GitHub API 调用封装
-- Issue/Comment 操作
-- PR 创建/查询
-- 分支管理
-
-### 6. Models (数据模型)
-
-**文件**: `src/swallowloop/models.py`
-
-**职责**:
-- Task 数据模型
-- TaskState 状态枚举
-- TaskType 类型枚举
-- Workspace 数据模型
-- 状态机定义
-
-### 7. Config (配置管理)
-
-**文件**: `src/swallowloop/config.py`
-
-**职责**:
-- 环境变量加载
-- 配置验证
-- 默认值管理
+| 目录 | 文件 | 职责 |
+|-----|------|------|
+| `persistence/` | `json_task_repository.py` | JSON 文件任务持久化 |
+| `agent/iflow/` | `iflow_agent.py` | IFlow Agent 实现 |
+| `agent/aider/` | `aider_agent.py` | Aider Agent 实现 |
+| `source_control/` | `github_client.py` | GitHub API 封装 |
+| `config/` | `settings.py` | 配置管理 |
 
 ---
 
@@ -153,25 +132,29 @@ clone/pull repo → checkout/create branch → run aider → commit → push →
 ```
 swallowloop/
 ├── src/swallowloop/
-│   ├── __init__.py          # 包入口
-│   ├── __main__.py          # python -m 入口
-│   ├── main.py              # 主入口，启动前清理旧进程
-│   ├── config.py            # 配置管理
-│   ├── models.py            # 数据模型 + 状态机
-│   ├── orchestrator.py      # 调度器
-│   ├── worker.py            # 执行器
-│   ├── task_manager.py      # 任务持久化
-│   ├── workspace_manager.py # 工作空间管理
-│   └── github_client.py     # GitHub API 封装
-│
+│   ├── main.py                    # 主入口
+│   ├── application/               # 应用层
+│   │   ├── dto/                   # 数据传输对象
+│   │   └── service/               # 应用服务
+│   │       ├── task_service.py    # 任务服务
+│   │       └── execution_service.py # 执行服务
+│   ├── domain/                    # 领域层
+│   │   ├── model/                 # 领域模型
+│   │   ├── event/                 # 领域事件
+│   │   └── repository/            # 仓库接口
+│   ├── infrastructure/            # 基础设施层
+│   │   ├── agent/                 # Agent 实现
+│   │   ├── config/                # 配置管理
+│   │   ├── persistence/           # 持久化实现
+│   │   └── source_control/        # 源码控制
+│   └── interfaces/                # 接口层
+│       └── cli/                   # CLI 入口
 ├── docs/
-│   ├── architecture.md      # 架构文档（本文件）
-│   └── data_models.md       # 数据模型文档
-│
-├── .env                     # 本地配置（不提交）
-├── .env_template            # 配置模板
-├── pyproject.toml           # 项目配置
-└── README.md                # 项目说明
+│   ├── architecture.md            # 架构文档
+│   ├── data_models.md             # 数据模型文档
+│   └── vision.md                  # 项目愿景
+├── .env_template                  # 配置模板
+└── pyproject.toml                 # 项目配置
 ```
 
 ---
@@ -198,7 +181,7 @@ swallowloop/
 |-----|------|-----|
 | PyGithub | >=2.8.1 | GitHub API 操作 |
 | transitions | >=0.9.3 | 状态机实现 |
-| aider-chat | >=0.86.0 | 代码生成 Agent |
+| iflow-cli-sdk | >=0.1.0 | IFlow Agent SDK |
 | psutil | >=6.1.0 | 进程管理 |
 | python-dotenv | - | 环境变量加载 |
 
