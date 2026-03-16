@@ -9,6 +9,7 @@ from .infrastructure.config import Settings
 from .infrastructure.persistence import JsonTaskRepository, JsonWorkspaceRepository
 from .infrastructure.source_control import GitHubSourceControl
 from .infrastructure.agent import Agent, IFlowAgent, AiderAgent
+from .main import helloworld
 
 __version__ = "0.1.0"
 __all__ = [
@@ -40,4 +41,6 @@ __all__ = [
     "Agent",
     "IFlowAgent",
     "AiderAgent",
+    # 工具函数
+    "helloworld",
 ]

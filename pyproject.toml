@@ -14,6 +14,7 @@ dependencies = [
 
 [project.scripts]
 swallowloop = "swallowloop.main:main"
+swallowloop-hello = "swallowloop.main:helloworld"
 
 [tool.uv]
 package = true
