@@ -198,6 +198,9 @@ class IFlowAgent(Agent):
     
     def _prepare_repo(self, task: Task, workspace_path: Path) -> ExecutionResult:
         """准备仓库"""
+        # 确保工作空间目录存在
+        workspace_path.mkdir(parents=True, exist_ok=True)
+        
         git_dir = workspace_path / ".git"
         if git_dir.exists():
             # 仓库已存在，拉取最新代码
