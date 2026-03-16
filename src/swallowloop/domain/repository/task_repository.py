@@ -28,11 +28,6 @@ class TaskRepository(ABC):
         pass
     
     @abstractmethod
-    def delete(self, task_id: TaskId) -> None:
-        """删除任务"""
-        pass
-    
-    @abstractmethod
     def list_all(self) -> list[Task]:
         """列出所有任务"""
         pass
