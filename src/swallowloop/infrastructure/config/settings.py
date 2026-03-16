@@ -24,6 +24,7 @@ class Settings:
     # Agent 配置
     agent_type: str = "iflow"  # iflow, aider
     agent_timeout: int = 600
+    auto_test: bool = False  # 是否自动运行测试
     
     # 工作目录
     work_dir: Path | None = None
@@ -60,8 +61,9 @@ class Settings:
             llm_model=os.getenv("LLM_MODEL", "gpt-4o"),
             llm_api_key=os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY"),
             llm_api_base_url=os.getenv("LLM_API_BASE_URL") or os.getenv("OPENAI_API_BASE_URL"),
-            agent_type=os.getenv("AGENT_TYPE", "aider"),
+            agent_type=os.getenv("AGENT_TYPE", "iflow"),
             agent_timeout=int(os.getenv("AGENT_TIMEOUT", "600")),
+            auto_test=os.getenv("AUTO_TEST", "false").lower() == "true",
             work_dir=work_dir,
             poll_interval=int(os.getenv("POLL_INTERVAL", "60")),
             issue_label=os.getenv("ISSUE_LABEL", "swallow"),
@@ -72,3 +74,8 @@ class Settings:
     def workspaces_dir(self) -> Path:
         """工作空间目录"""
         return (self.work_dir or Path.home() / ".swallowloop") / "workspaces"
+    
+    @property
+    def data_dir(self) -> Path:
+        """数据目录"""
+        return self.work_dir or Path.home() / ".swallowloop"
