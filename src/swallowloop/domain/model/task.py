@@ -54,6 +54,7 @@ class Task:
         {'trigger': 'retry', 'source': 'in_progress', 'dest': 'pending', 
          'conditions': 'can_retry'},
         {'trigger': 'abort', 'source': 'in_progress', 'dest': 'aborted'},
+        {'trigger': 'abort', 'source': 'submitted', 'dest': 'aborted'},
         
         # 用户反馈
         {'trigger': 'revise', 'source': 'submitted', 'dest': 'pending'},
