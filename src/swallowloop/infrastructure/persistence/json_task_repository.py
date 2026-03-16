@@ -59,15 +59,6 @@ class JsonTaskRepository(TaskRepository):
         self._tasks[str(task.issue_number)] = self._serialize(task)
         self._save()
     
-    def delete(self, task_id: TaskId) -> None:
-        """删除任务"""
-        # 查找对应的 issue_number
-        for issue_number, data in self._tasks.items():
-            if data.get("task_id") == str(task_id):
-                del self._tasks[issue_number]
-                self._save()
-                return
-    
     def list_all(self) -> list[Task]:
         """列出所有任务"""
         return [self._deserialize(data) for data in self._tasks.values()]
