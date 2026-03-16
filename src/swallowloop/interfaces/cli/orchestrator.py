@@ -171,6 +171,8 @@ class Orchestrator:
     
     def _tick(self) -> None:
         """一次调度周期"""
+        print("[SwallowLoop] 轮询开始...")
+        
         # 1. 扫描 Issue
         self._task_service.scan_issues()
         
