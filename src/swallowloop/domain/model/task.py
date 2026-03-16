@@ -69,6 +69,7 @@ class Task:
         branch_name: str | None = None,
         repo_url: str | None = None,
         max_retries: int = 5,
+        initial_state: str | None = None,
     ):
         # 基本属性
         self._id = task_id
@@ -99,16 +100,16 @@ class Task:
         
         # 初始化状态机
         self._machine: Machine | None = None
-        self._init_machine()
+        self._init_machine(initial_state)
     
-    def _init_machine(self) -> None:
+    def _init_machine(self, initial_state: str | None = None) -> None:
         """初始化状态机"""
         if self._machine is None:
             self._machine = Machine(
                 model=self,
                 states=[s.value for s in TaskState],
                 transitions=self.TRANSITIONS,
-                initial=TaskState.NEW.value,
+                initial=initial_state or TaskState.NEW.value,
                 send_event=True,
                 after_state_change='_update_timestamp',
                 model_attribute='state',
@@ -183,6 +184,11 @@ class Task:
         """终止任务（调用状态机 abort 触发器）"""
         self._init_machine()
         self.abort()  # 状态机：in_progress → aborted
+    
+    def do_retry(self) -> None:
+        """重试任务（调用状态机 retry 触发器）"""
+        self._init_machine()
+        self.retry()  # 状态机：in_progress → pending
     
     # ==================== 查询 ====================
     

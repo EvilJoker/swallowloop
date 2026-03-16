@@ -174,21 +174,36 @@ class Orchestrator:
         print("[SwallowLoop] 轮询开始...")
         
         # 1. 扫描 Issue
-        self._task_service.scan_issues()
+        _, tasks_to_abort = self._task_service.scan_issues()
         
-        # 2. 处理待执行任务
+        # 2. 处理需要中止的任务（Issue 已关闭）
+        for task in tasks_to_abort:
+            self._abort_task(task, "Issue 已关闭")
+        
+        # 3. 处理待执行任务
         pending_tasks = self._task_service.get_pending_tasks()
         for task in pending_tasks:
             self._process_task(task)
         
-        # 3. 检查执行中的任务
+        # 4. 检查执行中的任务
         in_progress_tasks = self._task_service.get_in_progress_tasks()
         for task in in_progress_tasks:
             self._check_task_result(task)
     
+    def _abort_task(self, task: Task, reason: str) -> None:
+        """中止任务"""
+        print(f"[Task] Issue#{task.issue_number} 已中止: {reason}")
+        
+        # 终止 Worker
+        self._execution_service.terminate_worker(task.issue_number)
+        
+        # 更新任务状态
+        self._task_service.abort_task(task, reason)
+    
     def _process_task(self, task: Task) -> None:
         """处理单个任务"""
-        print(f"[Task] 处理 Issue#{task.issue_number}: {task.title}")
+        retry_info = f" (重试 {task.retry_count}/{task._max_retries})" if task.retry_count > 0 else ""
+        print(f"[Task] 处理 Issue#{task.issue_number}: {task.title}{retry_info}")
         
         # 分配工作空间
         workspace = self._task_service.assign_workspace(task)
@@ -223,16 +238,20 @@ class Orchestrator:
             
             print(f"[Task] Issue#{task.issue_number} PR 已创建: {pr.html_url}")
         else:
-            # 失败
-            self._task_service.abort_task(task, result.message)
-            
-            message = self._task_service.format_comment(
-                task,
-                f"执行失败: {result.message}"
-            )
-            self._task_service.comment_on_issue(task.issue_number, message)
-            
-            print(f"[Task] Issue#{task.issue_number} 失败: {result.message}")
+            # 失败，检查是否可重试
+            if task.is_retryable:
+                print(f"[Task] Issue#{task.issue_number} 执行失败，准备重试: {result.message}")
+                self._task_service.retry_task(task, result.message)
+            else:
+                # 已达最大重试次数，中止任务
+                print(f"[Task] Issue#{task.issue_number} 执行失败（已达最大重试次数）: {result.message}")
+                self._task_service.abort_task(task, result.message)
+                
+                message = self._task_service.format_comment(
+                    task,
+                    f"执行失败: {result.message}"
+                )
+                self._task_service.comment_on_issue(task.issue_number, message)
 
 
 def kill_existing_processes() -> None:

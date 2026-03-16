@@ -27,6 +27,7 @@ class PullRequestInfo:
     title: str
     body: str = ""
     state: str = "open"
+    merged: bool = False
 
 
 @dataclass
