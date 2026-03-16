@@ -1,57 +1,49 @@
-"""Worker - 独立执行任务的进程"""
+"""Aider Agent 实现"""
 
 import os
 import subprocess
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
-from .config import Config
-from .models import Task, TaskType
+from ..base import Agent, ExecutionResult
+from ....domain.model import Task, TaskType
 
 
 @dataclass
-class TaskResult:
-    """任务执行结果"""
-    success: bool
-    message: str
-    files_changed: list[str] = field(default_factory=list)
-    output: str = ""
-    pr_url: str | None = None
-    pr_number: int | None = None
+class AiderConfig:
+    """Aider 配置"""
+    model: str = "claude-sonnet-4-20250514"
+    timeout: int = 600
+    llm_provider_config: dict[str, Any] | None = None
 
 
-class Worker:
+class AiderAgent(Agent):
     """
-    Worker - 独立执行任务
+    Aider Agent 实现
     
-    职责：
-    - 克隆仓库（首次任务）或切换分支（修改任务）
-    - 使用 Aider 进行代码开发
-    - 提交代码并创建/更新 PR
+    使用 Aider CLI 进行代码开发
     """
     
-    def __init__(self, config: Config):
-        self.config = config
-        self.model = config.llm_model
-        self.timeout = config.worker_timeout
+    def __init__(self, config: AiderConfig):
+        self._config = config
     
-    def execute(self, task: Task, workspace_path: Path) -> TaskResult:
-        """
-        执行任务
-        
-        Args:
-            task: 任务对象
-            workspace_path: 工作空间路径
-            
-        Returns:
-            TaskResult 执行结果
-        """
+    @property
+    def name(self) -> str:
+        return "aider"
+    
+    def execute(
+        self,
+        task: Task,
+        workspace_path: Path,
+    ) -> ExecutionResult:
+        """执行任务"""
         if task.task_type == TaskType.NEW_TASK:
             return self._execute_new_task(task, workspace_path)
         else:
             return self._execute_revision(task, workspace_path)
     
-    def _execute_new_task(self, task: Task, workspace_path: Path) -> TaskResult:
+    def _execute_new_task(self, task: Task, workspace_path: Path) -> ExecutionResult:
         """
         执行新任务
         
@@ -60,9 +52,9 @@ class Worker:
         2. 创建分支
         3. 运行 Aider
         4. 提交并推送
-        5. 创建 PR
         """
-        clone_url = f"https://{self.config.github_token}@github.com/{self.config.github_repo}.git"
+        # 构建 clone URL（使用 token 认证）
+        clone_url = task.repo_url
         
         # 1. 检查仓库是否已存在
         git_dir = workspace_path / ".git"
@@ -76,22 +68,21 @@ class Worker:
                     capture_output=True
                 )
                 subprocess.run(
-                    ["git", "checkout", self.config.base_branch],
+                    ["git", "checkout", "main"],
                     cwd=workspace_path,
                     check=True,
                     capture_output=True
                 )
                 subprocess.run(
-                    ["git", "pull", "origin", self.config.base_branch],
+                    ["git", "pull", "origin", "main"],
                     cwd=workspace_path,
                     check=True,
                     capture_output=True
                 )
             except subprocess.CalledProcessError as e:
-                return TaskResult(
+                return ExecutionResult(
                     success=False,
                     message=f"更新仓库失败: {e.stderr.decode() if e.stderr else str(e)}",
-                    files_changed=[],
                 )
         else:
             # 仓库不存在，克隆
@@ -103,15 +94,13 @@ class Worker:
                     capture_output=True
                 )
             except subprocess.CalledProcessError as e:
-                return TaskResult(
+                return ExecutionResult(
                     success=False,
                     message=f"克隆仓库失败: {e.stderr.decode() if e.stderr else str(e)}",
-                    files_changed=[],
                 )
         
         # 2. 创建或切换分支
         try:
-            # 先尝试切换到现有分支
             result = subprocess.run(
                 ["git", "checkout", task.branch_name],
                 cwd=workspace_path,
@@ -126,10 +115,9 @@ class Worker:
                     capture_output=True
                 )
         except subprocess.CalledProcessError as e:
-            return TaskResult(
+            return ExecutionResult(
                 success=False,
                 message=f"分支操作失败: {e.stderr.decode() if e.stderr else str(e)}",
-                files_changed=[],
             )
         
         # 3. 运行 Aider
@@ -142,10 +130,9 @@ class Worker:
         # 4. 提交
         files_changed = self._get_changed_files(workspace_path)
         if not files_changed:
-            return TaskResult(
+            return ExecutionResult(
                 success=False,
                 message="Aider 未修改任何文件",
-                files_changed=[],
             )
         
         try:
@@ -162,7 +149,7 @@ class Worker:
                 capture_output=True
             )
         except subprocess.CalledProcessError as e:
-            return TaskResult(
+            return ExecutionResult(
                 success=False,
                 message=f"提交失败: {e.stderr.decode() if e.stderr else str(e)}",
                 files_changed=files_changed,
@@ -177,21 +164,20 @@ class Worker:
                 capture_output=True
             )
         except subprocess.CalledProcessError as e:
-            return TaskResult(
+            return ExecutionResult(
                 success=False,
                 message=f"推送失败: {e.stderr.decode() if e.stderr else str(e)}",
                 files_changed=files_changed,
             )
         
-        # 6. 创建 PR（通过 GitHub API，这里先返回基本信息）
-        return TaskResult(
+        return ExecutionResult(
             success=True,
             message="任务完成，等待 PR 创建",
             files_changed=files_changed,
             output=result.output,
         )
     
-    def _execute_revision(self, task: Task, workspace_path: Path) -> TaskResult:
+    def _execute_revision(self, task: Task, workspace_path: Path) -> ExecutionResult:
         """
         执行修改任务
         
@@ -223,10 +209,9 @@ class Worker:
                 capture_output=True
             )
         except subprocess.CalledProcessError as e:
-            return TaskResult(
+            return ExecutionResult(
                 success=False,
                 message=f"切换分支失败: {e.stderr.decode() if e.stderr else str(e)}",
-                files_changed=[],
             )
         
         # 2. 运行 Aider
@@ -239,10 +224,9 @@ class Worker:
         # 3. amend 提交
         files_changed = self._get_changed_files(workspace_path)
         if not files_changed:
-            return TaskResult(
+            return ExecutionResult(
                 success=True,
                 message="无需修改",
-                files_changed=[],
             )
         
         try:
@@ -259,7 +243,7 @@ class Worker:
                 capture_output=True
             )
         except subprocess.CalledProcessError as e:
-            return TaskResult(
+            return ExecutionResult(
                 success=False,
                 message=f"Amend 提交失败: {e.stderr.decode() if e.stderr else str(e)}",
                 files_changed=files_changed,
@@ -274,24 +258,24 @@ class Worker:
                 capture_output=True
             )
         except subprocess.CalledProcessError as e:
-            return TaskResult(
+            return ExecutionResult(
                 success=False,
                 message=f"强制推送失败: {e.stderr.decode() if e.stderr else str(e)}",
                 files_changed=files_changed,
             )
         
-        return TaskResult(
+        return ExecutionResult(
             success=True,
             message="修改完成",
             files_changed=files_changed,
             output=result.output,
         )
     
-    def _run_aider(self, repo_path: Path, prompt: str) -> TaskResult:
+    def _run_aider(self, repo_path: Path, prompt: str) -> ExecutionResult:
         """运行 Aider"""
         cmd = [
             "aider",
-            f"--model", self.model,
+            f"--model", self._config.model,
             "--yes",
             "--no-auto-commits",
             "--no-dirty-commits",
@@ -301,12 +285,9 @@ class Worker:
         
         env = os.environ.copy()
         
-        # 传递 OpenAI API 配置给 aider
-        # aider 使用 AIDER_OPENAI_API_BASE 而不是 OPENAI_API_BASE_URL
-        if self.config.openai_api_key:
-            env["OPENAI_API_KEY"] = self.config.openai_api_key
-        if self.config.openai_api_base_url:
-            env["AIDER_OPENAI_API_BASE"] = self.config.openai_api_base_url
+        # 传递 LLM Provider 配置
+        if self._config.llm_provider_config:
+            env.update(self._config.llm_provider_config)
         
         try:
             result = subprocess.run(
@@ -315,30 +296,27 @@ class Worker:
                 capture_output=True,
                 text=True,
                 env=env,
-                timeout=self.timeout,
+                timeout=self._config.timeout,
             )
             
             output = result.stdout + "\n" + result.stderr
             success = result.returncode == 0
             
-            return TaskResult(
+            return ExecutionResult(
                 success=success,
                 message="Aider 完成" if success else "Aider 执行失败",
-                files_changed=[],
                 output=output,
             )
             
         except subprocess.TimeoutExpired:
-            return TaskResult(
+            return ExecutionResult(
                 success=False,
-                message=f"执行超时（{self.timeout}秒）",
-                files_changed=[],
+                message=f"执行超时（{self._config.timeout}秒）",
             )
         except FileNotFoundError:
-            return TaskResult(
+            return ExecutionResult(
                 success=False,
                 message="Aider 未安装，请执行: pip install aider-chat",
-                files_changed=[],
             )
     
     def _get_changed_files(self, repo_path: Path) -> list[str]:
@@ -369,12 +347,14 @@ class Worker:
     def _build_prompt(self, task: Task) -> str:
         """构建任务提示"""
         if task.task_type == TaskType.REVISION:
+            latest_comment = task.latest_comment
+            feedback = latest_comment.body if latest_comment else task.description
             return f"""根据审核反馈修改代码:
 
 **Issue:** {task.title}
 
 **反馈内容:**
-{task.description}
+{feedback}
 
 请根据反馈修改相关代码，确保满足审核要求。
 """
