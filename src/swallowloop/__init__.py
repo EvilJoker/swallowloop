@@ -10,12 +10,6 @@ from .infrastructure.persistence import JsonTaskRepository, JsonWorkspaceReposit
 from .infrastructure.source_control import GitHubSourceControl
 from .infrastructure.agent import Agent, IFlowAgent, AiderAgent
 
-# 向后兼容（旧 API）
-from .config import Config
-from .models import Task as LegacyTask
-from .orchestrator import Orchestrator as LegacyOrchestrator
-from .worker import Worker
-
 __version__ = "0.1.0"
 __all__ = [
     # 版本
@@ -46,9 +40,4 @@ __all__ = [
     "Agent",
     "IFlowAgent",
     "AiderAgent",
-    # 向后兼容
-    "Config",
-    "LegacyTask",
-    "LegacyOrchestrator",
-    "Worker",
 ]
