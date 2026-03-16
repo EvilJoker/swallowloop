@@ -28,6 +28,7 @@ class Config:
     base_branch: str = "main"  # 默认基础分支
     
     # Worker Agent 配置
+    agent_type: str = "iflow"  # iflow 或 aider
     llm_model: str = "claude-sonnet-4-20250514"  # Aider 使用的模型
     worker_timeout: int = 600  # Worker 超时(秒)
     auto_test: bool = False  # 是否自动运行测试
@@ -69,6 +70,7 @@ class Config:
             poll_interval=int(os.getenv("POLL_INTERVAL", "60")),
             issue_label=os.getenv("ISSUE_LABEL", "swallow"),
             base_branch=os.getenv("BASE_BRANCH", "main"),
+            agent_type=os.getenv("AGENT_TYPE", "iflow"),
             llm_model=os.getenv("LLM_MODEL", "claude-sonnet-4-20250514"),
             worker_timeout=int(os.getenv("WORKER_TIMEOUT", "600")),
             auto_test=os.getenv("AUTO_TEST", "false").lower() == "true",
