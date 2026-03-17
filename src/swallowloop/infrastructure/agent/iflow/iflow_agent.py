@@ -3,7 +3,7 @@
 import asyncio
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from iflow_sdk import (
     IFlowClient,
@@ -16,6 +16,10 @@ from iflow_sdk import (
 
 from ..base import Agent, ExecutionResult
 from ....domain.model import Task, TaskType
+
+if TYPE_CHECKING:
+    from ...config import Settings
+    from ...codebase import CodebaseManager
 
 
 @dataclass
@@ -33,8 +37,21 @@ class IFlowConfig:
 class IFlowAgent(Agent):
     """IFlow Agent 实现 - 使用 iFlow CLI SDK 进行代码开发"""
     
-    def __init__(self, config: IFlowConfig | None = None):
+    def __init__(
+        self,
+        config: IFlowConfig | None = None,
+        settings: "Settings | None" = None,
+    ):
         self._config = config or IFlowConfig()
+        self._settings = settings
+        self._codebase_manager: "CodebaseManager | None" = None
+        
+        if settings:
+            from ...codebase import CodebaseManager
+            self._codebase_manager = CodebaseManager(
+                codebase_dir=settings.codebase_dir,
+                github_repo=settings.github_repo,
+            )
     
     @property
     def name(self) -> str:
@@ -51,7 +68,12 @@ class IFlowAgent(Agent):
     
     async def _execute_new_task(self, task: Task, workspace_path: Path) -> ExecutionResult:
         # 1. 准备仓库
-        result = self._prepare_repo(task, workspace_path)
+        result = self._prepare_repo(
+            task,
+            workspace_path,
+            codebase_manager=self._codebase_manager,
+            github_token=self._settings.github_token if self._settings else None,
+        )
         if not result.success:
             return result
         

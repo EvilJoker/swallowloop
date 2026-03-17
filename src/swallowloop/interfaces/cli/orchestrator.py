@@ -137,7 +137,7 @@ class Orchestrator:
             config = IFlowConfig(
                 timeout=float(self._settings.agent_timeout),
             )
-            return IFlowAgent(config)
+            return IFlowAgent(config, settings=self._settings)
         else:
             from ...infrastructure.agent.aider import AiderConfig
             
@@ -145,7 +145,7 @@ class Orchestrator:
                 model=self._settings.llm_model,
                 timeout=self._settings.agent_timeout,
             )
-            return AiderAgent(config)
+            return AiderAgent(config, settings=self._settings)
     
     def run(self) -> None:
         """主循环"""
