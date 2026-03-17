@@ -30,6 +30,10 @@ class Settings:
     issue_label: str = "swallow"
     base_branch: str = "main"
     
+    # 日志配置
+    log_level: str = "INFO"
+    log_dir: Path | None = None
+    
     @classmethod
     def from_env(cls, dotenv_path: str | Path | None = None) -> "Settings":
         """从环境变量加载配置"""
@@ -50,6 +54,10 @@ class Settings:
         if work_dir:
             work_dir = Path(work_dir)
         
+        log_dir = os.getenv("LOG_DIR")
+        if log_dir:
+            log_dir = Path(log_dir)
+        
         return cls(
             github_token=github_token,
             github_repo=github_repo,
@@ -60,6 +68,8 @@ class Settings:
             poll_interval=int(os.getenv("POLL_INTERVAL", "60")),
             issue_label=os.getenv("ISSUE_LABEL", "swallow"),
             base_branch=os.getenv("BASE_BRANCH", "main"),
+            log_level=os.getenv("LOG_LEVEL", "INFO"),
+            log_dir=log_dir,
         )
     
     @property
@@ -71,3 +81,8 @@ class Settings:
     def data_dir(self) -> Path:
         """数据目录"""
         return self.work_dir or Path.home() / ".swallowloop"
+    
+    @property
+    def logs_dir(self) -> Path:
+        """日志目录"""
+        return self.log_dir or (self.work_dir or Path.home() / ".swallowloop") / "logs"

@@ -12,9 +12,13 @@ from ...application.service import TaskService, ExecutionService
 from ...domain.model import Task, TaskState, Comment
 from ...domain.repository import TaskRepository, WorkspaceRepository
 from ...infrastructure.config import Settings
+from ...infrastructure.logger import setup_logging, get_logger
 from ...infrastructure.persistence import JsonTaskRepository, JsonWorkspaceRepository
 from ...infrastructure.source_control import GitHubSourceControl
 from ...infrastructure.agent import IFlowAgent, AiderAgent, Agent
+
+
+logger = get_logger(__name__)
 
 
 class SourceControlAdapter:
@@ -89,6 +93,9 @@ class Orchestrator:
     def __init__(self, settings: Settings):
         self._settings = settings
         
+        # 初始化日志
+        setup_logging(log_dir=settings.logs_dir)
+        
         # 初始化基础设施
         self._task_repo: TaskRepository = JsonTaskRepository(settings.work_dir)
         self._workspace_repo: WorkspaceRepository = JsonWorkspaceRepository(settings.work_dir)
@@ -142,36 +149,36 @@ class Orchestrator:
     
     def run(self) -> None:
         """主循环"""
-        print(f"[SwallowLoop] 启动 - Agent: {self._agent.name}")
-        print(f"[SwallowLoop] 仓库: {self._settings.github_repo}")
-        print(f"[SwallowLoop] 监听标签: {self._settings.issue_label}")
+        logger.info(f"SwallowLoop 启动 - Agent: {self._agent.name}")
+        logger.info(f"仓库: {self._settings.github_repo}")
+        logger.info(f"监听标签: {self._settings.issue_label}")
         
         # 检查 Agent 可用性
         available, message = self._agent.check_available()
         if not available:
-            print(f"[ERROR] Agent 不可用: {message}")
+            logger.error(f"Agent 不可用: {message}")
             sys.exit(1)
-        print(f"[SwallowLoop] Agent 状态: {message}")
+        logger.info(f"Agent 状态: {message}")
         
         while self._running:
             try:
                 self._tick()
             except KeyboardInterrupt:
-                print("\n[SwallowLoop] 收到中断信号，正在退出...")
+                logger.info("收到中断信号，正在退出...")
                 self._running = False
             except Exception as e:
-                print(f"[ERROR] {e}")
+                logger.exception(f"运行时错误: {e}")
             
             if self._running:
                 time.sleep(self._settings.poll_interval)
         
         # 清理
         self._execution_service.terminate_all_workers()
-        print("[SwallowLoop] 已停止")
+        logger.info("SwallowLoop 已停止")
     
     def _tick(self) -> None:
         """一次调度周期"""
-        print("[SwallowLoop] 轮询开始...")
+        logger.debug("轮询开始...")
         
         # 1. 扫描 Issue
         _, tasks_to_abort = self._task_service.scan_issues()
@@ -192,7 +199,7 @@ class Orchestrator:
     
     def _abort_task(self, task: Task, reason: str) -> None:
         """中止任务"""
-        print(f"[Task] Issue#{task.issue_number} 已中止: {reason}")
+        logger.info(f"Issue#{task.issue_number} 已中止: {reason}")
         
         # 终止 Worker
         self._execution_service.terminate_worker(task.issue_number)
@@ -203,23 +210,23 @@ class Orchestrator:
     def _process_task(self, task: Task) -> None:
         """处理单个任务"""
         retry_info = f" (重试 {task.retry_count}/{task._max_retries})" if task.retry_count > 0 else ""
-        print(f"[Task] 处理 Issue#{task.issue_number}: {task.title}{retry_info}")
+        logger.info(f"处理 Issue#{task.issue_number}: {task.title}{retry_info}")
         
         # 根据状态区分处理
         if task.state == TaskState.NEW.value:
             # 新任务：分配工作空间
             workspace = self._task_service.assign_workspace(task)
-            print(f"[Task] 工作空间: {workspace.path}")
+            logger.info(f"工作空间: {workspace.path}")
         elif task.state == TaskState.PENDING.value:
             # 重试任务：已有工作空间，直接启动
-            print(f"[Task] 重试任务，工作空间: {task.workspace.path if task.workspace else '未知'}")
+            logger.info(f"重试任务，工作空间: {task.workspace.path if task.workspace else '未知'}")
         
         # 开始任务
         self._task_service.start_task(task)
         
         # 启动 Worker
         self._execution_service.start_worker(task)
-        print(f"[Task] Worker 已启动")
+        logger.info(f"Worker 已启动")
     
     def _check_task_result(self, task: Task) -> None:
         """检查任务执行结果"""
@@ -241,15 +248,15 @@ class Orchestrator:
             )
             self._task_service.comment_on_issue(task.issue_number, message)
             
-            print(f"[Task] Issue#{task.issue_number} PR 已创建: {pr.html_url}")
+            logger.info(f"Issue#{task.issue_number} PR 已创建: {pr.html_url}")
         else:
             # 失败，检查是否可重试
             if task.is_retryable:
-                print(f"[Task] Issue#{task.issue_number} 执行失败，准备重试: {result.message}")
+                logger.warning(f"Issue#{task.issue_number} 执行失败，准备重试: {result.message}")
                 self._task_service.retry_task(task, result.message)
             else:
                 # 已达最大重试次数，中止任务
-                print(f"[Task] Issue#{task.issue_number} 执行失败（已达最大重试次数）: {result.message}")
+                logger.error(f"Issue#{task.issue_number} 执行失败（已达最大重试次数）: {result.message}")
                 self._task_service.abort_task(task, result.message)
                 
                 message = self._task_service.format_comment(
@@ -278,7 +285,7 @@ def kill_existing_processes() -> None:
             is_entry = exe.endswith("/swallowloop") or "bin/swallowloop" in exe
             
             if is_entry and proc.info["pid"] != current_pid:
-                print(f"[KILL] 终止旧进程: PID={proc.info['pid']}")
+                logger.info(f"终止旧进程: PID={proc.info['pid']}")
                 proc.kill()
                 killed = True
         except (psutil.NoSuchProcess, psutil.AccessDenied):
@@ -290,6 +297,9 @@ def kill_existing_processes() -> None:
 
 def main() -> None:
     """主入口"""
+    # 初始化基本日志（用于启动阶段）
+    setup_logging()
+    
     kill_existing_processes()
     settings = Settings.from_env()
     orchestrator = Orchestrator(settings)

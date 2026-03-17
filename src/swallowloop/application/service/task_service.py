@@ -1,5 +1,6 @@
 """任务应用服务"""
 
+import logging
 import re
 from datetime import datetime
 from pathlib import Path
@@ -8,6 +9,9 @@ from typing import Protocol
 from ...domain.model import Task, TaskId, TaskState, Workspace, Comment
 from ...domain.repository import TaskRepository, WorkspaceRepository
 from ..dto import IssueDTO, TaskDTO, WorkspaceDTO
+
+
+logger = logging.getLogger(__name__)
 
 
 class SourceControlPort(Protocol):
@@ -48,12 +52,16 @@ class TaskService:
         Returns:
             tuple: (新任务列表, 需要中止的任务列表)
         """
+        logger.debug("开始扫描 Issue...")
+        
         # 1. 获取远端打开的 Issue 列表
         open_issues = self._source_control.get_labeled_issues(self._issue_label)
         open_issue_numbers = {issue.number for issue in open_issues}
+        logger.debug(f"发现 {len(open_issues)} 个打开的 Issue")
         
         # 2. 获取本地活跃任务
         local_tasks = self._task_repo.list_active()
+        logger.debug(f"本地活跃任务: {len(local_tasks)} 个")
         
         tasks = []
         tasks_to_abort = []
@@ -66,14 +74,17 @@ class TaskService:
                     # 检查 PR 是否合并
                     if task.pr and self._is_pr_merged(task.pr.number):
                         # PR 已合并，任务完成
+                        logger.info(f"Issue#{task.issue_number} PR 已合并，任务完成")
                         task.complete()
                         self._task_repo.save(task)
                     else:
                         # PR 未合并，中止任务
+                        logger.info(f"Issue#{task.issue_number} 已关闭，PR 未合并，中止任务")
                         tasks_to_abort.append(task)
                 elif task.state in (TaskState.IN_PROGRESS.value, TaskState.PENDING.value, 
                                     TaskState.NEW.value, TaskState.ASSIGNED.value):
                     # 任务执行中或待执行，需要中止
+                    logger.info(f"Issue#{task.issue_number} 已关闭，中止进行中的任务")
                     tasks_to_abort.append(task)
         
         # 4. 检查远端 Issue：创建新任务或检查评论
@@ -82,6 +93,7 @@ class TaskService:
             
             if task is None:
                 # 本地无此任务，创建新任务
+                logger.info(f"创建新任务: Issue#{issue.number} - {issue.title}")
                 task = self._create_task_from_issue(issue)
                 tasks.append(task)
             else:
@@ -130,6 +142,7 @@ class TaskService:
                 continue
             
             # 用户反馈 → 触发 revise
+            logger.info(f"Issue#{issue_number} 收到新评论，触发修改")
             task.apply_revision(comment)
             self._task_repo.save(task)
             self._processed_comments.add(comment.id)
@@ -158,6 +171,7 @@ class TaskService:
         self._workspace_repo.save(workspace)
         self._task_repo.save(task)
         
+        logger.debug(f"工作空间已分配: {workspace_path}")
         return workspace
     
     def start_task(self, task: Task) -> None:
@@ -177,22 +191,26 @@ class TaskService:
         )
         task.submit_pr(pr)
         self._task_repo.save(task)
+        logger.info(f"任务已提交: Issue#{task.issue_number}, PR=#{pr_number}")
     
     def complete_task(self, task: Task) -> None:
         """完成任务"""
         task.mark_completed()
         self._task_repo.save(task)
+        logger.info(f"任务已完成: Issue#{task.issue_number}")
     
     def abort_task(self, task: Task, reason: str) -> None:
         """终止任务"""
         task.do_abort()
         self._task_repo.save(task)
+        logger.info(f"任务已中止: Issue#{task.issue_number}, 原因: {reason}")
     
     def retry_task(self, task: Task, reason: str) -> None:
         """重试任务"""
         task.increment_retry()
         task.do_retry()
         self._task_repo.save(task)
+        logger.info(f"任务准备重试: Issue#{task.issue_number}, 重试次数: {task.retry_count}")
     
     def get_pending_tasks(self) -> list[Task]:
         """获取待执行任务"""

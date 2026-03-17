@@ -1,5 +1,6 @@
 """执行应用服务"""
 
+import logging
 import multiprocessing
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -8,6 +9,9 @@ from typing import Protocol
 from ...domain.model import Task, Workspace, PullRequest
 from ...domain.repository import TaskRepository, WorkspaceRepository
 from ...infrastructure.agent import ExecutionResult
+
+
+logger = logging.getLogger(__name__)
 
 
 class AgentPort(Protocol):
@@ -84,6 +88,8 @@ class ExecutionService:
         self._worker_processes[task.issue_number] = process
         task._worker_pid = process.pid
         task._started_at = datetime.now()
+        
+        logger.info(f"Worker 进程已启动: Issue#{task.issue_number}, PID={process.pid}")
     
     @staticmethod
     def _worker_main(
@@ -94,6 +100,7 @@ class ExecutionService:
         base_branch: str,
     ):
         """Worker 子进程入口"""
+        logger.info(f"Worker 开始执行: Issue#{task.issue_number}")
         result = agent.execute(task, workspace_path)
         
         # 写结果文件
@@ -102,6 +109,8 @@ class ExecutionService:
             f.write(f"success={result.success}\n")
             f.write(f"message={result.message}\n")
             f.write(f"files={','.join(result.files_changed)}\n")
+        
+        logger.info(f"Worker 执行完成: Issue#{task.issue_number}, success={result.success}")
     
     def check_worker_result(self, task: Task) -> ExecutionResult | None:
         """检查 Worker 执行结果"""
@@ -114,11 +123,13 @@ class ExecutionService:
         # Worker 已结束，检查结果
         workspace = self._workspace_repo.get(task.issue_number)
         if not workspace:
+            logger.error(f"工作空间丢失: Issue#{task.issue_number}")
             return ExecutionResult(False, "工作空间丢失")
         
         result_file = workspace.path.parent / f"result-{task.issue_number}"
         
         if not result_file.exists():
+            logger.error(f"Worker 异常退出: Issue#{task.issue_number}")
             return ExecutionResult(False, "Worker 异常退出")
         
         try:
@@ -129,22 +140,30 @@ class ExecutionService:
                         k, v = line.strip().split("=", 1)
                         data[k] = v
             
-            return ExecutionResult(
+            result = ExecutionResult(
                 success=data.get("success") == "True",
                 message=data.get("message", "执行完成"),
                 files_changed=data.get("files", "").split(",") if data.get("files") else [],
             )
+            
+            logger.debug(f"Worker 结果: Issue#{task.issue_number}, success={result.success}")
+            return result
         except Exception as e:
+            logger.exception(f"读取 Worker 结果失败: {e}")
             return ExecutionResult(False, str(e))
     
     def create_pull_request(self, task: Task) -> PullRequest:
         """创建 Pull Request"""
+        logger.info(f"创建 PR: Issue#{task.issue_number}, branch={task.branch_name}")
+        
         pr_info = self._source_control.create_pull_request(
             branch_name=task.branch_name,
             title=f"Issue#{task.issue_number}: {task.title}",
             body=f"## 关联 Issue\nCloses #{task.issue_number}\n\n{task.description}",
             base_branch=self._base_branch,
         )
+        
+        logger.info(f"PR 创建成功: #{pr_info.number} - {pr_info.html_url}")
         
         return PullRequest(
             number=pr_info.number,
@@ -158,19 +177,23 @@ class ExecutionService:
         """终止 Worker"""
         process = self._worker_processes.get(issue_number)
         if process and process.is_alive():
+            logger.info(f"终止 Worker: Issue#{issue_number}, PID={process.pid}")
             process.terminate()
             process.join(5)
             if process.is_alive():
+                logger.warning(f"强制终止 Worker: Issue#{issue_number}")
                 process.kill()
             del self._worker_processes[issue_number]
     
     def terminate_all_workers(self) -> None:
         """终止所有 Worker"""
+        logger.info("终止所有 Worker 进程")
         for issue_number in list(self._worker_processes.keys()):
             self.terminate_worker(issue_number)
     
     def cleanup_workspace(self, issue_number: int) -> bool:
         """清理工作空间"""
+        logger.info(f"清理工作空间: Issue#{issue_number}")
         return self._workspace_repo.release(issue_number)
     
     def cleanup_stale_workspaces(self, max_age_hours: int = 24) -> int:
@@ -179,6 +202,7 @@ class ExecutionService:
         for ws in self._workspace_repo.list_active():
             age = datetime.now() - ws.created_at
             if age > timedelta(hours=max_age_hours):
+                logger.info(f"清理过期工作空间: Issue#{ws.issue_number}, age={age}")
                 self._workspace_repo.release(ws.issue_number)
                 count += 1
         return count
