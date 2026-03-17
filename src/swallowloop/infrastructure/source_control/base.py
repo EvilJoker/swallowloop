@@ -92,6 +92,11 @@ class SourceControl(ABC):
         """检查分支是否存在"""
         pass
     
+    @abstractmethod
+    def delete_branch(self, branch_name: str) -> bool:
+        """删除远端分支"""
+        pass
+    
     @property
     @abstractmethod
     def provider_name(self) -> str:

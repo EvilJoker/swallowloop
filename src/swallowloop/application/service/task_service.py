@@ -239,23 +239,29 @@ class TaskService:
     def _generate_branch_name(self, issue_number: int, title: str, labels: list[str] | None = None) -> str:
         """生成分支名
         
-        格式: {type}/{number}-{slug}
+        格式: {type}/{number}/{date}-{slug}
         - type: 根据标签判断 (feature/fix/docs/chore)
         - number: Issue 编号
-        - slug: 标题中的英文关键词，最多 30 字符
+        - date: 月日格式 (MMDD)
+        - slug: 标题中的英文关键词，最多 20 字符
         """
+        from datetime import datetime
+        
         # 根据标签判断类型
         branch_type = self._get_branch_type(labels or [])
         
+        # 日期
+        date_str = datetime.now().strftime("%m%d")
+        
         # 从标题提取英文关键词
         slug = re.sub(r"[^a-zA-Z0-9\s-]", "", title.lower())
-        slug = re.sub(r"[\s]+", "-", slug).strip("-")[:30]
+        slug = re.sub(r"[\s]+", "-", slug).strip("-")[:20]
         
-        # 如果没有英文关键词，只用编号
+        # 构建分支名
         if slug:
-            return f"{branch_type}/{issue_number}-{slug}"
+            return f"{branch_type}/{issue_number}/{date_str}-{slug}"
         else:
-            return f"{branch_type}/{issue_number}"
+            return f"{branch_type}/{issue_number}/{date_str}"
     
     def _get_branch_type(self, labels: list[str]) -> str:
         """根据标签获取分支类型"""

@@ -81,6 +81,14 @@ class SourceControlAdapter:
     def get_pull_request(self, pr_number: int):
         """获取 PR"""
         return self._github.get_pull_request(pr_number)
+    
+    def has_branch(self, branch_name: str) -> bool:
+        """检查分支是否存在"""
+        return self._github.has_branch(branch_name)
+    
+    def delete_branch(self, branch_name: str) -> bool:
+        """删除远端分支"""
+        return self._github.delete_branch(branch_name)
 
 
 class Orchestrator:
@@ -180,19 +188,22 @@ class Orchestrator:
         """一次调度周期"""
         logger.debug("轮询开始...")
         
-        # 1. 扫描 Issue
+        # 1. 清理过期资源
+        self._cleanup_expired()
+        
+        # 2. 扫描 Issue
         _, tasks_to_abort = self._task_service.scan_issues()
         
-        # 2. 处理需要中止的任务（Issue 已关闭）
+        # 3. 处理需要中止的任务（Issue 已关闭）
         for task in tasks_to_abort:
             self._abort_task(task, "Issue 已关闭")
         
-        # 3. 处理待执行任务
+        # 4. 处理待执行任务
         pending_tasks = self._task_service.get_pending_tasks()
         for task in pending_tasks:
             self._process_task(task)
         
-        # 4. 检查执行中的任务
+        # 5. 检查执行中的任务
         in_progress_tasks = self._task_service.get_in_progress_tasks()
         for task in in_progress_tasks:
             self._check_task_result(task)
@@ -264,6 +275,46 @@ class Orchestrator:
                     f"执行失败: {result.message}"
                 )
                 self._task_service.comment_on_issue(task.issue_number, message)
+    
+    def _cleanup_expired(self) -> None:
+        """清理过期资源（已完成/已终止超过7天的任务）"""
+        import shutil
+        from datetime import datetime, timedelta
+        
+        # 获取已完成的任务
+        completed_tasks = self._task_repo.list_completed()
+        
+        for task in completed_tasks:
+            # 检查是否超过7天
+            if task.updated_at:
+                age = datetime.now() - task.updated_at
+                if age < timedelta(days=7):
+                    continue
+            else:
+                continue
+            
+            print(f"[Cleanup] 清理过期任务 Issue#{task.issue_number}")
+            
+            # 1. 删除工作空间目录
+            if task.workspace and task.workspace.path.exists():
+                try:
+                    shutil.rmtree(task.workspace.path)
+                    print(f"[Cleanup] 删除工作空间: {task.workspace.path}")
+                except Exception as e:
+                    print(f"[Cleanup] 删除工作空间失败: {e}")
+            
+            # 2. 删除远端分支（如果存在）
+            if task.branch_name:
+                if self._source_control.has_branch(task.branch_name):
+                    if self._source_control.delete_branch(task.branch_name):
+                        print(f"[Cleanup] 删除远端分支: {task.branch_name}")
+            
+            # 3. 删除任务记录
+            self._task_repo.delete(task.id)
+            
+            # 4. 删除工作空间记录
+            if task.workspace:
+                self._workspace_repo.delete(task.workspace.id)
 
 
 def kill_existing_processes() -> None:

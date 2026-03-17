@@ -70,6 +70,22 @@ class JsonTaskRepository(TaskRepository):
             if task.is_active
         ]
     
+    def list_completed(self) -> list[Task]:
+        """列出已完成/已终止的任务"""
+        return [
+            task for task in self.list_all()
+            if not task.is_active
+        ]
+    
+    def delete(self, task_id: TaskId) -> bool:
+        """删除任务"""
+        for issue_number, data in list(self._tasks.items()):
+            if data.get("task_id") == str(task_id):
+                del self._tasks[issue_number]
+                self._save()
+                return True
+        return False
+    
     def _serialize(self, task: Task) -> dict:
         """序列化任务"""
         return {

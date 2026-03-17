@@ -154,6 +154,16 @@ class GitHubSourceControl(SourceControl):
         except Exception:
             return False
     
+    def delete_branch(self, branch_name: str) -> bool:
+        """删除远端分支"""
+        try:
+            ref = self.repo.get_git_ref(f"heads/{branch_name}")
+            ref.delete()
+            return True
+        except Exception as e:
+            print(f"[GitHub] 删除分支失败: {branch_name}, 错误: {e}")
+            return False
+    
     def get_clone_url_with_token(self) -> str:
         """获取带 token 认证的 clone URL"""
         return f"https://{self._token}@github.com/{self._repo_name}.git"
