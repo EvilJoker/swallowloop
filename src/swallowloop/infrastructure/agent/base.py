@@ -84,25 +84,17 @@ class Agent(ABC):
     ) -> ExecutionResult:
         """准备仓库
         
-        如果提供了 codebase_manager 和 github_token，使用缓存机制：
-        1. 检查 codebase 缓存是否存在
-        2. 不存在则克隆，存在则更新
-        3. 从缓存复制到工作空间
-        
-        否则使用传统方式直接克隆。
+        如果工作空间不存在，克隆仓库。
+        如果工作空间已存在，不做任何操作，让 AI 通过 Step 1 提示词处理分支状态。
         """
         workspace_path.mkdir(parents=True, exist_ok=True)
         
         git_dir = workspace_path / ".git"
         if git_dir.exists():
-            # 工作空间已有仓库，更新即可
-            try:
-                cls._run_git(["fetch", "origin"], workspace_path)
-                cls._run_git(["checkout", "main"], workspace_path)
-                cls._run_git(["pull", "origin", "main"], workspace_path)
-            except subprocess.CalledProcessError as e:
-                return ExecutionResult(False, f"更新仓库失败: {e.stderr or str(e)}")
-            return ExecutionResult(True, "仓库准备完成")
+            # 工作空间已有仓库，不做任何操作
+            # AI 会通过 Step 1 提示词检查和处理分支状态
+            print(f"[Git] 工作空间已存在: {workspace_path}")
+            return ExecutionResult(True, "仓库已存在")
         
         # 使用 CodebaseManager 缓存机制
         if codebase_manager and github_token:
@@ -124,14 +116,12 @@ class Agent(ABC):
     
     @classmethod
     def _setup_branch(cls, task: "Task", workspace_path: Path) -> ExecutionResult:
-        """设置分支"""
-        try:
-            result = cls._run_git(["checkout", task.branch_name], workspace_path, check=False)
-            if result.returncode != 0:
-                cls._run_git(["checkout", "-b", task.branch_name], workspace_path)
-        except subprocess.CalledProcessError as e:
-            return ExecutionResult(False, f"分支操作失败: {e.stderr or str(e)}")
-        return ExecutionResult(True, "分支设置完成")
+        """设置分支
+        
+        分支操作现在由 AI 通过 Step 1 提示词处理，此方法保留为空操作。
+        """
+        # AI 会通过 Step 1 提示词检查和处理分支状态
+        return ExecutionResult(True, "分支操作由 AI 处理")
     
     @classmethod
     def _get_changed_files(cls, repo_path: Path) -> list[str]:
@@ -201,13 +191,61 @@ class Agent(ABC):
     
     @staticmethod
     def _build_prompt(task: "Task") -> str:
-        """构建任务提示"""
+        """构建任务提示
+        
+        包含 Step 1: 检查 Git 状态，确保在正确分支上
+        """
         from ...domain.model import TaskType
         
+        # Step 1: Git 状态检查提示
+        step1_prompt = f"""## Step 1: 检查工作空间状态
+
+在开始任务前，请先检查当前工作空间的 Git 状态。
+
+**任务分支名**: `{task.branch_name}`
+
+### 执行步骤：
+
+1. **检查当前状态**
+   ```bash
+   git branch --show-current
+   git status
+   ```
+
+2. **根据情况处理**：
+
+   **情况 A: 当前已在任务分支 `{task.branch_name}`**
+   - ✅ 保留所有现有修改，基于上次进度继续开发
+   - 直接进入 Step 2
+
+   **情况 B: 当前在其他分支或 main**
+   - 丢弃当前修改，切换到正确分支：
+   ```bash
+   git checkout .
+   git checkout main
+   git pull origin main
+   git checkout -b {task.branch_name}
+   ```
+   - 如果分支已存在于远程：
+   ```bash
+   git fetch origin
+   git checkout {task.branch_name}
+   git pull origin {task.branch_name}
+   ```
+
+3. **确认在正确分支后，进入 Step 2**
+
+---
+
+"""
+
+        # Step 2: 任务内容
         if task.task_type == TaskType.REVISION:
             latest_comment = task.latest_comment
             feedback = latest_comment.body if latest_comment else task.description
-            return f"""根据审核反馈修改代码:
+            step2_prompt = f"""## Step 2: 执行任务
+
+**任务类型**: 修改任务（根据审核反馈调整）
 
 **Issue:** {task.title}
 
@@ -216,9 +254,9 @@ class Agent(ABC):
 
 请根据反馈修改相关代码，确保满足审核要求。修改完成后，请确保代码可以正常运行。"""
         else:
-            return f"""请解决以下 GitHub Issue:
+            step2_prompt = f"""## Step 2: 执行任务
 
-**标题:** {task.title}
+**任务**: {task.title}
 
 **描述:**
 {task.description}
@@ -230,6 +268,8 @@ class Agent(ABC):
 4. 确保代码可以正常运行
 
 完成后请总结你做的修改。"""
+        
+        return step1_prompt + step2_prompt
     
     @classmethod
     def generate_report(
