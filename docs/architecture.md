@@ -99,17 +99,41 @@
 
 **任务状态流转**:
 ```
-new → assign → assigned → prepare → pending → start → in_progress
-                                                              │
-                    ┌─────────────────────────────────────────┼─────────────────┐
-                    ↓                                         ↓                 ↓
-                submitted ← submit                      pending ← retry    aborted ← abort
-                    │                                         ↑
-                    ↓                                         │
-                completed ← complete                    revise
+                    ┌── abort ──► aborted
                     │
-                    └──────→ pending (用户反馈)
+new → assign → assigned → prepare → pending → start → in_progress
+        │                               │               │
+        │                               │               │
+        └── abort ──────────────────────┼───────────────┼──► aborted
+                                        │               │
+                                        │               │
+                        retry ◄─────────┘               │
+                         │                               │
+                         ▼                               │
+                     pending ◄───────────────────────────┘
+                         ▲                               │
+                         │                               │
+                      revise                            submit
+                         │                               │
+                         │                               ▼
+                     submitted ◄───────────────────── in_progress
+                         │                               │
+                         │                               │
+                         │                               └── abort ──► aborted
+                         │
+                         ▼
+                     completed
 ```
+
+**状态转换规则**:
+- `new → assigned` - 分配工作空间
+- `assigned → pending` - 准备就绪
+- `pending → in_progress` - 开始执行
+- `in_progress → submitted` - 提交 PR
+- `submitted → completed` - PR 合并
+- `in_progress → pending` - 重试（最多 5 次）
+- `submitted → pending` - 用户反馈修改
+- `new/assigned/pending/in_progress/submitted → aborted` - 任务中止
 
 ### 4. Infrastructure 层 (基础设施层)
 
@@ -202,9 +226,37 @@ python -m swallowloop
 
 ---
 
+## 并行执行
+
+SwallowLoop 支持多任务并行执行：
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      iFlow 进程 (端口 8090)                  │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         │
+│  │  Session A  │  │  Session B  │  │  Session C  │         │
+│  │ cwd: issue1 │  │ cwd: issue2 │  │ cwd: issue3 │         │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘         │
+└─────────┼────────────────┼────────────────┼─────────────────┘
+          │                │                │
+          ▼                ▼                ▼
+    ┌──────────┐     ┌──────────┐     ┌──────────┐
+    │ Worker 1 │     │ Worker 2 │     │ Worker 3 │
+    │ (进程 A)  │     │ (进程 B)  │     │ (进程 C)  │
+    └──────────┘     └──────────┘     └──────────┘
+```
+
+**架构说明**：
+- **Orchestrator**: 单线程轮询，同时启动多个 pending 任务
+- **Worker**: 每个任务独立的 `multiprocessing.Process` 子进程
+- **iFlow SDK**: 单端口多 Session，每个 Session 指定独立工作目录 (cwd)
+- **工作空间**: 每个 Issue 独立目录，互不干扰
+
+---
+
 ## 扩展方向
 
-1. **并行任务调度** - 支持多个任务同时进行
+1. **并行任务调度** - ✅ 已支持，通过多 Worker 进程 + iFlow 多 Session 实现
 2. **巡检与技术债治理** - 定期扫描仓库生成建议任务
 3. **经验/风格记忆** - 从 PR Review 中沉淀项目知识
 4. **多平台支持** - GitLab / Gitea 等
