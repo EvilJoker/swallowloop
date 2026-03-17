@@ -154,15 +154,21 @@ class Agent(ABC):
     def _commit_and_push(cls, task: "Task", workspace_path: Path, files_changed: list[str]) -> ExecutionResult:
         """提交并推送"""
         try:
+            print(f"[Git] 添加文件到暂存区...")
             cls._run_git(["add", "-A"], workspace_path)
+            print(f"[Git] 提交更改: Issue#{task.issue_number}: {task.title}")
             cls._run_git(["commit", "-m", f"Issue#{task.issue_number}: {task.title}"], workspace_path)
         except subprocess.CalledProcessError as e:
             return ExecutionResult(False, f"提交失败: {e.stderr or str(e)}", files_changed)
         
         try:
+            print(f"[Git] 推送分支到远程: {task.branch_name}")
             cls._run_git(["push", "-u", "origin", task.branch_name], workspace_path)
+            print(f"[Git] 推送成功: {task.branch_name}")
         except subprocess.CalledProcessError as e:
-            return ExecutionResult(False, f"推送失败: {e.stderr or str(e)}", files_changed)
+            error_msg = e.stderr or str(e)
+            print(f"[Git] 推送失败: {error_msg}")
+            return ExecutionResult(False, f"推送失败: {error_msg}", files_changed)
         
         return ExecutionResult(True, "任务完成，等待 PR 创建", files_changed)
     
