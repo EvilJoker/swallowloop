@@ -92,6 +92,12 @@ class GitHubSourceControl(SourceControl):
         # head 格式: owner:branch_name
         head_ref = f"{self.repo.owner.login}:{branch_name}"
         
+        print(f"[GitHub] 创建 PR: head={head_ref}, base={base_branch}")
+        
+        # 检查远程分支是否存在
+        if not self.has_branch(branch_name):
+            raise RuntimeError(f"远程分支不存在: {branch_name}")
+        
         # 检查是否已有该分支的 open PR
         try:
             pulls = self.repo.get_pulls(
@@ -102,6 +108,7 @@ class GitHubSourceControl(SourceControl):
             for pr in pulls:
                 if pr.head.ref == branch_name:
                     # 已存在 open PR，返回它
+                    print(f"[GitHub] 已存在 PR #{pr.number}")
                     return PullRequestInfo(
                         number=pr.number,
                         html_url=pr.html_url,
@@ -110,8 +117,8 @@ class GitHubSourceControl(SourceControl):
                         body=pr.body or "",
                         state=pr.state,
                     )
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[GitHub] 检查已有 PR 失败: {e}")
         
         # 创建新 PR
         pr = self.repo.create_pull(
@@ -121,6 +128,8 @@ class GitHubSourceControl(SourceControl):
             base=base_branch,
             draft=False
         )
+        
+        print(f"[GitHub] PR 创建成功 #{pr.number}")
         
         return PullRequestInfo(
             number=pr.number,
@@ -153,8 +162,10 @@ class GitHubSourceControl(SourceControl):
         """检查分支是否存在"""
         try:
             self.repo.get_ref(f"heads/{branch_name}")
+            print(f"[GitHub] 分支存在: {branch_name}")
             return True
-        except Exception:
+        except Exception as e:
+            print(f"[GitHub] 分支不存在: {branch_name}, 错误: {e}")
             return False
     
     def delete_branch(self, branch_name: str) -> bool:
