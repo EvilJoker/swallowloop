@@ -149,8 +149,8 @@ class TaskService:
     
     def assign_workspace(self, task: Task) -> Workspace:
         """为任务分配工作空间"""
-        # 创建工作空间
-        workspace_id = f"issue{task.issue_number}_{datetime.now().strftime('%Y%m%d')}"
+        # 使用分支名作为工作空间 ID
+        workspace_id = task.branch_name
         workspace_path = self._get_workspace_path(workspace_id)
         
         workspace = Workspace(
@@ -239,7 +239,7 @@ class TaskService:
     def _generate_branch_name(self, issue_number: int, title: str, labels: list[str] | None = None) -> str:
         """生成分支名
         
-        格式: {type}/{number}/{date}-{slug}
+        格式: {type}_{number}_{date}-{slug}
         - type: 根据标签判断 (feature/fix/docs/chore)
         - number: Issue 编号
         - date: 月日格式 (MMDD)
@@ -257,11 +257,11 @@ class TaskService:
         slug = re.sub(r"[^a-zA-Z0-9\s-]", "", title.lower())
         slug = re.sub(r"[\s]+", "-", slug).strip("-")[:20]
         
-        # 构建分支名
+        # 构建分支名（使用下划线分隔）
         if slug:
-            return f"{branch_type}/{issue_number}/{date_str}-{slug}"
+            return f"{branch_type}_{issue_number}_{date_str}-{slug}"
         else:
-            return f"{branch_type}/{issue_number}/{date_str}"
+            return f"{branch_type}_{issue_number}_{date_str}"
     
     def _get_branch_type(self, labels: list[str]) -> str:
         """根据标签获取分支类型"""

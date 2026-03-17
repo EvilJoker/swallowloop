@@ -105,20 +105,8 @@ class Agent(ABC):
             try:
                 # 1. 准备缓存仓库
                 codebase_manager.prepare_codebase(github_token)
-                # 2. 复制到工作空间
-                repo_path = codebase_manager.copy_to_workspace(workspace_path)
-                # 3. 将仓库内容移动到工作空间根目录
-                import shutil
-                for item in repo_path.iterdir():
-                    if item.name != ".git":
-                        shutil.move(str(item), str(workspace_path / item.name))
-                # 移动 .git 目录
-                git_cache = repo_path / ".git"
-                git_target = workspace_path / ".git"
-                if git_cache.exists():
-                    shutil.move(str(git_cache), str(git_target))
-                # 删除空的临时目录
-                repo_path.rmdir()
+                # 2. 复制到工作空间（直接复制到 workspace_path）
+                codebase_manager.copy_to_workspace(workspace_path)
             except Exception as e:
                 return ExecutionResult(False, f"缓存复制失败: {str(e)}")
             return ExecutionResult(True, "仓库准备完成（使用缓存）")

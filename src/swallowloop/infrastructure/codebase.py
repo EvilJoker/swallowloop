@@ -104,27 +104,26 @@ class CodebaseManager:
         """将缓存仓库复制到工作空间
         
         使用 git clone --local 实现高效复制。
-        源仓库是浅克隆，目标也是浅克隆。
+        直接复制到 workspace_path，不创建子目录。
         
         Args:
             workspace_path: 目标工作空间路径
             
         Returns:
-            工作空间仓库路径
+            工作空间仓库路径（与 workspace_path 相同）
         """
         workspace_path.mkdir(parents=True, exist_ok=True)
         
-        repo_workspace_path = workspace_path / self.repo_dir_name
+        git_dir = workspace_path / ".git"
+        if git_dir.exists():
+            print(f"[Codebase] 工作空间已存在: {workspace_path}")
+            return workspace_path
         
-        if repo_workspace_path.exists():
-            print(f"[Codebase] 工作空间已存在: {repo_workspace_path}")
-            return repo_workspace_path
-        
-        print(f"[Codebase] 复制到工作空间: {repo_workspace_path}")
+        print(f"[Codebase] 复制到工作空间: {workspace_path}")
         
         # 使用 git clone --local 从本地仓库克隆（源是浅克隆，目标也是）
         result = subprocess.run(
-            ["git", "clone", "--local", str(self.repo_path), str(repo_workspace_path)],
+            ["git", "clone", "--local", str(self.repo_path), str(workspace_path)],
             capture_output=True,
             text=True
         )
@@ -132,4 +131,4 @@ class CodebaseManager:
         if result.returncode != 0:
             raise RuntimeError(f"复制仓库失败: {result.stderr}")
         
-        return repo_workspace_path
+        return workspace_path
