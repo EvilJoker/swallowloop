@@ -8,7 +8,6 @@ class CodebaseManager:
     """代码库缓存管理器
     
     用于管理代码库的本地缓存，避免每次任务都重新克隆。
-    使用浅克隆（depth=1）减少克隆时间和存储空间。
     
     缓存结构：~/.swallowloop/codebase/{owner}_{repo}/
     """
@@ -29,7 +28,6 @@ class CodebaseManager:
         """准备代码库缓存
         
         如果缓存不存在则克隆，存在则更新。
-        使用浅克隆（depth=1）提高效率。
         
         Args:
             github_token: GitHub 访问令牌
@@ -44,18 +42,18 @@ class CodebaseManager:
             print(f"[Codebase] 更新缓存: {self.github_repo}")
             self._pull()
         else:
-            # 不存在，执行浅克隆
+            # 不存在，执行克隆
             print(f"[Codebase] 克隆仓库: {self.github_repo}")
             self._clone(github_token)
         
         return self.repo_path
     
     def _clone(self, github_token: str) -> None:
-        """浅克隆仓库到缓存目录（depth=1）"""
+        """克隆仓库到缓存目录"""
         repo_url = f"https://{github_token}@github.com/{self.github_repo}.git"
         
         result = subprocess.run(
-            ["git", "clone", "--depth", "1", repo_url, str(self.repo_path)],
+            ["git", "clone", repo_url, str(self.repo_path)],
             capture_output=True,
             text=True
         )
@@ -66,10 +64,9 @@ class CodebaseManager:
         print(f"[Codebase] 克隆完成: {self.repo_path}")
     
     def _pull(self) -> None:
-        """更新缓存仓库（保持浅克隆）"""
-        # 浅仓库 fetch 保持深度
+        """更新缓存仓库"""
         result = subprocess.run(
-            ["git", "fetch", "--depth", "1"],
+            ["git", "fetch", "--all"],
             cwd=self.repo_path,
             capture_output=True,
             text=True
@@ -121,7 +118,7 @@ class CodebaseManager:
         
         print(f"[Codebase] 复制到工作空间: {workspace_path}")
         
-        # 使用 git clone --local 从本地仓库克隆（源是浅克隆，目标也是）
+        # 使用 git clone --local 从本地仓库克隆
         result = subprocess.run(
             ["git", "clone", "--local", str(self.repo_path), str(workspace_path)],
             capture_output=True,
