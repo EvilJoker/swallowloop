@@ -176,9 +176,21 @@ class Agent(ABC):
     
     @classmethod
     def _prepare_revision(cls, task: "Task", workspace_path: Path) -> ExecutionResult:
-        """准备修改任务（切换分支并拉取最新）"""
+        """准备修改任务（切换分支并拉取最新）
+        
+        支持浅克隆仓库：fetch 时指定深度获取远程分支
+        """
         try:
-            cls._run_git(["fetch", "origin"], workspace_path)
+            # 先尝试直接 fetch（完整仓库）
+            result = cls._run_git(["fetch", "origin"], workspace_path, check=False)
+            if result.returncode != 0:
+                # 可能是浅克隆，尝试 fetch 指定分支
+                result = cls._run_git(
+                    ["fetch", "--depth", "1", "origin", task.branch_name],
+                    workspace_path,
+                    check=False
+                )
+            
             cls._run_git(["checkout", task.branch_name], workspace_path)
             cls._run_git(["reset", "--hard", f"origin/{task.branch_name}"], workspace_path)
         except subprocess.CalledProcessError as e:
