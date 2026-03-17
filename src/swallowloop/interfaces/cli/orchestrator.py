@@ -205,9 +205,14 @@ class Orchestrator:
         retry_info = f" (重试 {task.retry_count}/{task._max_retries})" if task.retry_count > 0 else ""
         print(f"[Task] 处理 Issue#{task.issue_number}: {task.title}{retry_info}")
         
-        # 分配工作空间
-        workspace = self._task_service.assign_workspace(task)
-        print(f"[Task] 工作空间: {workspace.path}")
+        # 根据状态区分处理
+        if task.state == TaskState.NEW.value:
+            # 新任务：分配工作空间
+            workspace = self._task_service.assign_workspace(task)
+            print(f"[Task] 工作空间: {workspace.path}")
+        elif task.state == TaskState.PENDING.value:
+            # 重试任务：已有工作空间，直接启动
+            print(f"[Task] 重试任务，工作空间: {task.workspace.path if task.workspace else '未知'}")
         
         # 开始任务
         self._task_service.start_task(task)

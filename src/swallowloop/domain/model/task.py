@@ -53,6 +53,9 @@ class Task:
         # 异常处理
         {'trigger': 'retry', 'source': 'in_progress', 'dest': 'pending', 
          'conditions': 'can_retry'},
+        {'trigger': 'abort', 'source': 'new', 'dest': 'aborted'},
+        {'trigger': 'abort', 'source': 'assigned', 'dest': 'aborted'},
+        {'trigger': 'abort', 'source': 'pending', 'dest': 'aborted'},
         {'trigger': 'abort', 'source': 'in_progress', 'dest': 'aborted'},
         {'trigger': 'abort', 'source': 'submitted', 'dest': 'aborted'},
         
