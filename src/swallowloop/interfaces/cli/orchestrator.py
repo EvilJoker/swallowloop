@@ -17,6 +17,7 @@ from ...infrastructure.persistence import JsonTaskRepository, JsonWorkspaceRepos
 from ...infrastructure.source_control import GitHubSourceControl
 from ...infrastructure.agent import IFlowAgent, AiderAgent, Agent
 from ...infrastructure.agent.base import ExecutionResult
+from ...infrastructure.self_update import SelfUpdater
 
 
 logger = get_logger(__name__)
@@ -136,6 +137,13 @@ class Orchestrator:
             base_branch=settings.base_branch,
         )
         
+        # 初始化自更新器
+        self._self_updater: SelfUpdater | None = None
+        if settings.enable_self_update:
+            self._self_updater = SelfUpdater(
+                check_interval=settings.self_update_interval
+            )
+        
         self._running = True
     
     def _create_agent(self) -> Agent:
@@ -188,6 +196,18 @@ class Orchestrator:
     def _tick(self) -> None:
         """一次调度周期"""
         logger.debug("轮询开始...")
+        
+        # 0. 检查自更新（如果启用）
+        if self._self_updater and self._self_updater.check_for_update():
+            logger.info("发现新版本，准备更新...")
+            if self._self_updater.perform_update():
+                logger.info("更新完成，正在重启...")
+                # 先清理资源
+                self._execution_service.terminate_all_workers()
+                # 重启（exec 替换当前进程）
+                self._self_updater.restart()
+                # 如果 exec 失败，不会执行到这里
+                return
         
         # 1. 清理过期资源
         self._cleanup_expired()
