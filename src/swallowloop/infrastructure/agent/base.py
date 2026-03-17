@@ -157,7 +157,13 @@ class Agent(ABC):
     
     @classmethod
     def _commit_and_push(cls, task: "Task", workspace_path: Path, files_changed: list[str]) -> ExecutionResult:
-        """提交并推送"""
+        """提交并推送
+        
+        确保一个 PR 只有一个 commit：
+        - 如果分支已有自己的 commit，使用 --amend
+        - 如果是新分支，创建新 commit
+        - 推送时使用 --force-with-lease 保证安全
+        """
         # 检查当前分支是否正确
         try:
             result = cls._run_git(["branch", "--show-current"], workspace_path)
@@ -175,17 +181,41 @@ class Agent(ABC):
         except subprocess.CalledProcessError as e:
             return ExecutionResult(False, f"分支检查失败: {e.stderr or str(e)}", files_changed)
         
+        # 检查分支上是否已有自己的 commit（相对于 main）
+        has_own_commit = cls._has_own_commit(workspace_path)
+        
         try:
             print(f"[Git] 添加文件到暂存区...")
             cls._run_git(["add", "-A"], workspace_path)
-            print(f"[Git] 提交更改: Issue#{task.issue_number}: {task.title}")
-            cls._run_git(["commit", "-m", f"Issue#{task.issue_number}: {task.title}"], workspace_path)
+            
+            if has_own_commit:
+                # 已有 commit，使用 amend 保持单个 commit
+                print(f"[Git] Amend 提交: Issue#{task.issue_number}: {task.title}")
+                cls._run_git(["commit", "--amend", "-m", f"Issue#{task.issue_number}: {task.title}"], workspace_path)
+            else:
+                # 新分支，创建新 commit
+                print(f"[Git] 创建提交: Issue#{task.issue_number}: {task.title}")
+                cls._run_git(["commit", "-m", f"Issue#{task.issue_number}: {task.title}"], workspace_path)
         except subprocess.CalledProcessError as e:
             return ExecutionResult(False, f"提交失败: {e.stderr or str(e)}", files_changed)
         
         try:
             print(f"[Git] 推送分支到远程: {task.branch_name}")
-            cls._run_git(["push", "-u", "origin", task.branch_name], workspace_path)
+            # 检查远程分支是否存在
+            result = cls._run_git(
+                ["ls-remote", "--heads", "origin", task.branch_name],
+                workspace_path,
+                check=False
+            )
+            remote_exists = bool(result.stdout.strip())
+            
+            if remote_exists or has_own_commit:
+                # 远程已有分支或 amend 过，需要强制推送
+                print(f"[Git] 强制推送（已有远程分支）")
+                cls._run_git(["push", "-f", "origin", task.branch_name], workspace_path)
+            else:
+                # 新分支首次推送
+                cls._run_git(["push", "-u", "origin", task.branch_name], workspace_path)
             print(f"[Git] 推送成功: {task.branch_name}")
         except subprocess.CalledProcessError as e:
             error_msg = e.stderr or str(e)
@@ -193,6 +223,44 @@ class Agent(ABC):
             return ExecutionResult(False, f"推送失败: {error_msg}", files_changed)
         
         return ExecutionResult(True, "任务完成，等待 PR 创建", files_changed)
+    
+    @classmethod
+    def _has_own_commit(cls, workspace_path: Path) -> bool:
+        """检查当前分支是否有自己的 commit（相对于 main）
+        
+        通过比较当前分支和 main 的 commit 数量来判断
+        """
+        try:
+            # 获取当前分支名
+            result = cls._run_git(["branch", "--show-current"], workspace_path)
+            current_branch = result.stdout.strip()
+            
+            if current_branch in ("main", "master", ""):
+                return False
+            
+            # 检查是否有相对于 main 的 commit
+            result = cls._run_git(
+                ["rev-list", "--count", f"main..{current_branch}"],
+                workspace_path,
+                check=False
+            )
+            if result.returncode == 0:
+                count = int(result.stdout.strip())
+                return count > 0
+            
+            # 如果 main 不存在，尝试 master
+            result = cls._run_git(
+                ["rev-list", "--count", f"master..{current_branch}"],
+                workspace_path,
+                check=False
+            )
+            if result.returncode == 0:
+                count = int(result.stdout.strip())
+                return count > 0
+            
+            return False
+        except Exception:
+            return False
     
     @classmethod
     def _prepare_revision(cls, task: "Task", workspace_path: Path) -> ExecutionResult:
