@@ -247,10 +247,17 @@ class Orchestrator:
             # 仍在执行
             return
         
+        # 获取工作空间路径
+        workspace_path = task.workspace.path if task.workspace else None
+        
         if result.success:
             # 成功，创建 PR
             pr = self._execution_service.create_pull_request(task)
             self._task_service.submit_task(task, pr.number, pr.html_url)
+            
+            # 生成报告
+            if workspace_path:
+                self._agent.generate_report(task, workspace_path, result, pr.html_url)
             
             # 评论通知
             message = self._task_service.format_comment(
@@ -261,6 +268,10 @@ class Orchestrator:
             
             logger.info(f"Issue#{task.issue_number} PR 已创建: {pr.html_url}")
         else:
+            # 生成报告（失败）
+            if workspace_path:
+                self._agent.generate_report(task, workspace_path, result)
+            
             # 失败，检查是否可重试
             if task.is_retryable:
                 logger.warning(f"Issue#{task.issue_number} 执行失败，准备重试: {result.message}")

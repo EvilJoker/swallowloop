@@ -42,3 +42,6 @@ ENV/
 # SwallowLoop workspaces
 .swallowloop/
 .aider*
+
+# SwallowLoop task reports
+.swallowloop_report.md
