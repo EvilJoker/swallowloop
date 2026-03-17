@@ -89,10 +89,14 @@ class IFlowAgent(Agent):
         
         # 4. 提交推送
         files_changed = self._get_changed_files(workspace_path)
+        print(f"[Agent] 检测到修改的文件: {files_changed}")
+        
         if not files_changed:
             return ExecutionResult(False, "iFlow 未修改任何文件")
         
-        return self._commit_and_push(task, workspace_path, files_changed)
+        result = self._commit_and_push(task, workspace_path, files_changed)
+        print(f"[Agent] 提交推送结果: success={result.success}, message={result.message}")
+        return result
     
     async def _execute_revision(self, task: Task, workspace_path: Path) -> ExecutionResult:
         # 1. 切换分支
