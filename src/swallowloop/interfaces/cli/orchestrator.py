@@ -16,6 +16,7 @@ from ...infrastructure.logger import setup_logging, get_logger
 from ...infrastructure.persistence import JsonTaskRepository, JsonWorkspaceRepository
 from ...infrastructure.source_control import GitHubSourceControl
 from ...infrastructure.agent import IFlowAgent, AiderAgent, Agent
+from ...infrastructure.agent.base import ExecutionResult
 
 
 logger = get_logger(__name__)
