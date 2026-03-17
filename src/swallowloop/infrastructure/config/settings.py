@@ -34,6 +34,10 @@ class Settings:
     log_level: str = "INFO"
     log_dir: Path | None = None
     
+    # 自更新配置
+    enable_self_update: bool = True  # 是否启用自更新
+    self_update_interval: int = 300  # 检查更新的间隔（秒），默认5分钟
+    
     @classmethod
     def from_env(cls, dotenv_path: str | Path | None = None) -> "Settings":
         """从环境变量加载配置"""
@@ -70,6 +74,8 @@ class Settings:
             base_branch=os.getenv("BASE_BRANCH", "main"),
             log_level=os.getenv("LOG_LEVEL", "INFO"),
             log_dir=log_dir,
+            enable_self_update=os.getenv("ENABLE_SELF_UPDATE", "true").lower() == "true",
+            self_update_interval=int(os.getenv("SELF_UPDATE_INTERVAL", "300")),
         )
     
     @property
