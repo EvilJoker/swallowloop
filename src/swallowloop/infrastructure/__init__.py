@@ -4,6 +4,7 @@ from .agent import Agent, AiderAgent, IFlowAgent
 from .source_control import SourceControl, GitHubSourceControl
 from .persistence import JsonTaskRepository, JsonWorkspaceRepository
 from .config import Settings
+from .logger import setup_logging, get_logger, DailyRotatingFileHandler
 
 __all__ = [
     # Agent
@@ -18,4 +19,8 @@ __all__ = [
     "JsonWorkspaceRepository",
     # Config
     "Settings",
+    # Logger
+    "setup_logging",
+    "get_logger",
+    "DailyRotatingFileHandler",
 ]
