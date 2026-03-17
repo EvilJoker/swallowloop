@@ -96,6 +96,7 @@ class IFlowAgent(Agent):
             timeout=self._config.timeout,
             approval_mode=self._config.approval_mode,
             file_access=self._config.file_access,
+            file_allowed_dirs=[str(repo_path)],  # 显式设置允许访问的目录
             file_read_only=self._config.file_read_only,
             log_level=self._config.log_level,
             cwd=str(repo_path),
