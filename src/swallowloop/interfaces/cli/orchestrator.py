@@ -250,23 +250,39 @@ class Orchestrator:
         # 获取工作空间路径
         workspace_path = task.workspace.path if task.workspace else None
         
+        logger.info(f"Issue#{task.issue_number} 执行结果: success={result.success}, message={result.message}, files={result.files_changed}")
+        
         if result.success:
             # 成功，创建 PR
-            pr = self._execution_service.create_pull_request(task)
-            self._task_service.submit_task(task, pr.number, pr.html_url)
-            
-            # 生成报告
-            if workspace_path:
-                self._agent.generate_report(task, workspace_path, result, pr.html_url)
-            
-            # 评论通知
-            message = self._task_service.format_comment(
-                task, 
-                f"已创建 PR #{pr.number}: {pr.html_url}"
-            )
-            self._task_service.comment_on_issue(task.issue_number, message)
-            
-            logger.info(f"Issue#{task.issue_number} PR 已创建: {pr.html_url}")
+            try:
+                pr = self._execution_service.create_pull_request(task)
+                self._task_service.submit_task(task, pr.number, pr.html_url)
+                
+                # 生成报告
+                if workspace_path:
+                    self._agent.generate_report(task, workspace_path, result, pr.html_url)
+                
+                # 评论通知
+                message = self._task_service.format_comment(
+                    task, 
+                    f"已创建 PR #{pr.number}: {pr.html_url}"
+                )
+                self._task_service.comment_on_issue(task.issue_number, message)
+                
+                logger.info(f"Issue#{task.issue_number} PR 已创建: {pr.html_url}")
+            except Exception as e:
+                # PR 创建失败，视为任务失败
+                logger.error(f"Issue#{task.issue_number} PR 创建失败: {e}")
+                result = ExecutionResult(False, f"PR 创建失败: {e}", result.files_changed)
+                # 继续走失败处理逻辑
+                if workspace_path:
+                    self._agent.generate_report(task, workspace_path, result)
+                if task.is_retryable:
+                    self._task_service.retry_task(task, result.message)
+                else:
+                    self._task_service.abort_task(task, result.message)
+                    message = self._task_service.format_comment(task, f"执行失败: {result.message}")
+                    self._task_service.comment_on_issue(task.issue_number, message)
         else:
             # 生成报告（失败）
             if workspace_path:
