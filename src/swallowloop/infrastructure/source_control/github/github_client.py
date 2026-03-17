@@ -89,11 +89,14 @@ class GitHubSourceControl(SourceControl):
         base_branch: str = "main",
     ) -> PullRequestInfo:
         """创建 Pull Request"""
+        # head 格式: owner:branch_name
+        head_ref = f"{self.repo.owner.login}:{branch_name}"
+        
         # 检查是否已有该分支的 open PR
         try:
             pulls = self.repo.get_pulls(
                 state="open",
-                head=f"{self.repo.owner.login}:{branch_name}",
+                head=head_ref,
                 base=base_branch
             )
             for pr in pulls:
@@ -114,7 +117,7 @@ class GitHubSourceControl(SourceControl):
         pr = self.repo.create_pull(
             title=title,
             body=body,
-            head=branch_name,
+            head=head_ref,
             base=base_branch,
             draft=False
         )
