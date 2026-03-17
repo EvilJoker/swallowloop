@@ -85,14 +85,25 @@ class Agent(ABC):
         """准备仓库
         
         如果工作空间不存在，克隆仓库。
-        如果工作空间已存在，不做任何操作，让 AI 通过 Step 1 提示词处理分支状态。
+        如果工作空间已存在，确保 origin 指向正确的 GitHub 仓库。
         """
         workspace_path.mkdir(parents=True, exist_ok=True)
         
         git_dir = workspace_path / ".git"
         if git_dir.exists():
-            # 工作空间已有仓库，不做任何操作
-            # AI 会通过 Step 1 提示词检查和处理分支状态
+            # 工作空间已有仓库
+            # 确保远程 origin 指向 GitHub（而不是本地缓存）
+            if task.repo_url:
+                try:
+                    # 检查当前 origin
+                    result = cls._run_git(["remote", "get-url", "origin"], workspace_path, check=False)
+                    current_origin = result.stdout.strip()
+                    if current_origin != task.repo_url:
+                        print(f"[Git] 更新 origin: {current_origin} -> {task.repo_url}")
+                        cls._run_git(["remote", "set-url", "origin", task.repo_url], workspace_path)
+                except subprocess.CalledProcessError as e:
+                    return ExecutionResult(False, f"更新远程地址失败: {e.stderr or str(e)}")
+            
             print(f"[Git] 工作空间已存在: {workspace_path}")
             return ExecutionResult(True, "仓库已存在")
         
@@ -103,6 +114,10 @@ class Agent(ABC):
                 codebase_manager.prepare_codebase(github_token)
                 # 2. 复制到工作空间（直接复制到 workspace_path）
                 codebase_manager.copy_to_workspace(workspace_path)
+                # 3. 更新 origin 指向 GitHub
+                if task.repo_url:
+                    cls._run_git(["remote", "set-url", "origin", task.repo_url], workspace_path)
+                    print(f"[Git] 已设置 origin: {task.repo_url}")
             except Exception as e:
                 return ExecutionResult(False, f"缓存复制失败: {str(e)}")
             return ExecutionResult(True, "仓库准备完成（使用缓存）")
