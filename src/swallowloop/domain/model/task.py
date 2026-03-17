@@ -266,6 +266,11 @@ class Task:
         return self.state not in (TaskState.COMPLETED.value, TaskState.ABORTED.value)
     
     @property
+    def is_retryable(self) -> bool:
+        """任务是否可重试"""
+        return self._retry_count < self._max_retries
+    
+    @property
     def events(self) -> list[Any]:
         """获取领域事件"""
         return self._events.copy()
