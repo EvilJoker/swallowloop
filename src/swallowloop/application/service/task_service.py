@@ -112,7 +112,7 @@ class TaskService:
     
     def _create_task_from_issue(self, issue: IssueDTO) -> Task:
         """从 Issue 创建任务"""
-        branch_name = self._generate_branch_name(issue.number, issue.title)
+        branch_name = self._generate_branch_name(issue.number, issue.title, issue.labels)
         
         task = Task(
             task_id=TaskId(f"task-{issue.number}"),
@@ -236,11 +236,49 @@ class TaskService:
         count = task.submission_count + 1
         return f"[SwallowLoop Bot][{timestamp}][提交次数 {count}] {message}"
     
-    def _generate_branch_name(self, issue_number: int, title: str) -> str:
-        """生成分支名"""
+    def _generate_branch_name(self, issue_number: int, title: str, labels: list[str] | None = None) -> str:
+        """生成分支名
+        
+        格式: {type}/{number}-{slug}
+        - type: 根据标签判断 (feature/fix/docs/chore)
+        - number: Issue 编号
+        - slug: 标题中的英文关键词，最多 30 字符
+        """
+        # 根据标签判断类型
+        branch_type = self._get_branch_type(labels or [])
+        
+        # 从标题提取英文关键词
         slug = re.sub(r"[^a-zA-Z0-9\s-]", "", title.lower())
         slug = re.sub(r"[\s]+", "-", slug).strip("-")[:30]
-        return f"Issue{issue_number}_{slug}"
+        
+        # 如果没有英文关键词，只用编号
+        if slug:
+            return f"{branch_type}/{issue_number}-{slug}"
+        else:
+            return f"{branch_type}/{issue_number}"
+    
+    def _get_branch_type(self, labels: list[str]) -> str:
+        """根据标签获取分支类型"""
+        label_set = {label.lower() for label in labels}
+        
+        # bug 相关
+        if label_set & {"bug", "fix", "defect"}:
+            return "fix"
+        
+        # 文档相关
+        if label_set & {"documentation", "docs", "document"}:
+            return "docs"
+        
+        # 维护相关
+        if label_set & {"chore", "refactor", "maintenance"}:
+            return "chore"
+        
+        # 测试相关
+        if label_set & {"test", "testing"}:
+            return "test"
+        
+        # 默认为 feature
+        return "feature"
     
     def _get_workspace_path(self, workspace_id: str) -> Path:
         """获取工作空间路径"""
