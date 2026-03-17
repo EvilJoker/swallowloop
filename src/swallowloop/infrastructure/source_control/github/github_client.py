@@ -94,10 +94,6 @@ class GitHubSourceControl(SourceControl):
         
         print(f"[GitHub] 创建 PR: head={head_ref}, base={base_branch}")
         
-        # 检查远程分支是否存在
-        if not self.has_branch(branch_name):
-            raise RuntimeError(f"远程分支不存在: {branch_name}")
-        
         # 检查是否已有该分支的 open PR
         try:
             pulls = self.repo.get_pulls(
@@ -120,16 +116,19 @@ class GitHubSourceControl(SourceControl):
         except Exception as e:
             print(f"[GitHub] 检查已有 PR 失败: {e}")
         
-        # 创建新 PR
-        pr = self.repo.create_pull(
-            title=title,
-            body=body,
-            head=head_ref,
-            base=base_branch,
-            draft=False
-        )
-        
-        print(f"[GitHub] PR 创建成功 #{pr.number}")
+        # 创建新 PR（如果分支不存在会抛出异常）
+        try:
+            pr = self.repo.create_pull(
+                title=title,
+                body=body,
+                head=head_ref,
+                base=base_branch,
+                draft=False
+            )
+            print(f"[GitHub] PR 创建成功 #{pr.number}")
+        except Exception as e:
+            print(f"[GitHub] 创建 PR 失败: {e}")
+            raise RuntimeError(f"创建 PR 失败: {e}")
         
         return PullRequestInfo(
             number=pr.number,
@@ -161,7 +160,8 @@ class GitHubSourceControl(SourceControl):
     def has_branch(self, branch_name: str) -> bool:
         """检查分支是否存在"""
         try:
-            self.repo.get_git_ref(f"heads/{branch_name}")
+            # 使用 get_branch 而不是 get_git_ref
+            self.repo.get_branch(branch_name)
             print(f"[GitHub] 分支存在: {branch_name}")
             return True
         except Exception as e:
