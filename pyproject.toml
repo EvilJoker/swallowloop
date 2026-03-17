@@ -6,10 +6,13 @@ readme = "README.md"
 requires-python = ">=3.11,<3.13"
 dependencies = [
     "aider-chat>=0.86.0",
+    "aiofiles>=24.1.0",
+    "fastapi>=0.115.0",
     "iflow-cli-sdk>=0.1.11",
     "psutil>=6.1.0",
     "pygithub>=2.8.1",
     "transitions>=0.9.3",
+    "uvicorn>=0.32.0",
 ]
 
 [project.optional-dependencies]
@@ -20,6 +23,7 @@ dev = [
 
 [project.scripts]
 swallowloop = "swallowloop.main:main"
+swallowloop-web = "swallowloop.interfaces.web.cli:main"
 
 [tool.uv]
 package = true

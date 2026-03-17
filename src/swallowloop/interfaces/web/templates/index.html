@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SwallowLoop Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@2.0.3"></script>
+    <style>
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #1e293b; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+        
+        /* 状态徽章动画 */
+        .status-badge { transition: all 0.3s ease; }
+        .status-badge:hover { transform: scale(1.05); }
+        
+        /* 加载动画 */
+        .htmx-request .htmx-indicator { display: inline-block; }
+        .htmx-indicator { display: none; }
+        
+        /* 卡片悬停效果 */
+        .task-card { transition: all 0.2s ease; }
+        .task-card:hover { 
+            transform: translateY(-2px);
+            box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.5);
+        }
+        
+        /* 脉冲动画 */
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 1; }
+            100% { transform: scale(1.3); opacity: 0; }
+        }
+        .pulse-animation::before {
+            content: '';
+            position: absolute;
+            inset: -4px;
+            border-radius: 9999px;
+            background: currentColor;
+            opacity: 0.3;
+            animation: pulse-ring 1.5s ease-out infinite;
+        }
+    </style>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: { 50: '#f0f9ff', 100: '#e0f2fe', 200: '#bae6fd', 300: '#7dd3fc', 400: '#38bdf8', 500: '#0ea5e9', 600: '#0284c7', 700: '#0369a1', 800: '#075985', 900: '#0c4a6e' },
+                        accent: { 400: '#a78bfa', 500: '#8b5cf6', 600: '#7c3aed' },
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen">
+    <!-- 导航栏 -->
+    <nav class="bg-slate-800/80 backdrop-blur-md border-b border-slate-700/50 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center shadow-lg shadow-primary-500/20">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold bg-gradient-to-r from-primary-400 to-accent-400 bg-clip-text text-transparent">
+                            SwallowLoop
+                        </h1>
+                        <p class="text-xs text-slate-400">燕子回环 · 任务调度面板</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="text-sm text-slate-400" id="lastUpdate">-</div>
+                    <button onclick="refreshTasks()" class="p-2 rounded-lg bg-slate-700/50 hover:bg-slate-700 transition-colors">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主内容 -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- 统计卡片 -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8" id="statsCards">
+            <div class="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-slate-400 text-sm">待执行</p>
+                        <p class="text-2xl font-bold text-yellow-400" id="pendingCount">-</p>
+                    </div>
+                    <div class="w-10 h-10 rounded-lg bg-yellow-500/10 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-slate-400 text-sm">执行中</p>
+                        <p class="text-2xl font-bold text-blue-400" id="inProgressCount">-</p>
+                    </div>
+                    <div class="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-blue-400 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-slate-400 text-sm">已完成</p>
+                        <p class="text-2xl font-bold text-green-400" id="completedCount">-</p>
+                    </div>
+                    <div class="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-slate-400 text-sm">已中止</p>
+                        <p class="text-2xl font-bold text-red-400" id="abortedCount">-</p>
+                    </div>
+                    <div class="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 任务列表 -->
+        <div class="bg-slate-800/30 rounded-2xl border border-slate-700/50 overflow-hidden">
+            <div class="px-6 py-4 border-b border-slate-700/50 flex items-center justify-between">
+                <h2 class="text-lg font-semibold">任务列表</h2>
+                <div class="flex items-center space-x-2">
+                    <span class="htmx-indicator">
+                        <svg class="w-5 h-5 animate-spin text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </span>
+                </div>
+            </div>
+            
+            <div 
+                id="taskList" 
+                hx-get="/api/tasks" 
+                hx-trigger="load, every 5s"
+                hx-swap="innerHTML"
+                hx-indicator="closest .bg-slate-800\/30"
+            >
+                <!-- 任务卡片将由 HTMX 加载 -->
+                <div class="p-12 text-center text-slate-400">
+                    <svg class="w-12 h-12 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                    <p>加载中...</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 任务列表由 JavaScript 动态渲染，HTMX 获取数据 -->
+
+    <script>
+        // 处理任务列表响应
+        document.body.addEventListener('htmx:afterSwap', function(evt) {
+            if (evt.detail.target.id === 'taskList') {
+                const tasks = JSON.parse(evt.detail.xhr.responseText);
+                renderTaskList(tasks);
+                updateStats(tasks);
+            }
+        });
+
+        function renderTaskList(tasks) {
+            const container = document.getElementById('taskList');
+            
+            if (tasks.length === 0) {
+                container.innerHTML = `
+                    <div class="p-12 text-center text-slate-400">
+                        <svg class="w-12 h-12 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                        </svg>
+                        <p class="text-lg font-medium">暂无任务</p>
+                        <p class="text-sm mt-1">在 GitHub Issue 上添加 "swallow" 标签来创建任务</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const html = tasks.map(task => {
+                const stateConfig = getStateConfig(task.state);
+                return `
+                    <a href="/tasks/${task.issue_number}" class="task-card block px-6 py-4 hover:bg-slate-800/50 transition-colors border-b border-slate-700/30 last:border-b-0">
+                        <div class="flex items-center justify-between">
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center flex-wrap gap-2">
+                                    <span class="status-badge px-2.5 py-1 rounded-full text-xs font-medium ${stateConfig.class}">
+                                        ${stateConfig.icon} ${stateConfig.text}
+                                    </span>
+                                    <span class="text-sm text-slate-400">#${task.issue_number}</span>
+                                    <h3 class="text-sm font-medium truncate">${escapeHtml(task.title)}</h3>
+                                </div>
+                                <div class="mt-2 flex items-center flex-wrap gap-3 text-xs text-slate-500">
+                                    <span class="flex items-center gap-1">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                        </svg>
+                                        ${task.branch_name || '-'}
+                                    </span>
+                                    <span>${task.created_at}</span>
+                                    ${task.pr_number ? `<a href="${task.pr_url}" target="_blank" class="text-primary-400 hover:text-primary-300 flex items-center gap-1" onclick="event.stopPropagation()">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                        </svg>
+                                        PR #${task.pr_number}
+                                    </a>` : ''}
+                                    ${task.retry_count > 0 ? `<span class="text-yellow-400">重试 ${task.retry_count}次</span>` : ''}
+                                </div>
+                            </div>
+                            <svg class="w-5 h-5 text-slate-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                            </svg>
+                        </div>
+                    </a>
+                `;
+            }).join('');
+            
+            container.innerHTML = `<div class="divide-y divide-slate-700/50">${html}</div>`;
+            updateLastUpdate();
+        }
+
+        function getStateConfig(state) {
+            const configs = {
+                'new': { text: '新建', class: 'bg-slate-500/20 text-slate-300', icon: '○' },
+                'assigned': { text: '已分配', class: 'bg-indigo-500/20 text-indigo-300', icon: '◐' },
+                'pending': { text: '待执行', class: 'bg-yellow-500/20 text-yellow-300', icon: '◔' },
+                'in_progress': { text: '执行中', class: 'bg-blue-500/20 text-blue-300 relative', icon: '◑' },
+                'submitted': { text: '已提交', class: 'bg-purple-500/20 text-purple-300', icon: '◕' },
+                'completed': { text: '已完成', class: 'bg-green-500/20 text-green-300', icon: '●' },
+                'aborted': { text: '已中止', class: 'bg-red-500/20 text-red-300', icon: '✕' },
+            };
+            return configs[state] || configs['new'];
+        }
+
+        function updateStats(tasks) {
+            const stats = {
+                pending: 0,
+                in_progress: 0,
+                completed: 0,
+                aborted: 0
+            };
+            
+            tasks.forEach(task => {
+                if (task.state === 'new' || task.state === 'assigned' || task.state === 'pending') {
+                    stats.pending++;
+                } else if (task.state === 'in_progress') {
+                    stats.in_progress++;
+                } else if (task.state === 'completed') {
+                    stats.completed++;
+                } else if (task.state === 'aborted') {
+                    stats.aborted++;
+                }
+            });
+            
+            animateNumber('pendingCount', stats.pending);
+            animateNumber('inProgressCount', stats.in_progress);
+            animateNumber('completedCount', stats.completed);
+            animateNumber('abortedCount', stats.aborted);
+        }
+
+        function animateNumber(elementId, targetValue) {
+            const el = document.getElementById(elementId);
+            const currentValue = parseInt(el.textContent) || 0;
+            if (currentValue !== targetValue) {
+                el.style.transform = 'scale(1.2)';
+                el.textContent = targetValue;
+                setTimeout(() => el.style.transform = 'scale(1)', 200);
+            }
+        }
+
+        function updateLastUpdate() {
+            const now = new Date();
+            document.getElementById('lastUpdate').textContent = 
+                `更新于 ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+        }
+
+        function refreshTasks() {
+            htmx.trigger('#taskList', 'htmx:trigger');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>

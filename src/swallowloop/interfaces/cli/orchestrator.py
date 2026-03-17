@@ -3,6 +3,7 @@
 import os
 import sys
 import time
+import multiprocessing
 from pathlib import Path
 
 import psutil
@@ -98,8 +99,10 @@ class Orchestrator:
     协调 TaskService 和 ExecutionService，实现完整的任务处理流程
     """
     
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, web_port: int = 8080, enable_web: bool = True):
         self._settings = settings
+        self._web_port = web_port
+        self._enable_web = enable_web
         
         # 初始化日志
         setup_logging(log_dir=settings.logs_dir)
@@ -135,6 +138,9 @@ class Orchestrator:
             base_branch=settings.base_branch,
         )
         
+        # Web Dashboard 进程
+        self._web_process: multiprocessing.Process | None = None
+        
         self._running = True
     
     def _create_agent(self) -> Agent:
@@ -168,21 +174,56 @@ class Orchestrator:
             sys.exit(1)
         logger.info(f"Agent 状态: {message}")
         
-        while self._running:
-            try:
-                self._tick()
-            except KeyboardInterrupt:
-                logger.info("收到中断信号，正在退出...")
-                self._running = False
-            except Exception as e:
-                logger.exception(f"运行时错误: {e}")
-            
-            if self._running:
-                time.sleep(self._settings.poll_interval)
+        # 启动 Web Dashboard
+        if self._enable_web:
+            self._start_web_dashboard()
         
-        # 清理
-        self._execution_service.terminate_all_workers()
-        logger.info("SwallowLoop 已停止")
+        try:
+            while self._running:
+                try:
+                    self._tick()
+                except KeyboardInterrupt:
+                    logger.info("收到中断信号，正在退出...")
+                    self._running = False
+                except Exception as e:
+                    logger.exception(f"运行时错误: {e}")
+                
+                if self._running:
+                    time.sleep(self._settings.poll_interval)
+        finally:
+            # 清理
+            self._execution_service.terminate_all_workers()
+            self._stop_web_dashboard()
+            logger.info("SwallowLoop 已停止")
+    
+    def _start_web_dashboard(self) -> None:
+        """启动 Web Dashboard 服务"""
+        from ..web.server import start_web_server_process
+        from ...infrastructure.persistence import JsonTaskRepository, JsonWorkspaceRepository
+        
+        def task_repo_factory():
+            return JsonTaskRepository(self._settings.work_dir)
+        
+        def workspace_repo_factory():
+            return JsonWorkspaceRepository(self._settings.work_dir)
+        
+        self._web_process = start_web_server_process(
+            task_repo_factory=task_repo_factory,
+            workspace_repo_factory=workspace_repo_factory,
+            port=self._web_port,
+            logs_dir=self._settings.logs_dir,
+        )
+        logger.info(f"Web Dashboard 已启动: http://localhost:{self._web_port}")
+    
+    def _stop_web_dashboard(self) -> None:
+        """停止 Web Dashboard 服务"""
+        if self._web_process and self._web_process.is_alive():
+            logger.info("正在停止 Web Dashboard...")
+            self._web_process.terminate()
+            self._web_process.join(timeout=5)
+            if self._web_process.is_alive():
+                self._web_process.kill()
+            logger.info("Web Dashboard 已停止")
     
     def _tick(self) -> None:
         """一次调度周期"""

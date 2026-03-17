@@ -1,5 +1,7 @@
 """工作空间实体"""
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
