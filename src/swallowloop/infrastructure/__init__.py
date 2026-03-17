@@ -5,6 +5,7 @@ from .source_control import SourceControl, GitHubSourceControl
 from .persistence import JsonTaskRepository, JsonWorkspaceRepository
 from .config import Settings
 from .logger import setup_logging, get_logger, DailyRotatingFileHandler
+from .self_update import SelfUpdater
 
 __all__ = [
     # Agent
@@ -23,4 +24,6 @@ __all__ = [
     "setup_logging",
     "get_logger",
     "DailyRotatingFileHandler",
+    # Self Update
+    "SelfUpdater",
 ]
