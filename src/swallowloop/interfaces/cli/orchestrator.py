@@ -1,5 +1,7 @@
 """DDD 架构的 Orchestrator 实现"""
 
+import argparse
+import asyncio
 import os
 import sys
 import time
@@ -17,6 +19,7 @@ from ...infrastructure.persistence import JsonTaskRepository, JsonWorkspaceRepos
 from ...infrastructure.source_control import GitHubSourceControl
 from ...infrastructure.agent import IFlowAgent, AiderAgent, Agent
 from ...infrastructure.agent.base import ExecutionResult
+from ...infrastructure.logging.dashboard_handler import get_dashboard_handler
 
 
 logger = get_logger(__name__)
@@ -99,8 +102,10 @@ class Orchestrator:
     协调 TaskService 和 ExecutionService，实现完整的任务处理流程
     """
     
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, enable_dashboard: bool = True, dashboard_port: int = 8080):
         self._settings = settings
+        self._enable_dashboard = enable_dashboard
+        self._dashboard_port = dashboard_port
         
         # 初始化日志
         setup_logging(log_dir=settings.logs_dir)
@@ -136,7 +141,48 @@ class Orchestrator:
             base_branch=settings.base_branch,
         )
         
+        # 初始化 Dashboard 服务
+        self._dashboard = None
+        if enable_dashboard:
+            self._init_dashboard()
+        
         self._running = True
+    
+    def _init_dashboard(self):
+        """初始化 Dashboard 服务"""
+        from ..web import DashboardServer
+        
+        self._dashboard = DashboardServer(
+            task_repository=self._task_repo,
+            workspace_repository=self._workspace_repo,
+            settings=self._settings,
+            port=self._dashboard_port,
+        )
+        
+        # 启动 Dashboard 服务（在后台进程）
+        self._dashboard_process = self._dashboard.start_in_process()
+        
+        # 设置日志处理器
+        dashboard_handler = get_dashboard_handler()
+        dashboard_handler.set_emit_callback(self._emit_log_to_dashboard)
+        
+        logger.info(f"Dashboard 已启动: http://localhost:{self._dashboard_port}")
+    
+    def _emit_log_to_dashboard(self, issue_number: int, level: str, message: str, source: str):
+        """发送日志到 Dashboard"""
+        if self._dashboard is None:
+            return
+        
+        # 使用 asyncio 发送（需要在事件循环中运行）
+        try:
+            loop = asyncio.new_event_loop()
+            loop.run_until_complete(
+                self._dashboard.emit_log(issue_number, level, message, source)
+            )
+            loop.close()
+        except Exception as e:
+            # 静默处理错误，避免影响主流程
+            pass
     
     def _create_agent(self) -> Agent:
         """根据配置创建 Agent"""
@@ -224,6 +270,10 @@ class Orchestrator:
         retry_info = f" (重试 {task.retry_count}/{task._max_retries})" if task.retry_count > 0 else ""
         logger.info(f"处理 Issue#{task.issue_number}: {task.title}{retry_info}")
         
+        # 设置当前日志上下文
+        dashboard_handler = get_dashboard_handler()
+        dashboard_handler.set_current_issue(task.issue_number)
+        
         # 根据状态区分处理
         if task.state == TaskState.NEW.value:
             # 新任务：分配工作空间
@@ -239,6 +289,10 @@ class Orchestrator:
         # 启动 Worker
         self._execution_service.start_worker(task)
         logger.info(f"Worker 已启动")
+        
+        # 注册 Worker 到 Dashboard
+        if self._dashboard and task._worker_pid:
+            self._dashboard.register_worker(task.issue_number, task._worker_pid)
     
     def _check_task_result(self, task: Task) -> None:
         """检查任务执行结果"""
@@ -376,12 +430,22 @@ def kill_existing_processes() -> None:
 
 def main() -> None:
     """主入口"""
+    # 解析命令行参数
+    parser = argparse.ArgumentParser(description="SwallowLoop - 燕子回环")
+    parser.add_argument("--no-dashboard", action="store_true", help="禁用 Web Dashboard")
+    parser.add_argument("--port", type=int, default=8080, help="Dashboard 端口号 (默认: 8080)")
+    args = parser.parse_args()
+    
     # 初始化基本日志（用于启动阶段）
     setup_logging()
     
     kill_existing_processes()
     settings = Settings.from_env()
-    orchestrator = Orchestrator(settings)
+    orchestrator = Orchestrator(
+        settings,
+        enable_dashboard=not args.no_dashboard,
+        dashboard_port=args.port,
+    )
     orchestrator.run()
 
 

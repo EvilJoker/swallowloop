@@ -10,6 +10,9 @@ dependencies = [
     "psutil>=6.1.0",
     "pygithub>=2.8.1",
     "transitions>=0.9.3",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "websockets>=14.0",
 ]
 
 [project.optional-dependencies]
@@ -20,6 +23,7 @@ dev = [
 
 [project.scripts]
 swallowloop = "swallowloop.main:main"
+swallowloop-dashboard = "swallowloop.interfaces.web.standalone:main"
 
 [tool.uv]
 package = true
