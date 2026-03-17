@@ -36,3 +36,13 @@ class TaskRepository(ABC):
     def list_active(self) -> list[Task]:
         """列出活跃任务"""
         pass
+    
+    @abstractmethod
+    def list_completed(self) -> list[Task]:
+        """列出已完成/已终止的任务"""
+        pass
+    
+    @abstractmethod
+    def delete(self, task_id: TaskId) -> bool:
+        """删除任务"""
+        pass

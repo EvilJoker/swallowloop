@@ -66,6 +66,28 @@ class JsonWorkspaceRepository(WorkspaceRepository):
             for data in self._workspaces.values()
         ]
     
+    def list_expired(self, days: int = 7) -> list[Workspace]:
+        """列出过期的工作空间（创建时间超过指定天数）"""
+        from datetime import timedelta
+        
+        cutoff = datetime.now() - timedelta(days=days)
+        
+        return [
+            self._deserialize(data)
+            for data in self._workspaces.values()
+            if datetime.fromisoformat(data.get("created_at", datetime.now().isoformat())) < cutoff
+        ]
+    
+    def delete(self, workspace_id: str) -> bool:
+        """删除工作空间记录"""
+        # 根据 workspace_id 查找
+        for issue_number, data in list(self._workspaces.items()):
+            if data.get("id") == workspace_id:
+                del self._workspaces[issue_number]
+                self._save()
+                return True
+        return False
+    
     def _serialize(self, workspace: Workspace) -> dict:
         """序列化工作空间"""
         return {
