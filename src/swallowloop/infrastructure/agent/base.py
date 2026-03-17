@@ -143,6 +143,23 @@ class Agent(ABC):
     @classmethod
     def _commit_and_push(cls, task: "Task", workspace_path: Path, files_changed: list[str]) -> ExecutionResult:
         """提交并推送"""
+        # 检查当前分支是否正确
+        try:
+            result = cls._run_git(["branch", "--show-current"], workspace_path)
+            current_branch = result.stdout.strip()
+            print(f"[Git] 当前分支: {current_branch}, 目标分支: {task.branch_name}")
+            
+            if current_branch != task.branch_name:
+                # 当前分支不正确，需要切换或创建
+                print(f"[Git] 分支不匹配，尝试切换到 {task.branch_name}")
+                result = cls._run_git(["checkout", task.branch_name], workspace_path, check=False)
+                if result.returncode != 0:
+                    # 分支不存在，创建新分支
+                    print(f"[Git] 分支不存在，创建新分支 {task.branch_name}")
+                    cls._run_git(["checkout", "-b", task.branch_name], workspace_path)
+        except subprocess.CalledProcessError as e:
+            return ExecutionResult(False, f"分支检查失败: {e.stderr or str(e)}", files_changed)
+        
         try:
             print(f"[Git] 添加文件到暂存区...")
             cls._run_git(["add", "-A"], workspace_path)
