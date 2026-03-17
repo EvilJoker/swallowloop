@@ -37,6 +37,11 @@ class CommentInfo:
     body: str
     author: str
     created_at: datetime = field(default_factory=datetime.now)
+    
+    @property
+    def is_bot_comment(self) -> bool:
+        """是否为机器人评论"""
+        return "SwallowLoop" in self.body
 
 
 class SourceControl(ABC):

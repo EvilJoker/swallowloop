@@ -12,6 +12,12 @@ dependencies = [
     "transitions>=0.9.3",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+]
+
 [project.scripts]
 swallowloop = "swallowloop.main:main"
 
@@ -20,6 +26,14 @@ package = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/swallowloop"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-v --tb=short"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
 
 [build-system]
 requires = ["hatchling"]
