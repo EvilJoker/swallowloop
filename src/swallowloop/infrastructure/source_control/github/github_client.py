@@ -161,7 +161,7 @@ class GitHubSourceControl(SourceControl):
     def has_branch(self, branch_name: str) -> bool:
         """检查分支是否存在"""
         try:
-            self.repo.get_ref(f"heads/{branch_name}")
+            self.repo.get_git_ref(f"heads/{branch_name}")
             print(f"[GitHub] 分支存在: {branch_name}")
             return True
         except Exception as e:
