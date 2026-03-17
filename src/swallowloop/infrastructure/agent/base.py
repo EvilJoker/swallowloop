@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ...domain.model import Task
+    from ..codebase import CodebaseManager
 
 
 @dataclass
@@ -70,23 +71,63 @@ class Agent(ABC):
         )
     
     @classmethod
-    def _prepare_repo(cls, task: "Task", workspace_path: Path) -> ExecutionResult:
-        """准备仓库"""
+    def _prepare_repo(
+        cls,
+        task: "Task",
+        workspace_path: Path,
+        codebase_manager: "CodebaseManager | None" = None,
+        github_token: str | None = None,
+    ) -> ExecutionResult:
+        """准备仓库
+        
+        如果提供了 codebase_manager 和 github_token，使用缓存机制：
+        1. 检查 codebase 缓存是否存在
+        2. 不存在则克隆，存在则更新
+        3. 从缓存复制到工作空间
+        
+        否则使用传统方式直接克隆。
+        """
         workspace_path.mkdir(parents=True, exist_ok=True)
         
         git_dir = workspace_path / ".git"
         if git_dir.exists():
+            # 工作空间已有仓库，更新即可
             try:
                 cls._run_git(["fetch", "origin"], workspace_path)
                 cls._run_git(["checkout", "main"], workspace_path)
                 cls._run_git(["pull", "origin", "main"], workspace_path)
             except subprocess.CalledProcessError as e:
                 return ExecutionResult(False, f"更新仓库失败: {e.stderr or str(e)}")
-        else:
+            return ExecutionResult(True, "仓库准备完成")
+        
+        # 使用 CodebaseManager 缓存机制
+        if codebase_manager and github_token:
             try:
-                cls._run_git(["clone", task.repo_url, "."], workspace_path)
-            except subprocess.CalledProcessError as e:
-                return ExecutionResult(False, f"克隆仓库失败: {e.stderr or str(e)}")
+                # 1. 准备缓存仓库
+                codebase_manager.prepare_codebase(github_token)
+                # 2. 复制到工作空间
+                repo_path = codebase_manager.copy_to_workspace(workspace_path)
+                # 3. 将仓库内容移动到工作空间根目录
+                import shutil
+                for item in repo_path.iterdir():
+                    if item.name != ".git":
+                        shutil.move(str(item), str(workspace_path / item.name))
+                # 移动 .git 目录
+                git_cache = repo_path / ".git"
+                git_target = workspace_path / ".git"
+                if git_cache.exists():
+                    shutil.move(str(git_cache), str(git_target))
+                # 删除空的临时目录
+                repo_path.rmdir()
+            except Exception as e:
+                return ExecutionResult(False, f"缓存复制失败: {str(e)}")
+            return ExecutionResult(True, "仓库准备完成（使用缓存）")
+        
+        # 传统方式：直接克隆
+        try:
+            cls._run_git(["clone", task.repo_url, "."], workspace_path)
+        except subprocess.CalledProcessError as e:
+            return ExecutionResult(False, f"克隆仓库失败: {e.stderr or str(e)}")
         return ExecutionResult(True, "仓库准备完成")
     
     @classmethod

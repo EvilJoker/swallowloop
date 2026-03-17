@@ -78,6 +78,11 @@ class Settings:
         return (self.work_dir or Path.home() / ".swallowloop") / "workspaces"
     
     @property
+    def codebase_dir(self) -> Path:
+        """代码库缓存目录"""
+        return (self.work_dir or Path.home() / ".swallowloop") / "codebase"
+    
+    @property
     def data_dir(self) -> Path:
         """数据目录"""
         return self.work_dir or Path.home() / ".swallowloop"
