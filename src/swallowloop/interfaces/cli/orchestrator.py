@@ -169,6 +169,7 @@ class Orchestrator:
         logger.info(f"SwallowLoop 启动 - Agent: {self._agent.name}")
         logger.info(f"仓库: {self._settings.github_repo}")
         logger.info(f"监听标签: {self._settings.issue_label}")
+        logger.info(f"最大并发 Worker: {self._settings.max_workers}")
         
         # 检查 Agent 可用性
         available, message = self._agent.check_available()
@@ -219,15 +220,44 @@ class Orchestrator:
         for task in tasks_to_abort:
             self._abort_task(task, "Issue 已关闭")
         
-        # 4. 处理待执行任务
-        pending_tasks = self._task_service.get_pending_tasks()
-        for task in pending_tasks:
-            self._process_task(task)
-        
-        # 5. 检查执行中的任务
+        # 4. 检查执行中的任务（先检查，释放已完成的 worker 槽位）
         in_progress_tasks = self._task_service.get_in_progress_tasks()
+        if in_progress_tasks:
+            logger.info(f"检查 {len(in_progress_tasks)} 个执行中任务")
         for task in in_progress_tasks:
             self._check_task_result(task)
+        
+        # 5. 处理待执行任务（限制并发数）
+        pending_tasks = self._task_service.get_pending_tasks()
+        if pending_tasks:
+            # 获取当前活跃 worker 数量
+            active_workers = self._execution_service.get_active_worker_count()
+            max_workers = self._settings.max_workers
+            available_slots = max_workers - active_workers
+            
+            logger.info(f"发现 {len(pending_tasks)} 个待执行任务，当前活跃 Worker: {active_workers}/{max_workers}")
+            
+            # 只启动有空闲槽位的任务
+            tasks_to_start = pending_tasks[:available_slots] if available_slots > 0 else []
+            
+            if len(tasks_to_start) < len(pending_tasks):
+                logger.info(f"并发限制：本次启动 {len(tasks_to_start)} 个任务，{len(pending_tasks) - len(tasks_to_start)} 个任务排队等待")
+            
+            for task in tasks_to_start:
+                self._process_task(task)
+        
+        # 6. 状态汇总（每次轮询打印一次）
+        self._log_status_summary()
+    
+    def _log_status_summary(self) -> None:
+        """打印状态汇总"""
+        active_tasks = self._task_repo.list_active()
+        in_progress = sum(1 for t in active_tasks if t.state == TaskState.IN_PROGRESS.value)
+        pending = sum(1 for t in active_tasks if t.state in (TaskState.NEW.value, TaskState.PENDING.value))
+        active_workers = self._execution_service.get_active_worker_count()
+        max_workers = self._settings.max_workers
+        
+        logger.info(f"[状态汇总] Worker: {active_workers}/{max_workers}, 执行中: {in_progress}, 待处理: {pending}")
     
     def _abort_task(self, task: Task, reason: str) -> None:
         """中止任务"""

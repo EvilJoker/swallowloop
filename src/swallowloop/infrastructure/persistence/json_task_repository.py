@@ -1,11 +1,17 @@
 """JSON 任务仓库实现"""
 
+import fcntl
 import json
+import logging
 from datetime import datetime
 from pathlib import Path
+from typing import IO
 
 from ...domain.model import Task, TaskId, TaskState, TaskType, Workspace, Comment, PullRequest
 from ...domain.repository import TaskRepository
+
+
+logger = logging.getLogger(__name__)
 
 
 class JsonTaskRepository(TaskRepository):
@@ -13,15 +19,25 @@ class JsonTaskRepository(TaskRepository):
     JSON 文件任务仓库
     
     任务数据保存到 ~/.swallowloop/tasks.json
+    使用文件锁保护并发写入
     """
     
     def __init__(self, data_dir: Path | None = None):
         self.data_dir = data_dir or Path.home() / ".swallowloop"
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.tasks_file = self.data_dir / "tasks.json"
+        self._lock_file = self.data_dir / "tasks.json.lock"
         
         # 加载已有任务
         self._tasks: dict[str, dict] = self._load()
+    
+    def _acquire_lock(self, lock_file: IO) -> None:
+        """获取文件锁"""
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+    
+    def _release_lock(self, lock_file: IO) -> None:
+        """释放文件锁"""
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
     
     def _load(self) -> dict:
         """加载任务数据"""
@@ -31,13 +47,41 @@ class JsonTaskRepository(TaskRepository):
         try:
             with open(self.tasks_file) as f:
                 return json.load(f)
-        except (json.JSONDecodeError, IOError):
+        except (json.JSONDecodeError, IOError) as e:
+            logger.warning(f"加载任务数据失败: {e}")
             return {}
     
     def _save(self) -> None:
-        """保存任务数据"""
-        with open(self.tasks_file, "w") as f:
-            json.dump(self._tasks, f, indent=2, ensure_ascii=False, default=str)
+        """保存任务数据（带文件锁保护）"""
+        # 先写入临时文件，再原子替换
+        temp_file = self.tasks_file.with_suffix('.tmp')
+        lock_path = self._lock_file
+        
+        try:
+            # 获取文件锁
+            with open(lock_path, 'w') as lock_f:
+                self._acquire_lock(lock_f)
+                try:
+                    # 写入临时文件
+                    with open(temp_file, "w") as f:
+                        json.dump(self._tasks, f, indent=2, ensure_ascii=False, default=str)
+                    
+                    # 原子替换
+                    temp_file.replace(self.tasks_file)
+                finally:
+                    self._release_lock(lock_f)
+        except Exception as e:
+            logger.error(f"保存任务数据失败: {e}")
+            if temp_file.exists():
+                temp_file.unlink()
+            raise
+        finally:
+            # 清理锁文件
+            if lock_path.exists():
+                try:
+                    lock_path.unlink()
+                except:
+                    pass
     
     def get(self, task_id: TaskId) -> Task | None:
         """根据ID获取任务"""
