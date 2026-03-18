@@ -26,34 +26,37 @@
 │                         SwallowLoop System                          │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
-│  interfaces/cli/                                                    │
-│  ┌─────────────────┐                                               │
-│  │  Orchestrator   │ ──────────────────────────────────────────┐   │
-│  │  (主调度器)      │                                           │   │
-│  └─────────────────┘                                           │   │
-│           │                                                    │   │
-│           ▼                                                    │   │
-│  application/service/                                          │   │
-│  ┌─────────────────┐    ┌─────────────────┐                    │   │
-│  │  TaskService    │    │ExecutionService │                    │   │
-│  │  (任务管理)      │    │  (执行管理)      │                    │   │
-│  └─────────────────┘    └─────────────────┘                    │   │
-│           │                      │                              │   │
-│           ▼                      ▼                              │   │
-│  domain/                                                        │   │
-│  ┌─────────────────────────────────────────┐                    │   │
-│  │ model: Task, Workspace, Comment, PR     │                    │   │
-│  │ event: TaskAssigned, TaskStarted, etc.  │                    │   │
-│  │ repository: TaskRepo, WorkspaceRepo     │                    │   │
-│  └─────────────────────────────────────────┘                    │   │
-│           │                      │                              │   │
-│           ▼                      ▼                              │   │
-│  infrastructure/                                                 │   │
-│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌───────────┐  │   │
-│  │ persistence │ │   agent     │ │source_control│ │  config   │  │   │
-│  │ (JSON Repo) │ │(IFlow/Aider)│ │  (GitHub)    │ │ (Settings)│◀─┘   │
-│  └─────────────┘ └─────────────┘ └─────────────┘ └───────────┘      │
-│                                                                     │
+│  interfaces/                                                        │
+│  ┌─────────────────┐    ┌─────────────────┐                        │
+│  │  Orchestrator   │    │  Web Dashboard  │                        │
+│  │  (主调度器)      │    │  (FastAPI)      │                        │
+│  └─────────────────┘    └─────────────────┘                        │
+│           │                      │                                  │
+│           ▼                      ▼                                  │
+│  application/service/                                              │
+│  ┌─────────────────┐    ┌─────────────────┐                        │
+│  │  TaskService    │    │ExecutionService │                        │
+│  │  (任务管理)      │    │  (执行管理)      │                        │
+│  └─────────────────┘    └─────────────────┘                        │
+│           │                      │                                  │
+│           ▼                      ▼                                  │
+│  domain/                                                            │
+│  ┌─────────────────────────────────────────┐                        │
+│  │ model: Task, Workspace, Comment, PR     │                        │
+│  │ event: TaskAssigned, TaskStarted, etc.  │                        │
+│  │ repository: TaskRepo, WorkspaceRepo     │                        │
+│  └─────────────────────────────────────────┘                        │
+│           │                      │                                  │
+│           ▼                      ▼                                  │
+│  infrastructure/                                                    │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌───────────────┐  │
+│  │ persistence │ │   agent     │ │source_control│ │    config     │  │
+│  │ (JSON Repo) │ │(IFlow/Aider)│ │  (GitHub)    │ │  (Settings)   │  │
+│  └─────────────┘ └─────────────┘ └─────────────┘ └───────────────┘  │
+│  ┌─────────────┐                                                   │
+│  │ self_update │                                                   │
+│  │  (自更新)    │                                                   │
+│  └─────────────┘                                                   │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -67,9 +70,11 @@
 
 负责接收外部请求，协调应用服务完成任务。
 
-| 文件 | 职责 |
-|-----|------|
-| `cli/orchestrator.py` | 主调度器，协调 TaskService 和 ExecutionService |
+| 目录 | 文件 | 职责 |
+|-----|------|------|
+| `cli/` | `orchestrator.py` | 主调度器，协调 TaskService 和 ExecutionService |
+| `web/` | `dashboard.py` | Web Dashboard 服务，提供 REST API 和 WebSocket |
+| `web/` | `standalone.py` | Dashboard 独立启动入口 |
 
 ### 2. Application 层 (应用层)
 
@@ -80,7 +85,7 @@
 | 文件 | 职责 |
 |-----|------|
 | `service/task_service.py` | 任务生命周期管理：扫描 Issue、创建任务、状态流转 |
-| `service/execution_service.py` | 任务执行管理：Worker 进程管理、结果检查 |
+| `service/execution_service.py` | 任务执行管理：Worker 进程管理、超时检测、结果检查 |
 | `dto/issue_dto.py` | Issue 数据传输对象 |
 
 ### 3. Domain 层 (领域层)
@@ -125,16 +130,6 @@ new → assign → assigned → prepare → pending → start → in_progress
                      completed
 ```
 
-**状态转换规则**:
-- `new → assigned` - 分配工作空间
-- `assigned → pending` - 准备就绪
-- `pending → in_progress` - 开始执行
-- `in_progress → submitted` - 提交 PR
-- `submitted → completed` - PR 合并
-- `in_progress → pending` - 重试（最多 5 次）
-- `submitted → pending` - 用户反馈修改
-- `new/assigned/pending/in_progress/submitted → aborted` - 任务中止
-
 ### 4. Infrastructure 层 (基础设施层)
 
 **目录**: `src/swallowloop/infrastructure/`
@@ -143,11 +138,74 @@ new → assign → assigned → prepare → pending → start → in_progress
 
 | 目录 | 文件 | 职责 |
 |-----|------|------|
-| `persistence/` | `json_task_repository.py` | JSON 文件任务持久化 |
+| `persistence/` | `json_task_repository.py` | JSON 文件任务持久化（带文件锁） |
+| `persistence/` | `json_workspace_repository.py` | JSON 文件工作空间持久化 |
 | `agent/iflow/` | `iflow_agent.py` | IFlow Agent 实现 |
 | `agent/aider/` | `aider_agent.py` | Aider Agent 实现 |
+| `agent/` | `base.py` | Agent 基类，Git 操作封装 |
 | `source_control/` | `github_client.py` | GitHub API 封装 |
 | `config/` | `settings.py` | 配置管理 |
+| `self_update.py` | `self_update.py` | 自更新机制 |
+
+---
+
+## 核心功能
+
+### 1. 并发控制
+
+支持多任务并行执行，通过 `MAX_WORKERS` 配置最大并发数（默认 5）。
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      Orchestrator                            │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         │
+│  │  Worker 1   │  │  Worker 2   │  │  Worker 3   │         │
+│  │ cwd: issue1 │  │ cwd: issue2 │  │ cwd: issue3 │         │
+│  └─────────────┘  └─────────────┘  └─────────────┘         │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 2. Worker 超时检测
+
+Worker 进程有 2 小时超时限制，超时自动终止并标记任务失败。
+
+### 3. AI 生成 Commit Message
+
+根据代码 diff 自动生成符合 Conventional Commits 格式的 commit message：
+- 格式: `{type}: {description}`
+- 类型: feat/fix/docs/style/refactor/test/chore
+- commit message 同时用于 PR 标题
+
+### 4. 自更新机制
+
+周期性检查远程仓库是否有新版本，自动执行 `git pull` 并重启服务。
+
+### 5. Web Dashboard
+
+提供 Web 界面查看任务状态和实时日志：
+- REST API：任务列表、详情、统计
+- WebSocket：实时日志推送
+- 默认端口：8080
+
+---
+
+## 配置说明
+
+| 环境变量 | 说明 | 默认值 |
+|---------|------|--------|
+| `GITHUB_TOKEN` | GitHub Personal Access Token | - |
+| `GITHUB_REPO` | 目标仓库 (owner/repo 格式) | - |
+| `AGENT_TYPE` | Agent 类型 (iflow/aider) | `iflow` |
+| `AGENT_TIMEOUT` | Agent 超时(秒) | `600` |
+| `MAX_WORKERS` | 最大并发 Worker 数量 | `5` |
+| `POLL_INTERVAL` | 轮询间隔(秒) | `60` |
+| `ISSUE_LABEL` | 监听的 Issue 标签 | `swallow` |
+| `BASE_BRANCH` | 默认基础分支 | `main` |
+| `WEB_ENABLED` | 是否启用 Web Dashboard | `true` |
+| `WEB_PORT` | Web 服务端口 | `8080` |
+| `WEB_HOST` | Web 服务监听地址 | `0.0.0.0` |
+| `ENABLE_SELF_UPDATE` | 是否启用自更新 | `true` |
+| `SELF_UPDATE_INTERVAL` | 自更新检查间隔(秒) | `300` |
 
 ---
 
@@ -170,32 +228,32 @@ swallowloop/
 │   │   ├── agent/                 # Agent 实现
 │   │   ├── config/                # 配置管理
 │   │   ├── persistence/           # 持久化实现
-│   │   └── source_control/        # 源码控制
+│   │   ├── source_control/        # 源码控制
+│   │   └── self_update.py         # 自更新
 │   └── interfaces/                # 接口层
-│       └── cli/                   # CLI 入口
+│       ├── cli/                   # CLI 入口
+│       └── web/                   # Web Dashboard
 ├── docs/
 │   ├── architecture.md            # 架构文档
 │   ├── data_models.md             # 数据模型文档
-│   └── vision.md                  # 项目愿景
+│   ├── vision.md                  # 项目愿景
+│   └── test_scenarios.md          # 测试场景
+├── tests/                         # 测试用例
 ├── .env_template                  # 配置模板
 └── pyproject.toml                 # 项目配置
 ```
 
 ---
 
-## 配置说明
+## 数据文件位置
 
-| 环境变量 | 说明 | 必需 | 默认值 |
-|---------|------|-----|--------|
-| `GITHUB_TOKEN` | GitHub Personal Access Token | 是 | - |
-| `GITHUB_REPO` | 目标仓库 (owner/repo 格式) | 是 | - |
-| `OPENAI_API_KEY` | LLM API Key | 是 | - |
-| `OPENAI_API_BASE_URL` | LLM API 地址 | 否 | - |
-| `LLM_MODEL` | Aider 使用的模型 | 否 | `claude-sonnet-4-20250514` |
-| `POLL_INTERVAL` | 轮询间隔(秒) | 否 | `60` |
-| `ISSUE_LABEL` | 监听的 Issue 标签 | 否 | `swallow` |
-| `BASE_BRANCH` | 默认基础分支 | 否 | `main` |
-| `WORKER_TIMEOUT` | Worker 超时(秒) | 否 | `600` |
+| 文件 | 路径 | 说明 |
+|-----|------|------|
+| 任务数据 | `~/.swallowloop/tasks.json` | 任务持久化存储 |
+| 工作空间数据 | `~/.swallowloop/workspaces.json` | 工作空间记录 |
+| 工作空间目录 | `~/.swallowloop/workspaces/` | 代码仓库工作目录 |
+| 代码缓存 | `~/.swallowloop/codebase/` | 代码库缓存 |
+| 日志目录 | `~/.swallowloop/logs/` | 日志文件 |
 
 ---
 
@@ -205,9 +263,11 @@ swallowloop/
 |-----|------|-----|
 | PyGithub | >=2.8.1 | GitHub API 操作 |
 | transitions | >=0.9.3 | 状态机实现 |
-| iflow-cli-sdk | >=0.1.0 | IFlow Agent SDK |
+| iflow-cli-sdk | >=0.1.11 | IFlow Agent SDK |
 | psutil | >=6.1.0 | 进程管理 |
-| python-dotenv | - | 环境变量加载 |
+| FastAPI | >=0.109.0 | Web 框架 |
+| uvicorn | >=0.27.0 | ASGI 服务器 |
+| websockets | >=12.0 | WebSocket 支持 |
 
 ---
 
@@ -226,37 +286,8 @@ python -m swallowloop
 
 ---
 
-## 并行执行
-
-SwallowLoop 支持多任务并行执行：
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      iFlow 进程 (端口 8090)                  │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         │
-│  │  Session A  │  │  Session B  │  │  Session C  │         │
-│  │ cwd: issue1 │  │ cwd: issue2 │  │ cwd: issue3 │         │
-│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘         │
-└─────────┼────────────────┼────────────────┼─────────────────┘
-          │                │                │
-          ▼                ▼                ▼
-    ┌──────────┐     ┌──────────┐     ┌──────────┐
-    │ Worker 1 │     │ Worker 2 │     │ Worker 3 │
-    │ (进程 A)  │     │ (进程 B)  │     │ (进程 C)  │
-    └──────────┘     └──────────┘     └──────────┘
-```
-
-**架构说明**：
-- **Orchestrator**: 单线程轮询，同时启动多个 pending 任务
-- **Worker**: 每个任务独立的 `multiprocessing.Process` 子进程
-- **iFlow SDK**: 单端口多 Session，每个 Session 指定独立工作目录 (cwd)
-- **工作空间**: 每个 Issue 独立目录，互不干扰
-
----
-
 ## 扩展方向
 
-1. **并行任务调度** - ✅ 已支持，通过多 Worker 进程 + iFlow 多 Session 实现
-2. **巡检与技术债治理** - 定期扫描仓库生成建议任务
-3. **经验/风格记忆** - 从 PR Review 中沉淀项目知识
-4. **多平台支持** - GitLab / Gitea 等
+1. **巡检与技术债治理** - 定期扫描仓库生成建议任务
+2. **经验/风格记忆** - 从 PR Review 中沉淀项目知识
+3. **多平台支持** - GitLab / Gitea 等
