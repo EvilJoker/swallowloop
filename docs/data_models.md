@@ -144,9 +144,9 @@ Worker 执行完成后返回的结果对象。
 |-------|------|------|--------|
 | `github_token` | str | GitHub Token | - |
 | `github_repo` | str | 目标仓库 | - |
-| `llm_model` | str | LLM 模型 | `gpt-4o` |
+| `llm_config` | LLMConfig | LLM 配置 | 默认使用 iFlow |
 | `agent_type` | str | Agent 类型 | `iflow` |
-| `agent_timeout` | int | Agent 超时(秒) | `600` |
+| `agent_timeout` | int | Agent 超时(秒) | `1200` (20分钟) |
 | `max_workers` | int | 最大并发 Worker | `5` |
 | `work_dir` | Path \| None | 工作目录 | `~/.swallowloop` |
 | `poll_interval` | int | 轮询间隔(秒) | `60` |
@@ -158,6 +158,48 @@ Worker 执行完成后返回的结果对象。
 | `web_host` | str | Web 监听地址 | `0.0.0.0` |
 | `enable_self_update` | bool | 启用自更新 | `true` |
 | `self_update_interval` | int | 更新检查间隔(秒) | `300` |
+
+---
+
+## 7. LLMConfig (LLM 配置模型)
+
+支持多种 LLM 提供商的统一配置。
+
+### 字段定义
+
+| 字段名 | 类型 | 说明 |
+|-------|------|------|
+| `provider` | LLMProvider | LLM 提供商 |
+| `model_name` | str | 模型名称 |
+| `api_key` | str \| None | API Key |
+| `base_url` | str \| None | API 端点 URL |
+| `extra_params` | dict | 额外参数 |
+
+### LLMProvider (LLM 提供商枚举)
+
+| 值 | 说明 |
+|-----|------|
+| `iflow` | 使用本地 iFlow CLI 默认配置 |
+| `openai` | OpenAI API |
+| `minimax` | MiniMax API |
+| `custom` | 自定义 OpenAI 兼容 API |
+
+### 配置方式
+
+**方式一：使用 LLM_* 前缀环境变量**
+```bash
+LLM_PROVIDER=minimax
+LLM_API_KEY=your-api-key
+LLM_BASE_URL=https://api.minimaxi.com/v1
+LLM_MODEL_NAME=MiniMax-M2.5-highspeed
+```
+
+**方式二：兼容旧环境变量**
+```bash
+OPENAI_API_KEY=your-api-key  # 可用于 Minimax
+OPENAI_API_BASE_URL=https://api.minimaxi.com/v1
+LLM_MODEL=minimax/MiniMax-M2.5-highspeed
+```
 
 ---
 

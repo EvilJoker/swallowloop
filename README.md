@@ -114,8 +114,12 @@ Issue 创建 → SwallowLoop 检测 → 代码生成 → PR 提交 → 人工审
 |-----|------|--------|
 | `GITHUB_TOKEN` | GitHub Token | - |
 | `GITHUB_REPO` | 目标仓库 | - |
+| `LLM_PROVIDER` | LLM 提供商 (iflow/openai/minimax/custom) | `iflow` |
+| `LLM_API_KEY` | LLM API Key | - |
+| `LLM_BASE_URL` | LLM API 端点 URL | - |
+| `LLM_MODEL_NAME` | LLM 模型名称 | - |
 | `AGENT_TYPE` | Agent 类型 (iflow/aider) | `iflow` |
-| `AGENT_TIMEOUT` | Agent 超时(秒) | `600` |
+| `AGENT_TIMEOUT` | Agent 超时(秒) | `1200` (20分钟) |
 | `MAX_WORKERS` | 最大并发 Worker | `5` |
 | `POLL_INTERVAL` | 轮询间隔(秒) | `60` |
 | `ISSUE_LABEL` | Issue 标签 | `swallow` |
@@ -141,8 +145,9 @@ Issue 创建 → SwallowLoop 检测 → 代码生成 → PR 提交 → 人工审
 
 **核心特性：**
 - **并发控制**: 最大 Worker 数量可配置，超出的任务排队等待
-- **超时检测**: Worker 2 小时超时自动终止
+- **超时检测**: Worker 超时自动终止（默认 20 分钟）
 - **AI Commit**: 根据代码 diff 自动生成 commit message
+- **LLM 配置独立化**: 支持多种 LLM 提供商（iFlow/OpenAI/MiniMax/自定义）
 - **自更新**: 周期检查远程版本并自动更新
 
 详细架构文档请参阅 [docs/architecture.md](docs/architecture.md)
