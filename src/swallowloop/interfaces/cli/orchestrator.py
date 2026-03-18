@@ -306,7 +306,8 @@ class Orchestrator:
         if result.success:
             # 成功，创建 PR
             try:
-                pr = self._execution_service.create_pull_request(task)
+                # 使用 AI 生成的 commit message 作为 PR 标题
+                pr = self._execution_service.create_pull_request(task, result.commit_message)
                 self._task_service.submit_task(task, pr.number, pr.html_url)
                 
                 # 生成报告

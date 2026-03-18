@@ -87,14 +87,20 @@ class IFlowAgent(Agent):
         if not result.success:
             return result
         
-        # 4. 提交推送
+        # 4. 获取修改的文件
         files_changed = self._get_changed_files(workspace_path)
         print(f"[Agent] 检测到修改的文件: {files_changed}")
         
         if not files_changed:
             return ExecutionResult(False, "iFlow 未修改任何文件")
         
-        result = self._commit_and_push(task, workspace_path, files_changed)
+        # 5. 使用 AI 生成 commit message
+        diff = self._get_diff(workspace_path)
+        commit_message = await self._generate_commit_message(workspace_path, diff, task)
+        print(f"[Agent] AI 生成的 commit message: {commit_message}")
+        
+        # 6. 提交推送
+        result = self._commit_and_push_with_message(task, workspace_path, files_changed, commit_message)
         print(f"[Agent] 提交推送结果: success={result.success}, message={result.message}")
         return result
     
@@ -109,12 +115,18 @@ class IFlowAgent(Agent):
         if not result.success:
             return result
         
-        # 3. Amend 提交
+        # 3. 获取修改的文件
         files_changed = self._get_changed_files(workspace_path)
         if not files_changed:
             return ExecutionResult(True, "无需修改")
         
-        return self._amend_and_push(task, workspace_path, files_changed)
+        # 4. 使用 AI 生成 commit message
+        diff = self._get_diff(workspace_path)
+        commit_message = await self._generate_commit_message(workspace_path, diff, task)
+        print(f"[Agent] AI 生成的 commit message: {commit_message}")
+        
+        # 5. Amend 提交
+        return self._commit_and_push_with_message(task, workspace_path, files_changed, commit_message)
     
     async def _run_iflow(self, repo_path: Path, prompt: str) -> ExecutionResult:
         """运行 iFlow"""
@@ -146,6 +158,74 @@ class IFlowAgent(Agent):
         except Exception as e:
             return ExecutionResult(False, f"iFlow 执行失败: {str(e)}", output="".join(output_parts))
     
+    async def _generate_commit_message(self, repo_path: Path, diff: str, task: Task) -> str:
+        """使用 AI 生成 commit message
+        
+        Args:
+            repo_path: 仓库路径
+            diff: git diff 内容
+            task: 任务对象
+            
+        Returns:
+            生成的 commit message，格式: {type}: {description}
+        """
+        prompt = f"""请根据以下代码变更生成一个简洁的 commit message。
+
+## 规则
+1. 格式: `{{type}}: {{description}}`
+2. type 只能是: feat, fix, docs, style, refactor, test, chore
+3. description 是简短的中文描述，不超过 30 字
+4. 只输出 commit message，不要其他内容
+
+## 原始任务
+{task.title}
+
+## 代码变更
+```diff
+{diff[:8000]}
+```
+
+请生成 commit message:"""
+        
+        options = IFlowOptions(
+            timeout=30.0,  # 短超时，生成 commit message 很快
+            approval_mode=self._config.approval_mode,
+            file_access=False,  # 不需要文件访问
+            file_read_only=True,
+            log_level=self._config.log_level,
+            cwd=str(repo_path),
+            auth_method_id=self._config.auth_method_id,
+            auth_method_info=self._config.auth_method_info,
+        )
+        
+        try:
+            async with IFlowClient(options) as client:
+                await client.send_message(prompt)
+                result = ""
+                async for message in client.receive_messages():
+                    if isinstance(message, AssistantMessage):
+                        result += message.chunk.text
+                    elif isinstance(message, TaskFinishMessage):
+                        break
+                
+                # 清理输出，提取 commit message
+                commit_msg = result.strip()
+                # 移除可能的 markdown 代码块标记
+                if commit_msg.startswith("```"):
+                    commit_msg = commit_msg.split("\n", 1)[-1]
+                if commit_msg.endswith("```"):
+                    commit_msg = commit_msg.rsplit("```", 1)[0]
+                
+                # 验证格式，如果不符合则使用默认格式
+                if not any(commit_msg.startswith(f"{t}:") for t in ["feat", "fix", "docs", "style", "refactor", "test", "chore"]):
+                    # 根据任务类型生成默认消息
+                    return f"feat: {task.title[:30]}"
+                
+                return commit_msg.strip()
+        except Exception as e:
+            print(f"[Agent] 生成 commit message 失败: {e}，使用默认格式")
+            return f"feat: {task.title[:30]}"
+    
     @staticmethod
     def check_available() -> tuple[bool, str]:
         try:
@@ -153,3 +233,80 @@ class IFlowAgent(Agent):
             return True, f"iflow-cli-sdk v{iflow_sdk.__version__}"
         except ImportError:
             return False, "iflow-cli-sdk 未安装，请执行: pip install iflow-cli-sdk"
+    
+    @classmethod
+    def _get_diff(cls, workspace_path: Path) -> str:
+        """获取 git diff"""
+        import subprocess
+        try:
+            result = cls._run_git(["diff", "HEAD"], workspace_path, check=False)
+            if result.returncode != 0:
+                # 如果 HEAD 不存在（新仓库），获取所有未跟踪文件的差异
+                result = cls._run_git(["diff"], workspace_path, check=False)
+            return result.stdout
+        except Exception:
+            return ""
+    
+    @classmethod
+    def _commit_and_push_with_message(
+        cls,
+        task: Task,
+        workspace_path: Path,
+        files_changed: list[str],
+        commit_message: str,
+    ) -> ExecutionResult:
+        """使用指定的 commit message 提交并推送"""
+        import subprocess
+        
+        # 检查当前分支是否正确
+        try:
+            result = cls._run_git(["branch", "--show-current"], workspace_path)
+            current_branch = result.stdout.strip()
+            print(f"[Git] 当前分支: {current_branch}, 目标分支: {task.branch_name}")
+            
+            if current_branch != task.branch_name:
+                print(f"[Git] 分支不匹配，尝试切换到 {task.branch_name}")
+                result = cls._run_git(["checkout", task.branch_name], workspace_path, check=False)
+                if result.returncode != 0:
+                    print(f"[Git] 分支不存在，创建新分支 {task.branch_name}")
+                    cls._run_git(["checkout", "-b", task.branch_name], workspace_path)
+        except subprocess.CalledProcessError as e:
+            return ExecutionResult(False, f"分支检查失败: {e.stderr or str(e)}", files_changed)
+        
+        # 检查分支上是否已有自己的 commit
+        has_own_commit = cls._has_own_commit(workspace_path)
+        
+        try:
+            print(f"[Git] 添加文件到暂存区...")
+            cls._run_git(["add", "-A"], workspace_path)
+            
+            if has_own_commit:
+                print(f"[Git] Amend 提交: {commit_message}")
+                cls._run_git(["commit", "--amend", "-m", commit_message], workspace_path)
+            else:
+                print(f"[Git] 创建提交: {commit_message}")
+                cls._run_git(["commit", "-m", commit_message], workspace_path)
+        except subprocess.CalledProcessError as e:
+            return ExecutionResult(False, f"提交失败: {e.stderr or str(e)}", files_changed)
+        
+        try:
+            print(f"[Git] 推送分支到远程: {task.branch_name}")
+            result = cls._run_git(
+                ["ls-remote", "--heads", "origin", task.branch_name],
+                workspace_path,
+                check=False
+            )
+            remote_exists = bool(result.stdout.strip())
+            
+            if remote_exists or has_own_commit:
+                print(f"[Git] 强制推送（已有远程分支）")
+                cls._run_git(["push", "-f", "origin", task.branch_name], workspace_path)
+            else:
+                cls._run_git(["push", "-u", "origin", task.branch_name], workspace_path)
+            print(f"[Git] 推送成功: {task.branch_name}")
+        except subprocess.CalledProcessError as e:
+            error_msg = e.stderr or str(e)
+            print(f"[Git] 推送失败: {error_msg}")
+            return ExecutionResult(False, f"推送失败: {error_msg}", files_changed)
+        
+        return ExecutionResult(True, "任务完成，等待 PR 创建", files_changed, commit_message=commit_message)

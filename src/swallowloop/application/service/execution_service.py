@@ -122,6 +122,7 @@ class ExecutionService:
                 f.write(f"success={result.success}\n")
                 f.write(f"message={result.message}\n")
                 f.write(f"files={','.join(result.files_changed)}\n")
+                f.write(f"commit_message={result.commit_message}\n")
             
             logger.info(f"Worker 执行完成: Issue#{task.issue_number}, success={result.success}")
             
@@ -136,6 +137,7 @@ class ExecutionService:
                     f.write(f"success=False\n")
                     f.write(f"message={error_msg}\n")
                     f.write(f"files=\n")
+                    f.write(f"commit_message=\n")
             except Exception as write_error:
                 logger.error(f"写入结果文件失败: {write_error}")
     
@@ -195,9 +197,12 @@ class ExecutionService:
                 success=data.get("success") == "True",
                 message=data.get("message", "执行完成"),
                 files_changed=data.get("files", "").split(",") if data.get("files") else [],
+                commit_message=data.get("commit_message", ""),
             )
             
             logger.info(f"Worker 结果: Issue#{task.issue_number}, success={result.success}")
+            if result.commit_message:
+                logger.info(f"Commit message: {result.commit_message}")
             
             # 清理进程记录
             if task.issue_number in self._worker_processes:
@@ -210,12 +215,17 @@ class ExecutionService:
             logger.exception(f"读取 Worker 结果失败: {e}")
             return ExecutionResult(False, str(e))
     
-    def create_pull_request(self, task: Task) -> PullRequest:
-        """创建 Pull Request"""
+    def create_pull_request(self, task: Task, commit_message: str = "") -> PullRequest:
+        """创建 Pull Request
+        
+        Args:
+            task: 任务对象
+            commit_message: AI 生成的 commit message，用于 PR 标题
+        """
         logger.info(f"创建 PR: Issue#{task.issue_number}, branch={task.branch_name}")
         
-        # 生成简洁的 PR 标题
-        pr_title = self._generate_pr_title(task)
+        # 使用 AI 生成的 commit message 作为 PR 标题，否则生成一个
+        pr_title = commit_message if commit_message else self._generate_pr_title(task)
         
         pr_info = self._source_control.create_pull_request(
             branch_name=task.branch_name,
