@@ -93,7 +93,7 @@ class TestE2ENewIssueFlow:
         task = new_tasks[0]
         assert task.issue_number == 100
         assert task.state == TaskState.NEW.value
-        assert task.branch_name.startswith("Issue100")
+        assert task.branch_name.startswith("feature_100")
 
         # 4. 分配工作空间
         workspace = task_service.assign_workspace(task)
@@ -115,7 +115,8 @@ class TestE2ENewIssueFlow:
         pr = execution_service.create_pull_request(task)
         
         assert pr is not None
-        assert "Issue#100" in pr.title
+        # PR 标题格式: {type}: {description}
+        assert pr.title.startswith("feat:")
         assert "Closes #100" in mock_source_control._created_prs[-1]["body"]
 
         # 8. 提交任务
@@ -854,12 +855,12 @@ class TestE2EIntegrationScenarios:
         验证各种标题格式的分支名正确生成
         """
         test_cases = [
-            (1, "Fix the bug!!!", "Issue1_fix-the-bug"),
-            (2, "Add new feature", "Issue2_add-new-feature"),
-            (3, "中文标题测试", "Issue3"),
-            (4, "UPPERCASE TITLE", "Issue4_uppercase-title"),
-            (5, "   spaces   around   ", "Issue5_spaces-around"),
-            (6, "special@#$%characters", "Issue6_specialcharacters"),
+            (1, "Fix the bug!!!", "feature_1"),
+            (2, "Add new feature", "feature_2"),
+            (3, "中文标题测试", "feature_3"),
+            (4, "UPPERCASE TITLE", "feature_4"),
+            (5, "   spaces   around   ", "feature_5"),
+            (6, "special@#$%characters", "feature_6"),
         ]
 
         task_service = TaskService(
@@ -885,8 +886,8 @@ class TestE2EIntegrationScenarios:
         new_tasks, _ = task_service.scan_issues()
 
         for task in new_tasks:
-            # 验证分支名以 Issue# 开头
-            assert task.branch_name.startswith(f"Issue{task.issue_number}")
+            # 验证分支名以 feature_# 开头（新格式）
+            assert task.branch_name.startswith(f"feature_{task.issue_number}")
             # 验证分支名不含特殊字符
             assert "@" not in task.branch_name
             assert "#" not in task.branch_name

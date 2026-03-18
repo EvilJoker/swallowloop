@@ -71,8 +71,9 @@ class TestPRCreation:
         pr = execution_service.create_pull_request(task)
 
         assert pr is not None
+        # PR 标题格式: {type}: {description}
+        assert pr.title.startswith("feat:")
         assert pr.branch_name == task.branch_name
-        assert f"Issue#{task.issue_number}" in pr.title
 
     def test_pr_title_format(
         self,
@@ -106,10 +107,10 @@ class TestPRCreation:
 
         pr = execution_service.create_pull_request(task)
 
-        # 标题应包含 Issue 号
-        assert f"Issue#{sample_issue.number}" in pr.title
-        # 标题应包含原始 Issue 标题
-        assert sample_issue.title in pr.title
+        # 标题格式: {type}: {description}
+        assert pr.title.startswith("feat:")
+        # 标题应包含原始 Issue 标题关键词
+        assert "登录" in pr.title
 
     def test_pr_body_contains_issue_reference(
         self,

@@ -192,7 +192,7 @@ class TestTaskCreation:
         assert task.title == sample_issue.title
         assert task.description == sample_issue.body
         assert task.state == TaskState.NEW.value
-        assert task.branch_name.startswith("Issue1")
+        assert task.branch_name.startswith("feature_1")
 
     def test_create_task_generates_correct_branch_name(
         self,
@@ -222,8 +222,8 @@ class TestTaskCreation:
         new_tasks, _ = task_service.scan_issues()
         task = new_tasks[0]
 
-        # 分支名应包含 Issue 号和清理后的标题
-        assert "Issue42" in task.branch_name
+        # 验证分支名格式: {type}_{issue_number}_{date}-{slug}
+        assert "feature_42" in task.branch_name
         # 特殊字符应被移除
         assert "!" not in task.branch_name
         assert "   " not in task.branch_name
