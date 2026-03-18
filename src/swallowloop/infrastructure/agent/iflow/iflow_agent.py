@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 @dataclass
 class IFlowConfig:
     """IFlow 配置"""
-    timeout: float = 600.0
+    timeout: float = 1200.0  # Agent 超时时间（秒），默认 20 分钟
     approval_mode: ApprovalMode = ApprovalMode.YOLO
     file_access: bool = True
     file_read_only: bool = False

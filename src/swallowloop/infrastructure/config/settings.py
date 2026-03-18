@@ -20,7 +20,7 @@ class Settings:
     
     # Agent 配置
     agent_type: str = "iflow"  # iflow, aider
-    agent_timeout: int = 600
+    agent_timeout: int = 1200  # Agent 超时时间（秒），默认 20 分钟
     
     # Worker 并发配置
     max_workers: int = 5  # 最大并发 Worker 数量
@@ -75,7 +75,7 @@ class Settings:
             github_repo=github_repo,
             llm_model=os.getenv("LLM_MODEL", "gpt-4o"),
             agent_type=os.getenv("AGENT_TYPE", "iflow"),
-            agent_timeout=int(os.getenv("AGENT_TIMEOUT", "600")),
+            agent_timeout=int(os.getenv("AGENT_TIMEOUT", "1200")),
             max_workers=int(os.getenv("MAX_WORKERS", "5")),
             work_dir=work_dir,
             poll_interval=int(os.getenv("POLL_INTERVAL", "60")),
