@@ -253,8 +253,9 @@ class ExecutionService:
         - "feat: 自更新机制"
         - "fix: 修复工作空间 origin 指向问题"
         """
-        # 获取类型前缀
-        pr_type = self._get_pr_type(task.labels or [])
+        # 获取类型前缀（使用 Task 的 labels 属性，如果没有则默认为 feat）
+        labels = getattr(task, 'labels', None) or []
+        pr_type = self._get_pr_type(labels)
         
         # 从标题提取简短描述
         summary = self._extract_summary(task.title)

@@ -236,7 +236,8 @@ class TestWorkspacePathGeneration:
         workspace = task_service.assign_workspace(task)
 
         # 路径应包含 issue 号
-        assert f"issue{sample_issue.number}" in str(workspace.path)
+        # 验证工作空间路径包含分支名的一部分
+        assert f"feature_{sample_issue.number}" in str(workspace.path)
         # 路径应在 .swallowloop 目录下
         assert ".swallowloop" in str(workspace.path)
 

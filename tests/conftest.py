@@ -483,3 +483,67 @@ def sample_pr() -> PullRequest:
         branch_name="Issue1_fix-login-button-style",
         title="Issue#1: 修复登录页面的按钮样式问题",
     )
+
+
+# ==================== 并发测试 Fixtures ====================
+
+class MockSlowAgent(MockAgent):
+    """模拟慢速 Agent，用于并发测试"""
+    
+    def __init__(self, execution_delay: float = 2.0):
+        super().__init__()
+        self._execution_delay = execution_delay
+        self._active_count = 0
+        self._max_active_count = 0
+    
+    def execute(self, task: Task, workspace_path: Path) -> ExecutionResult:
+        """执行任务，记录并发数"""
+        import time
+        
+        self._active_count += 1
+        self._max_active_count = max(self._max_active_count, self._active_count)
+        
+        try:
+            if self._execution_delay > 0:
+                time.sleep(self._execution_delay)
+            
+            return super().execute(task, workspace_path)
+        finally:
+            self._active_count -= 1
+    
+    @property
+    def max_active_count(self) -> int:
+        return self._max_active_count
+
+
+@pytest.fixture
+def mock_slow_agent():
+    """创建模拟慢速 Agent"""
+    return MockSlowAgent(execution_delay=0.5)
+
+
+# ==================== Web Dashboard Fixtures ====================
+
+@pytest.fixture
+def mock_dashboard_app(temp_dir, mock_source_control, mock_agent):
+    """创建测试用 Dashboard 应用"""
+    from swallowloop.infrastructure.config import Settings
+    from swallowloop.interfaces.web.dashboard import DashboardServer
+    
+    settings = Settings(
+        github_token="test_token",
+        github_repo="test/repo",
+        work_dir=temp_dir,
+    )
+    
+    task_repo = JsonTaskRepository(temp_dir)
+    workspace_repo = JsonWorkspaceRepository(temp_dir)
+    
+    dashboard = DashboardServer(
+        task_repository=task_repo,
+        workspace_repository=workspace_repo,
+        settings=settings,
+        port=8765,  # 使用非标准端口避免冲突
+    )
+    
+    return dashboard, task_repo, workspace_repo
