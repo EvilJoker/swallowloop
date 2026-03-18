@@ -214,9 +214,12 @@ class ExecutionService:
         """创建 Pull Request"""
         logger.info(f"创建 PR: Issue#{task.issue_number}, branch={task.branch_name}")
         
+        # 生成简洁的 PR 标题
+        pr_title = self._generate_pr_title(task)
+        
         pr_info = self._source_control.create_pull_request(
             branch_name=task.branch_name,
-            title=f"Issue#{task.issue_number}: {task.title}",
+            title=pr_title,
             body=f"## 关联 Issue\nCloses #{task.issue_number}\n\n{task.description}",
             base_branch=self._base_branch,
         )
@@ -230,6 +233,64 @@ class ExecutionService:
             title=pr_info.title,
             body=pr_info.body,
         )
+    
+    def _generate_pr_title(self, task: Task) -> str:
+        """生成简洁的 PR 标题
+        
+        格式: {type}: {简短描述}
+        
+        例如：
+        - "feat: 自更新机制"
+        - "fix: 修复工作空间 origin 指向问题"
+        """
+        # 获取类型前缀
+        pr_type = self._get_pr_type(task.labels or [])
+        
+        # 从标题提取简短描述
+        summary = self._extract_summary(task.title)
+        
+        return f"{pr_type}: {summary}"
+    
+    def _get_pr_type(self, labels: list[str]) -> str:
+        """根据标签获取 PR 类型"""
+        label_set = {label.lower() for label in labels}
+        
+        if label_set & {"bug", "fix", "defect"}:
+            return "fix"
+        if label_set & {"documentation", "docs", "document"}:
+            return "docs"
+        if label_set & {"chore", "refactor", "maintenance"}:
+            return "chore"
+        if label_set & {"test", "testing"}:
+            return "test"
+        
+        return "feat"
+    
+    def _extract_summary(self, title: str) -> str:
+        """从 Issue 标题提取简短描述"""
+        import re
+        
+        # 常见冗余词汇
+        filler_words = ["每次", "当我", "我想", "然后", "如果", "有就", "可以", "能够", "应该"]
+        
+        summary = title
+        for word in filler_words:
+            summary = summary.replace(word, "")
+        
+        # 提取第一句话
+        for sep in ["。", "，", ",", "\n", "；", ";"]:
+            if sep in summary:
+                summary = summary.split(sep)[0]
+                break
+        
+        # 清理空白
+        summary = re.sub(r"\s+", "", summary).strip()
+        
+        # 限制长度
+        if len(summary) > 30:
+            summary = summary[:30]
+        
+        return summary or title[:30]
     
     def terminate_worker(self, issue_number: int) -> None:
         """终止 Worker"""
