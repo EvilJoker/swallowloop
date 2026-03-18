@@ -22,6 +22,7 @@ class ExecutionResult:
     message: str
     files_changed: list[str] = field(default_factory=list)
     output: str = ""
+    commit_message: str = ""  # AI 生成的 commit message
 
 
 class Agent(ABC):
