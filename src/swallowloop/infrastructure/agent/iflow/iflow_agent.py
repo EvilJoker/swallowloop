@@ -32,10 +32,15 @@ class IFlowConfig:
     log_level: str = "INFO"
     auth_method_id: str | None = None
     auth_method_info: dict[str, Any] | None = None
+    base_port: int = 8090  # iFlow 进程基础端口，实际端口 = base_port + (issue_number % 100)
 
 
 class IFlowAgent(Agent):
     """IFlow Agent 实现 - 使用 iFlow CLI SDK 进行代码开发"""
+    
+    # 端口分配锁，防止并发分配相同端口
+    _port_lock = asyncio.Lock()
+    _used_ports: set[int] = set()
     
     def __init__(
         self,
@@ -45,6 +50,7 @@ class IFlowAgent(Agent):
         self._config = config or IFlowConfig()
         self._settings = settings
         self._codebase_manager: "CodebaseManager | None" = None
+        self._current_port: int | None = None  # 当前使用的端口
         
         if settings:
             from ...codebase import CodebaseManager
@@ -57,7 +63,20 @@ class IFlowAgent(Agent):
     def name(self) -> str:
         return "iflow"
     
+    def _allocate_port(self, issue_number: int) -> int:
+        """为 Worker 分配唯一的 iFlow 端口
+        
+        端口分配策略：base_port + (issue_number % 100)
+        支持 100 个并发 Worker (端口 8090-8189)
+        """
+        port = self._config.base_port + (issue_number % 100)
+        self._current_port = port
+        print(f"[Agent] 分配 iFlow 端口: {port} (Issue#{issue_number})")
+        return port
+    
     def execute(self, task: Task, workspace_path: Path) -> ExecutionResult:
+        # 分配端口
+        self._allocate_port(task.issue_number)
         return asyncio.run(self._execute_async(task, workspace_path))
     
     async def _execute_async(self, task: Task, workspace_path: Path) -> ExecutionResult:
@@ -130,6 +149,7 @@ class IFlowAgent(Agent):
     
     async def _run_iflow(self, repo_path: Path, prompt: str) -> ExecutionResult:
         """运行 iFlow"""
+        port = self._current_port or self._config.base_port
         options = IFlowOptions(
             timeout=self._config.timeout,
             approval_mode=self._config.approval_mode,
@@ -140,6 +160,7 @@ class IFlowAgent(Agent):
             cwd=str(repo_path),
             auth_method_id=self._config.auth_method_id,
             auth_method_info=self._config.auth_method_info,
+            process_start_port=port,  # 使用分配的端口
         )
         
         output_parts = []
@@ -187,6 +208,7 @@ class IFlowAgent(Agent):
 
 请生成 commit message:"""
         
+        port = self._current_port or self._config.base_port
         options = IFlowOptions(
             timeout=30.0,  # 短超时，生成 commit message 很快
             approval_mode=self._config.approval_mode,
@@ -196,6 +218,7 @@ class IFlowAgent(Agent):
             cwd=str(repo_path),
             auth_method_id=self._config.auth_method_id,
             auth_method_info=self._config.auth_method_info,
+            process_start_port=port,  # 使用相同的端口
         )
         
         try:
