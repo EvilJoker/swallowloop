@@ -1,0 +1,1488 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SwallowLoop Dashboard</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-tertiary: #1a1a25;
+            --bg-card: rgba(18, 18, 26, 0.9);
+            --bg-card-hover: rgba(25, 25, 35, 0.95);
+            --text-primary: #f0f0f5;
+            --text-secondary: #a8a8b8;
+            --text-muted: #6a6a7a;
+            --accent-blue: #3b82f6;
+            --accent-cyan: #06b6d4;
+            --accent-purple: #8b5cf6;
+            --accent-green: #10b981;
+            --accent-yellow: #f59e0b;
+            --accent-red: #ef4444;
+            --accent-orange: #f97316;
+            --accent-pink: #ec4899;
+            --border-color: rgba(255, 255, 255, 0.06);
+            --border-hover: rgba(255, 255, 255, 0.12);
+            --glass-bg: rgba(255, 255, 255, 0.02);
+            --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+            --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.4);
+            --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.5);
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --radius-xl: 20px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Background Effects */
+        .bg-effects {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+            overflow: hidden;
+        }
+
+        .bg-effects::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: 
+                radial-gradient(ellipse 800px 600px at 20% 20%, rgba(59, 130, 246, 0.08), transparent),
+                radial-gradient(ellipse 600px 400px at 80% 80%, rgba(139, 92, 246, 0.06), transparent),
+                radial-gradient(ellipse 400px 300px at 50% 50%, rgba(6, 182, 212, 0.04), transparent);
+            animation: bgFloat 30s ease-in-out infinite;
+        }
+
+        @keyframes bgFloat {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            33% { transform: translate(2%, 1%) rotate(1deg); }
+            66% { transform: translate(-1%, 2%) rotate(-1deg); }
+        }
+
+        .noise-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0.015;
+            pointer-events: none;
+            z-index: 1;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+        }
+
+        /* Container */
+        .container {
+            position: relative;
+            z-index: 2;
+            max-width: 1800px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 32px;
+            padding: 20px 28px;
+            background: var(--bg-card);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-xl);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .logo-icon {
+            width: 52px;
+            height: 52px;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 26px;
+            box-shadow: 0 4px 20px rgba(6, 182, 212, 0.25);
+            animation: logoPulse 4s ease-in-out infinite;
+        }
+
+        @keyframes logoPulse {
+            0%, 100% { box-shadow: 0 4px 20px rgba(6, 182, 212, 0.25); }
+            50% { box-shadow: 0 4px 30px rgba(139, 92, 246, 0.35); }
+        }
+
+        .logo-text h1 {
+            font-size: 26px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--text-primary), var(--accent-cyan));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -0.5px;
+        }
+
+        .logo-text p {
+            font-size: 13px;
+            color: var(--text-muted);
+            font-weight: 400;
+            margin-top: 2px;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .refresh-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 18px;
+            background: var(--glass-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .refresh-btn:hover {
+            background: var(--bg-tertiary);
+            border-color: var(--border-hover);
+            color: var(--text-primary);
+        }
+
+        .refresh-btn.loading .icon {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 16px;
+            margin-bottom: 28px;
+        }
+
+        @media (max-width: 1200px) {
+            .stats-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--accent-color, var(--accent-blue)), transparent);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .stat-card:hover::before {
+            opacity: 1;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+            border-color: var(--border-hover);
+        }
+
+        .stat-card .stat-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            margin-bottom: 16px;
+        }
+
+        .stat-card.total .stat-icon { background: rgba(59, 130, 246, 0.15); }
+        .stat-card.total { --accent-color: var(--accent-blue); }
+        .stat-card.active .stat-icon { background: rgba(6, 182, 212, 0.15); }
+        .stat-card.active { --accent-color: var(--accent-cyan); }
+        .stat-card.running .stat-icon { background: rgba(16, 185, 129, 0.15); }
+        .stat-card.running { --accent-color: var(--accent-green); }
+        .stat-card.completed .stat-icon { background: rgba(139, 92, 246, 0.15); }
+        .stat-card.completed { --accent-color: var(--accent-purple); }
+        .stat-card.aborted .stat-icon { background: rgba(239, 68, 68, 0.15); }
+        .stat-card.aborted { --accent-color: var(--accent-red); }
+
+        .stat-card .label {
+            font-size: 12px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        .stat-card .value {
+            font-size: 36px;
+            font-weight: 700;
+            line-height: 1;
+        }
+
+        .stat-card.total .value { color: var(--accent-blue); }
+        .stat-card.active .value { color: var(--accent-cyan); }
+        .stat-card.running .value { color: var(--accent-green); }
+        .stat-card.completed .value { color: var(--accent-purple); }
+        .stat-card.aborted .value { color: var(--accent-red); }
+
+        /* Main Content */
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 420px;
+            gap: 24px;
+        }
+
+        @media (max-width: 1400px) {
+            .main-content {
+                grid-template-columns: 1fr 380px;
+            }
+        }
+
+        @media (max-width: 1200px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Task List Section */
+        .task-list-section {
+            background: var(--bg-card);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-xl);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            max-height: calc(100vh - 280px);
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--bg-secondary);
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-primary);
+        }
+
+        .section-title .icon {
+            font-size: 18px;
+        }
+
+        .task-count {
+            background: var(--glass-bg);
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .filter-tabs {
+            display: flex;
+            gap: 6px;
+        }
+
+        .filter-tab {
+            padding: 8px 16px;
+            border-radius: var(--radius-md);
+            font-size: 13px;
+            font-weight: 500;
+            background: transparent;
+            border: 1px solid transparent;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .filter-tab:hover {
+            background: var(--glass-bg);
+            color: var(--text-secondary);
+        }
+
+        .filter-tab.active {
+            background: var(--accent-blue);
+            color: white;
+            border-color: var(--accent-blue);
+        }
+
+        .task-list {
+            flex: 1;
+            overflow-y: auto;
+            min-height: 300px;
+        }
+
+        .task-list::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .task-list::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .task-list::-webkit-scrollbar-thumb {
+            background: var(--bg-tertiary);
+            border-radius: 3px;
+        }
+
+        .task-list::-webkit-scrollbar-thumb:hover {
+            background: var(--text-muted);
+        }
+
+        .task-item {
+            padding: 18px 24px;
+            border-bottom: 1px solid var(--border-color);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .task-item::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: transparent;
+            transition: background 0.2s ease;
+        }
+
+        .task-item:hover {
+            background: var(--bg-card-hover);
+        }
+
+        .task-item.selected {
+            background: rgba(59, 130, 246, 0.08);
+        }
+
+        .task-item.selected::before {
+            background: var(--accent-blue);
+        }
+
+        .task-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+
+        .task-title {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .task-issue-number {
+            color: var(--accent-cyan);
+            font-weight: 600;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            flex-shrink: 0;
+        }
+
+        .task-title-text {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* State Badges */
+        .task-state {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            flex-shrink: 0;
+        }
+
+        .task-state.new { 
+            background: rgba(59, 130, 246, 0.12); 
+            color: var(--accent-blue); 
+            border: 1px solid rgba(59, 130, 246, 0.2);
+        }
+        .task-state.assigned { 
+            background: rgba(139, 92, 246, 0.12); 
+            color: var(--accent-purple); 
+            border: 1px solid rgba(139, 92, 246, 0.2);
+        }
+        .task-state.pending { 
+            background: rgba(245, 158, 11, 0.12); 
+            color: var(--accent-yellow); 
+            border: 1px solid rgba(245, 158, 11, 0.2);
+        }
+        .task-state.in_progress { 
+            background: rgba(16, 185, 129, 0.12); 
+            color: var(--accent-green); 
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+        .task-state.submitted { 
+            background: rgba(6, 182, 212, 0.12); 
+            color: var(--accent-cyan); 
+            border: 1px solid rgba(6, 182, 212, 0.2);
+        }
+        .task-state.completed { 
+            background: rgba(139, 92, 246, 0.12); 
+            color: var(--accent-purple); 
+            border: 1px solid rgba(139, 92, 246, 0.2);
+        }
+        .task-state.aborted { 
+            background: rgba(239, 68, 68, 0.12); 
+            color: var(--accent-red); 
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+
+        .task-state .state-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        .task-state.in_progress .state-dot {
+            animation: statePulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes statePulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.8); }
+        }
+
+        .task-meta {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .task-meta-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .task-meta-item .meta-icon {
+            font-size: 14px;
+            opacity: 0.7;
+        }
+
+        /* Detail Panel */
+        .detail-panel {
+            background: var(--bg-card);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-xl);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            max-height: calc(100vh - 280px);
+            position: sticky;
+            top: 24px;
+        }
+
+        .detail-header {
+            padding: 24px;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--bg-secondary);
+        }
+
+        .detail-status-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .detail-issue-badge {
+            background: var(--glass-bg);
+            padding: 6px 12px;
+            border-radius: var(--radius-sm);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            color: var(--accent-cyan);
+            font-weight: 600;
+        }
+
+        .detail-title {
+            font-size: 16px;
+            font-weight: 600;
+            line-height: 1.5;
+            color: var(--text-primary);
+            margin-bottom: 20px;
+        }
+
+        .detail-info-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+        }
+
+        .info-item {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .info-item.full-width {
+            grid-column: span 2;
+        }
+
+        .info-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 500;
+        }
+
+        .info-value {
+            font-size: 14px;
+            color: var(--text-primary);
+        }
+
+        .info-value a {
+            color: var(--accent-cyan);
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+
+        .info-value a:hover {
+            color: var(--accent-blue);
+            text-decoration: underline;
+        }
+
+        .info-value.mono {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+        }
+
+        /* Task Description */
+        .task-description {
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .description-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .description-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .collapse-icon {
+            font-size: 12px;
+            color: var(--text-muted);
+            transition: transform 0.2s ease;
+        }
+
+        .description-header.collapsed .collapse-icon {
+            transform: rotate(-90deg);
+        }
+
+        .description-content {
+            margin-top: 12px;
+            padding: 16px;
+            background: var(--bg-primary);
+            border-radius: var(--radius-md);
+            font-size: 13px;
+            line-height: 1.7;
+            color: var(--text-secondary);
+            white-space: pre-wrap;
+            word-break: break-word;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .description-content::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .description-content::-webkit-scrollbar-thumb {
+            background: var(--bg-tertiary);
+            border-radius: 2px;
+        }
+
+        .description-header.collapsed + .description-content {
+            display: none;
+        }
+
+        .no-description {
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        /* Session Output */
+        .session-output {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        .output-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 24px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .output-title {
+            font-size: 13px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-secondary);
+        }
+
+        .live-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--accent-green);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--accent-green);
+            border-radius: 50%;
+            animation: livePulse 2s ease-in-out infinite;
+            box-shadow: 0 0 8px var(--accent-green);
+        }
+
+        @keyframes livePulse {
+            0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 8px var(--accent-green); }
+            50% { opacity: 0.6; transform: scale(0.85); box-shadow: 0 0 4px var(--accent-green); }
+        }
+
+        .output-content {
+            flex: 1;
+            padding: 16px;
+            overflow-y: auto;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 12px;
+            line-height: 1.7;
+            background: var(--bg-primary);
+            min-height: 150px;
+        }
+
+        .output-content::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .output-content::-webkit-scrollbar-track {
+            background: var(--bg-secondary);
+        }
+
+        .output-content::-webkit-scrollbar-thumb {
+            background: var(--bg-tertiary);
+            border-radius: 3px;
+        }
+
+        .log-line {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 2px;
+            padding: 2px 0;
+        }
+
+        .log-line:hover {
+            background: var(--glass-bg);
+        }
+
+        .log-timestamp {
+            color: var(--text-muted);
+            font-size: 11px;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .log-level {
+            font-weight: 600;
+            min-width: 50px;
+            text-align: center;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+        }
+
+        .log-level.DEBUG { 
+            color: var(--text-muted); 
+            background: rgba(100, 100, 120, 0.15);
+        }
+        .log-level.INFO { 
+            color: var(--accent-blue); 
+            background: rgba(59, 130, 246, 0.12);
+        }
+        .log-level.WARNING { 
+            color: var(--accent-yellow); 
+            background: rgba(245, 158, 11, 0.12);
+        }
+        .log-level.ERROR { 
+            color: var(--accent-red); 
+            background: rgba(239, 68, 68, 0.12);
+        }
+        .log-level.SUCCESS { 
+            color: var(--accent-green); 
+            background: rgba(16, 185, 129, 0.12);
+        }
+
+        .log-message {
+            color: var(--text-secondary);
+            word-break: break-word;
+            flex: 1;
+        }
+
+        /* Empty State */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 60px 40px;
+            color: var(--text-muted);
+            text-align: center;
+        }
+
+        .empty-icon {
+            font-size: 56px;
+            margin-bottom: 20px;
+            opacity: 0.4;
+        }
+
+        .empty-text {
+            font-size: 15px;
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+        }
+
+        .empty-hint {
+            font-size: 13px;
+            opacity: 0.7;
+            line-height: 1.6;
+        }
+
+        /* Loading */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 60px;
+        }
+
+        .spinner {
+            width: 36px;
+            height: 36px;
+            border: 3px solid var(--border-color);
+            border-top-color: var(--accent-cyan);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        /* Connection Status */
+        .connection-status {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            font-size: 12px;
+            color: var(--text-muted);
+            z-index: 100;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.3s ease;
+        }
+
+        .connection-status.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .connection-status.connected {
+            border-color: rgba(16, 185, 129, 0.3);
+            color: var(--accent-green);
+        }
+
+        .connection-status.disconnected {
+            border-color: rgba(239, 68, 68, 0.3);
+            color: var(--accent-red);
+        }
+
+        .connection-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container {
+                padding: 16px;
+            }
+            
+            .header {
+                flex-direction: column;
+                gap: 16px;
+                padding: 16px 20px;
+            }
+            
+            .section-header {
+                flex-direction: column;
+                gap: 12px;
+                align-items: flex-start;
+            }
+            
+            .filter-tabs {
+                width: 100%;
+                overflow-x: auto;
+                padding-bottom: 4px;
+            }
+            
+            .detail-info-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .info-item.full-width {
+                grid-column: span 1;
+            }
+        }
+
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .task-item {
+            animation: fadeIn 0.3s ease forwards;
+        }
+
+        .task-item:nth-child(1) { animation-delay: 0.05s; }
+        .task-item:nth-child(2) { animation-delay: 0.1s; }
+        .task-item:nth-child(3) { animation-delay: 0.15s; }
+        .task-item:nth-child(4) { animation-delay: 0.2s; }
+        .task-item:nth-child(5) { animation-delay: 0.25s; }
+    </style>
+</head>
+<body>
+    <div class="bg-effects"></div>
+    <div class="noise-overlay"></div>
+    
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <div class="logo-icon">
+                    <span>&#10024;</span>
+                </div>
+                <div class="logo-text">
+                    <h1>SwallowLoop</h1>
+                    <p>&#29141;&#23376;&#22238;&#29615; &#183; &#20219;&#21153;&#31649;&#29702;&#38754;&#26495;</p>
+                </div>
+            </div>
+            <div class="header-actions">
+                <button class="refresh-btn" id="refresh-btn" onclick="loadTasks()">
+                    <span class="icon">&#8635;</span>
+                    <span>&#21047;&#26032;</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Stats -->
+        <div class="stats-grid" id="stats">
+            <div class="stat-card total">
+                <div class="stat-icon">&#128202;</div>
+                <div class="label">&#24635;&#20219;&#21153;</div>
+                <div class="value" id="stat-total">0</div>
+            </div>
+            <div class="stat-card active">
+                <div class="stat-icon">&#128171;</div>
+                <div class="label">&#27963;&#36291;&#20219;&#21153;</div>
+                <div class="value" id="stat-active">0</div>
+            </div>
+            <div class="stat-card running">
+                <div class="stat-icon">&#9889;</div>
+                <div class="label">&#25191;&#34892;&#20013;</div>
+                <div class="value" id="stat-running">0</div>
+            </div>
+            <div class="stat-card completed">
+                <div class="stat-icon">&#10003;</div>
+                <div class="label">&#24050;&#23436;&#25104;</div>
+                <div class="value" id="stat-completed">0</div>
+            </div>
+            <div class="stat-card aborted">
+                <div class="stat-icon">&#10007;</div>
+                <div class="label">&#24050;&#32456;&#27490;</div>
+                <div class="value" id="stat-aborted">0</div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Task List -->
+            <section class="task-list-section">
+                <div class="section-header">
+                    <h2 class="section-title">
+                        <span class="icon">&#128203;</span>
+                        &#20219;&#21153;&#21015;&#34920;
+                        <span class="task-count" id="task-count">0 &#20010;&#20219;&#21153;</span>
+                    </h2>
+                    <div class="filter-tabs">
+                        <button class="filter-tab active" data-filter="all">&#20840;&#37096;</button>
+                        <button class="filter-tab" data-filter="active">&#27963;&#36291;</button>
+                        <button class="filter-tab" data-filter="in_progress">&#25191;&#34892;&#20013;</button>
+                        <button class="filter-tab" data-filter="completed">&#24050;&#23436;&#25104;</button>
+                    </div>
+                </div>
+                <div class="task-list" id="task-list">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Detail Panel -->
+            <aside class="detail-panel" id="detail-panel">
+                <div class="empty-state">
+                    <div class="empty-icon">&#128270;</div>
+                    <div class="empty-text">&#36873;&#25321;&#19968;&#20010;&#20219;&#21153;&#26597;&#30475;&#35814;&#24773;</div>
+                    <div class="empty-hint">&#28857;&#20987;&#24038;&#20391;&#20219;&#21153;&#26597;&#30475;&#35814;&#32454;&#20449;&#24687;&#21644;&#23454;&#26102;&#36755;&#20986;</div>
+                </div>
+            </aside>
+        </div>
+    </div>
+
+    <!-- Connection Status -->
+    <div class="connection-status" id="connection-status">
+        <span class="connection-dot"></span>
+        <span id="connection-text">&#24050;&#36830;&#25509;</span>
+    </div>
+
+    <script>
+        // State
+        let tasks = [];
+        let selectedTask = null;
+        let currentFilter = 'all';
+        let taskSocket = null;
+        let dashboardSocket = null;
+        let reconnectAttempts = 0;
+        const MAX_RECONNECT_ATTEMPTS = 5;
+
+        // API Base URL
+        const API_BASE = window.location.origin;
+
+        // DOM Elements
+        const taskListEl = document.getElementById('task-list');
+        const detailPanelEl = document.getElementById('detail-panel');
+        const filterTabs = document.querySelectorAll('.filter-tab');
+        const refreshBtn = document.getElementById('refresh-btn');
+        const connectionStatus = document.getElementById('connection-status');
+        const connectionText = document.getElementById('connection-text');
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadTasks();
+            connectDashboardWebSocket();
+            setupFilterTabs();
+            // Poll every 10 seconds
+            setInterval(loadTasks, 10000);
+        });
+
+        // Filter Tabs
+        function setupFilterTabs() {
+            filterTabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    filterTabs.forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+                    currentFilter = tab.dataset.filter;
+                    renderTaskList();
+                });
+            });
+        }
+
+        // Load Tasks
+        async function loadTasks() {
+            refreshBtn.classList.add('loading');
+            try {
+                const response = await fetch(`${API_BASE}/api/tasks`);
+                const data = await response.json();
+                tasks = data.tasks || [];
+                updateStats();
+                renderTaskList();
+            } catch (error) {
+                console.error('Failed to load tasks:', error);
+                taskListEl.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">&#9888;</div>
+                        <div class="empty-text">&#21152;&#36733;&#22833;&#36133;</div>
+                        <div class="empty-hint">&#35831;&#26816;&#26597;&#32593;&#32476;&#36830;&#25509;&#24182;&#37325;&#35797;</div>
+                    </div>
+                `;
+            } finally {
+                refreshBtn.classList.remove('loading');
+            }
+        }
+
+        // Update Stats
+        function updateStats() {
+            const stats = {
+                total: tasks.length,
+                active: tasks.filter(t => t.is_active).length,
+                running: tasks.filter(t => t.state === 'in_progress').length,
+                completed: tasks.filter(t => t.state === 'completed').length,
+                aborted: tasks.filter(t => t.state === 'aborted').length,
+            };
+
+            document.getElementById('stat-total').textContent = stats.total;
+            document.getElementById('stat-active').textContent = stats.active;
+            document.getElementById('stat-running').textContent = stats.running;
+            document.getElementById('stat-completed').textContent = stats.completed;
+            document.getElementById('stat-aborted').textContent = stats.aborted;
+            document.getElementById('task-count').textContent = `${stats.total} 个任务`;
+        }
+
+        // Render Task List
+        function renderTaskList() {
+            let filteredTasks = tasks;
+            
+            if (currentFilter === 'active') {
+                filteredTasks = tasks.filter(t => t.is_active);
+            } else if (currentFilter === 'in_progress') {
+                filteredTasks = tasks.filter(t => t.state === 'in_progress');
+            } else if (currentFilter === 'completed') {
+                filteredTasks = tasks.filter(t => t.state === 'completed');
+            }
+
+            if (filteredTasks.length === 0) {
+                taskListEl.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">&#128196;</div>
+                        <div class="empty-text">&#26242;&#26080;&#20219;&#21153;</div>
+                        <div class="empty-hint">&#22312; GitHub Issue &#19978;&#28155;&#21152; swallow &#26631;&#31614;&#21019;&#24314;&#20219;&#21153;</div>
+                    </div>
+                `;
+                return;
+            }
+
+            taskListEl.innerHTML = filteredTasks.map((task, index) => `
+                <div class="task-item ${selectedTask?.issue_number === task.issue_number ? 'selected' : ''}" 
+                     onclick="selectTask(${task.issue_number})"
+                     style="animation-delay: ${Math.min(index * 0.05, 0.3)}s">
+                    <div class="task-header">
+                        <div class="task-title">
+                            <span class="task-issue-number">#${task.issue_number}</span>
+                            <span class="task-title-text">${escapeHtml(task.title)}</span>
+                        </div>
+                        <span class="task-state ${task.state}">
+                            <span class="state-dot"></span>
+                            ${formatState(task.state)}
+                        </span>
+                    </div>
+                    <div class="task-meta">
+                        <span class="task-meta-item">
+                            <span class="meta-icon">&#128338;</span>
+                            ${formatTime(task.updated_at)}
+                        </span>
+                        <span class="task-meta-item">
+                            <span class="meta-icon">&#128204;</span>
+                            ${escapeHtml(task.branch_name)}
+                        </span>
+                        ${task.retry_count > 0 ? `
+                        <span class="task-meta-item">
+                            <span class="meta-icon">&#128260;</span>
+                            ${task.retry_count}/${task.max_retries}
+                        </span>
+                        ` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Select Task
+        function selectTask(issueNumber) {
+            selectedTask = tasks.find(t => t.issue_number === issueNumber);
+            renderTaskList();
+            renderDetailPanel();
+            connectTaskWebSocket(issueNumber);
+        }
+
+        // Render Detail Panel
+        function renderDetailPanel() {
+            if (!selectedTask) {
+                detailPanelEl.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">&#128270;</div>
+                        <div class="empty-text">&#36873;&#25321;&#19968;&#20010;&#20219;&#21153;&#26597;&#30475;&#35814;&#24773;</div>
+                        <div class="empty-hint">&#28857;&#20987;&#24038;&#20391;&#20219;&#21153;&#26597;&#30475;&#35814;&#32454;&#20449;&#24687;&#21644;&#23454;&#26102;&#36755;&#20986;</div>
+                    </div>
+                `;
+                return;
+            }
+
+            const task = selectedTask;
+            detailPanelEl.innerHTML = `
+                <div class="detail-header">
+                    <div class="detail-status-row">
+                        <span class="detail-issue-badge">#${task.issue_number}</span>
+                        <span class="task-state ${task.state}">
+                            <span class="state-dot"></span>
+                            ${formatState(task.state)}
+                        </span>
+                    </div>
+                    <h3 class="detail-title">${escapeHtml(task.title)}</h3>
+                    <div class="detail-info-grid">
+                        <div class="info-item">
+                            <span class="info-label">&#20219;&#21153;&#31867;&#22411;</span>
+                            <span class="info-value">${task.task_type === 'new_task' ? '&#26032;&#20219;&#21153;' : '&#20462;&#35746;&#20219;&#21153;'}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">&#37325;&#35797;&#27425;&#25968;</span>
+                            <span class="info-value">${task.retry_count} / ${task.max_retries}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">&#20998;&#25903;&#21517;&#31216;</span>
+                            <span class="info-value mono">${escapeHtml(task.branch_name)}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Worker PID</span>
+                            <span class="info-value mono">${task.worker_pid || '-'}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">&#21019;&#24314;&#26102;&#38388;</span>
+                            <span class="info-value">${formatDateTime(task.created_at)}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">&#26356;&#26032;&#26102;&#38388;</span>
+                            <span class="info-value">${formatDateTime(task.updated_at)}</span>
+                        </div>
+                        ${task.pr_url ? `
+                        <div class="info-item full-width">
+                            <span class="info-label">Pull Request</span>
+                            <span class="info-value">
+                                <a href="${task.pr_url}" target="_blank">#${task.pr_number} - &#26597;&#30475; PR</a>
+                            </span>
+                        </div>
+                        ` : ''}
+                    </div>
+                </div>
+                
+                <div class="task-description">
+                    <div class="description-header" onclick="toggleDescription(this)">
+                        <span class="description-title">
+                            <span>&#128221;</span>
+                            &#20219;&#21153;&#25551;&#36848;
+                        </span>
+                        <span class="collapse-icon">&#9660;</span>
+                    </div>
+                    <div class="description-content">
+                        ${task.description ? escapeHtml(task.description) : '<span class="no-description">&#26242;&#26080;&#25551;&#36848;</span>'}
+                    </div>
+                </div>
+                
+                <div class="session-output">
+                    <div class="output-header">
+                        <span class="output-title">
+                            <span>&#128187;</span>
+                            &#23454;&#26102;&#36755;&#20986;
+                        </span>
+                        <span class="live-indicator" id="live-indicator" style="display: none;">
+                            <span class="live-dot"></span>
+                            LIVE
+                        </span>
+                    </div>
+                    <div class="output-content" id="output-content">
+                        <div class="empty-state">
+                            <div class="empty-icon">&#128172;</div>
+                            <div class="empty-text">&#31561;&#24453;&#36755;&#20986;...</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Toggle Description
+        function toggleDescription(header) {
+            header.classList.toggle('collapsed');
+        }
+
+        // WebSocket Connection for Task
+        function connectTaskWebSocket(issueNumber) {
+            if (taskSocket) {
+                taskSocket.close();
+            }
+
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            taskSocket = new WebSocket(`${wsProtocol}//${window.location.host}/ws/tasks/${issueNumber}`);
+
+            const liveIndicator = document.getElementById('live-indicator');
+            const outputContent = document.getElementById('output-content');
+
+            taskSocket.onopen = () => {
+                showConnectionStatus('connected', '&#24050;&#36830;&#25509;&#21040;&#20219;&#21153;&#26085;&#24535;');
+                if (liveIndicator) liveIndicator.style.display = 'flex';
+                loadTaskLogs(issueNumber);
+            };
+
+            taskSocket.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                
+                if (data.type === 'log') {
+                    appendLog(data);
+                } else if (data.type === 'status_change') {
+                    const task = tasks.find(t => t.issue_number === data.issue_number);
+                    if (task) {
+                        task.state = data.new_state;
+                        updateStats();
+                        renderTaskList();
+                        // Update detail panel if this is the selected task
+                        if (selectedTask && selectedTask.issue_number === data.issue_number) {
+                            selectedTask.state = data.new_state;
+                            renderDetailPanel();
+                        }
+                    }
+                }
+            };
+
+            taskSocket.onclose = () => {
+                if (liveIndicator) liveIndicator.style.display = 'none';
+                showConnectionStatus('disconnected', '&#26085;&#24535;&#36830;&#25509;&#24050;&#26029;&#24320;');
+            };
+
+            taskSocket.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                if (liveIndicator) liveIndicator.style.display = 'none';
+            };
+        }
+
+        // Load historical logs
+        async function loadTaskLogs(issueNumber) {
+            try {
+                const response = await fetch(`${API_BASE}/api/tasks/${issueNumber}/logs`);
+                const data = await response.json();
+                const outputContent = document.getElementById('output-content');
+                
+                if (data.logs && data.logs.length > 0) {
+                    outputContent.innerHTML = '';
+                    data.logs.forEach(log => appendLog(log));
+                    // Scroll to bottom
+                    outputContent.scrollTop = outputContent.scrollHeight;
+                }
+            } catch (error) {
+                console.error('Failed to load logs:', error);
+            }
+        }
+
+        // Append Log
+        function appendLog(log) {
+            const outputContent = document.getElementById('output-content');
+            if (!outputContent) return;
+
+            // Remove empty state if present
+            const emptyState = outputContent.querySelector('.empty-state');
+            if (emptyState) {
+                emptyState.remove();
+            }
+
+            const logLine = document.createElement('div');
+            logLine.className = 'log-line';
+            logLine.innerHTML = `
+                <span class="log-timestamp">${formatTime(log.timestamp)}</span>
+                <span class="log-level ${log.level || 'INFO'}">${log.level || 'INFO'}</span>
+                <span class="log-message">${escapeHtml(log.message)}</span>
+            `;
+            outputContent.appendChild(logLine);
+            
+            // Auto-scroll if near bottom
+            const isNearBottom = outputContent.scrollHeight - outputContent.scrollTop - outputContent.clientHeight < 100;
+            if (isNearBottom) {
+                outputContent.scrollTop = outputContent.scrollHeight;
+            }
+        }
+
+        // Dashboard WebSocket for global updates
+        function connectDashboardWebSocket() {
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            dashboardSocket = new WebSocket(`${wsProtocol}//${window.location.host}/ws/dashboard`);
+
+            dashboardSocket.onopen = () => {
+                reconnectAttempts = 0;
+            };
+
+            dashboardSocket.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type === 'status_change') {
+                    loadTasks(); // Reload tasks on status change
+                }
+            };
+
+            dashboardSocket.onclose = () => {
+                // Reconnect logic
+                if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+                    reconnectAttempts++;
+                    setTimeout(connectDashboardWebSocket, 3000 * reconnectAttempts);
+                }
+            };
+        }
+
+        // Show Connection Status
+        function showConnectionStatus(status, text) {
+            connectionStatus.className = `connection-status ${status} visible`;
+            connectionText.innerHTML = text;
+            
+            setTimeout(() => {
+                connectionStatus.classList.remove('visible');
+            }, 3000);
+        }
+
+        // Utility Functions
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function formatState(state) {
+            const stateMap = {
+                'new': '&#26032;&#24314;',
+                'assigned': '&#24050;&#20998;&#37197;',
+                'pending': '&#24453;&#25191;&#34892;',
+                'in_progress': '&#25191;&#34892;&#20013;',
+                'submitted': '&#24050;&#25552;&#20132;',
+                'completed': '&#24050;&#23436;&#25104;',
+                'aborted': '&#24050;&#32456;&#27490;',
+            };
+            return stateMap[state] || state;
+        }
+
+        function formatTime(isoString) {
+            if (!isoString) return '-';
+            const date = new Date(isoString);
+            return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }
+
+        function formatDateTime(isoString) {
+            if (!isoString) return '-';
+            const date = new Date(isoString);
+            return date.toLocaleString('zh-CN', { 
+                month: '2-digit', 
+                day: '2-digit', 
+                hour: '2-digit', 
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        }
+    </script>
+</body>
+</html>

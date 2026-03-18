@@ -144,6 +144,18 @@ class Orchestrator:
                 check_interval=settings.self_update_interval
             )
         
+        # 初始化 Web Dashboard
+        self._dashboard = None
+        self._dashboard_process = None
+        if settings.web_enabled:
+            from ..web import DashboardServer
+            self._dashboard = DashboardServer(
+                task_repository=self._task_repo,
+                workspace_repository=self._workspace_repo,
+                settings=settings,
+                port=settings.web_port,
+            )
+        
         self._running = True
     
     def _create_agent(self) -> Agent:
@@ -171,6 +183,11 @@ class Orchestrator:
         logger.info(f"监听标签: {self._settings.issue_label}")
         logger.info(f"最大并发 Worker: {self._settings.max_workers}")
         
+        # 启动 Web Dashboard
+        if self._dashboard:
+            self._dashboard_process = self._dashboard.start_in_process()
+            logger.info(f"Web Dashboard 已启动: http://localhost:{self._settings.web_port}")
+        
         # 检查 Agent 可用性
         available, message = self._agent.check_available()
         if not available:
@@ -192,6 +209,9 @@ class Orchestrator:
         
         # 清理
         self._execution_service.terminate_all_workers()
+        if self._dashboard_process and self._dashboard_process.is_alive():
+            self._dashboard_process.terminate()
+            self._dashboard_process.join(2)
         logger.info("SwallowLoop 已停止")
     
     def _tick(self) -> None:

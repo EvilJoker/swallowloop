@@ -37,6 +37,11 @@ class Settings:
     log_level: str = "INFO"
     log_dir: Path | None = None
     
+    # Web Dashboard 配置
+    web_enabled: bool = True  # 是否启用 Web Dashboard
+    web_port: int = 8080  # Web 服务端口
+    web_host: str = "0.0.0.0"  # Web 服务监听地址
+    
     # 自更新配置
     enable_self_update: bool = True  # 是否启用自更新
     self_update_interval: int = 300  # 检查更新的间隔（秒），默认5分钟
@@ -78,6 +83,9 @@ class Settings:
             base_branch=os.getenv("BASE_BRANCH", "main"),
             log_level=os.getenv("LOG_LEVEL", "INFO"),
             log_dir=log_dir,
+            web_enabled=os.getenv("WEB_ENABLED", "true").lower() == "true",
+            web_port=int(os.getenv("WEB_PORT", "8080")),
+            web_host=os.getenv("WEB_HOST", "0.0.0.0"),
             enable_self_update=os.getenv("ENABLE_SELF_UPDATE", "true").lower() == "true",
             self_update_interval=int(os.getenv("SELF_UPDATE_INTERVAL", "300")),
         )
