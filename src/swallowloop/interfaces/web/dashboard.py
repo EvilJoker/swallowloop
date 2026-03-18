@@ -155,6 +155,8 @@ class DashboardServer:
         @self._app.get("/api/tasks")
         async def list_tasks():
             """获取所有任务列表"""
+            # 从文件重新加载，确保获取最新数据（进程间同步）
+            self._task_repo.reload()
             tasks = self._task_repo.list_all()
             summaries = [self._task_to_summary(task) for task in tasks]
             # 按更新时间倒序
@@ -164,6 +166,8 @@ class DashboardServer:
         @self._app.get("/api/tasks/{issue_number}")
         async def get_task(issue_number: int):
             """获取单个任务详情"""
+            # 从文件重新加载，确保获取最新数据（进程间同步）
+            self._task_repo.reload()
             task = self._task_repo.get_by_issue(issue_number)
             if not task:
                 raise HTTPException(status_code=404, detail="任务不存在")
@@ -212,6 +216,8 @@ class DashboardServer:
         @self._app.get("/api/stats")
         async def get_stats():
             """获取统计信息"""
+            # 从文件重新加载，确保获取最新数据（进程间同步）
+            self._task_repo.reload()
             tasks = self._task_repo.list_all()
             stats = {
                 "total": len(tasks),
@@ -226,6 +232,8 @@ class DashboardServer:
         @self._app.get("/api/sessions")
         async def list_sessions():
             """获取活跃的 Session 列表"""
+            # 从文件重新加载，确保获取最新数据（进程间同步）
+            self._task_repo.reload()
             in_progress_tasks = self._task_repo.list_active()
             sessions = []
             for task in in_progress_tasks:

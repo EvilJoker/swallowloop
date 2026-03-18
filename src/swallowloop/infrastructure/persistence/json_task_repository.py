@@ -20,6 +20,8 @@ class JsonTaskRepository(TaskRepository):
     
     任务数据保存到 ~/.swallowloop/tasks.json
     使用文件锁保护并发写入
+    
+    支持进程间数据同步：每次读取操作都会重新从文件加载，确保获取最新数据
     """
     
     def __init__(self, data_dir: Path | None = None):
@@ -30,6 +32,10 @@ class JsonTaskRepository(TaskRepository):
         
         # 加载已有任务
         self._tasks: dict[str, dict] = self._load()
+    
+    def reload(self) -> None:
+        """重新从文件加载任务数据（用于进程间同步）"""
+        self._tasks = self._load()
     
     def _acquire_lock(self, lock_file: IO) -> None:
         """获取文件锁"""
