@@ -236,13 +236,24 @@ class IFlowAgent(Agent):
     
     @classmethod
     def _get_diff(cls, workspace_path: Path) -> str:
-        """获取 git diff"""
-        import subprocess
+        """获取 git diff（相对于 main 分支的总修改）
+        
+        设计原则：一个任务一个 commit
+        所以 diff 是整个分支相对于 base 的所有修改
+        """
         try:
-            result = cls._run_git(["diff", "HEAD"], workspace_path, check=False)
-            if result.returncode != 0:
-                # 如果 HEAD 不存在（新仓库），获取所有未跟踪文件的差异
-                result = cls._run_git(["diff"], workspace_path, check=False)
+            # 获取相对于 main 的 diff
+            result = cls._run_git(["diff", "main"], workspace_path, check=False)
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout
+            
+            # 如果 main 不存在，尝试 master
+            result = cls._run_git(["diff", "master"], workspace_path, check=False)
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout
+            
+            # 如果都没有（新分支，还没 commit），获取工作区 diff
+            result = cls._run_git(["diff"], workspace_path, check=False)
             return result.stdout
         except Exception:
             return ""
