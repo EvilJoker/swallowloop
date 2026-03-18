@@ -112,6 +112,11 @@ class ExecutionService:
         
         logger.info(f"Worker 执行完成: Issue#{task.issue_number}, success={result.success}")
     
+    def is_worker_alive(self, issue_number: int) -> bool:
+        """检查 Worker 进程是否存活"""
+        process = self._worker_processes.get(issue_number)
+        return process is not None and process.is_alive()
+    
     def check_worker_result(self, task: Task) -> ExecutionResult | None:
         """检查 Worker 执行结果"""
         process = self._worker_processes.get(task.issue_number)

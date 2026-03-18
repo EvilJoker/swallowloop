@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 @dataclass
 class IFlowConfig:
     """IFlow 配置"""
-    timeout: float = 600.0
+    timeout: float = 3600.0  # 1小时
     approval_mode: ApprovalMode = ApprovalMode.YOLO
     file_access: bool = True
     file_read_only: bool = False

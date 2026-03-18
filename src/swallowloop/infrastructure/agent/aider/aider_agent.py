@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 class AiderConfig:
     """Aider 配置"""
     model: str = "claude-sonnet-4-20250514"
-    timeout: int = 600
+    timeout: int = 3600  # 1小时
 
 
 class AiderAgent(Agent):

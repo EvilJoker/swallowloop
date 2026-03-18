@@ -102,6 +102,7 @@ class JsonTaskRepository(TaskRepository):
             "pr_url": task.pr.html_url if task.pr else None,
             "retry_count": task.retry_count,
             "submission_count": task.submission_count,
+            "started_at": task.started_at.isoformat() if task.started_at else None,
             "comments": [
                 {
                     "id": c.id,

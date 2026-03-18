@@ -20,7 +20,7 @@ class Settings:
     
     # Agent 配置
     agent_type: str = "iflow"  # iflow, aider
-    agent_timeout: int = 600
+    agent_timeout: int = 3600  # 1小时，避免长时间任务被误判为超时
     
     # 工作目录
     work_dir: Path | None = None
@@ -63,7 +63,7 @@ class Settings:
             github_repo=github_repo,
             llm_model=os.getenv("LLM_MODEL", "gpt-4o"),
             agent_type=os.getenv("AGENT_TYPE", "iflow"),
-            agent_timeout=int(os.getenv("AGENT_TIMEOUT", "600")),
+            agent_timeout=int(os.getenv("AGENT_TIMEOUT", "3600")),
             work_dir=work_dir,
             poll_interval=int(os.getenv("POLL_INTERVAL", "60")),
             issue_label=os.getenv("ISSUE_LABEL", "swallow"),

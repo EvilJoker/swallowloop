@@ -99,6 +99,9 @@ class Orchestrator:
     协调 TaskService 和 ExecutionService，实现完整的任务处理流程
     """
     
+    # 心跳日志间隔（秒）- 每5分钟输出一次状态
+    HEARTBEAT_INTERVAL = 300
+    
     def __init__(self, settings: Settings):
         self._settings = settings
         
@@ -242,10 +245,40 @@ class Orchestrator:
     
     def _check_task_result(self, task: Task) -> None:
         """检查任务执行结果"""
+        from datetime import datetime, timedelta
+        
         result = self._execution_service.check_worker_result(task)
         
         if result is None:
-            # 仍在执行
+            # 仍在执行,检查是否超时
+            if task.started_at:
+                elapsed = datetime.now() - task.started_at
+                timeout_seconds = self._settings.agent_timeout
+                
+                # 检查进程是否还存活
+                worker_alive = self._execution_service.is_worker_alive(task.issue_number)
+                
+                # 只有当进程已经终止或超过超时时间才中止
+                if not worker_alive:
+                    logger.error(f"Issue#{task.issue_number} Worker 进程已终止")
+                    self._abort_task(task, "Worker 进程异常终止")
+                    return
+                elif elapsed > timedelta(seconds=timeout_seconds):
+                    logger.error(f"Issue#{task.issue_number} 执行超时 ({elapsed} > {timeout_seconds}秒)")
+                    self._abort_task(task, f"执行超时（{timeout_seconds}秒）")
+                    return
+                else:
+                    # 进程正常运行，输出心跳日志
+                    elapsed_minutes = int(elapsed.total_seconds() // 60)
+                    if elapsed_seconds := int(elapsed.total_seconds()):
+                        # 每 HEARTBEAT_INTERVAL 秒输出一次心跳日志
+                        if elapsed_seconds % self.HEARTBEAT_INTERVAL == 0:
+                            logger.info(
+                                f"Issue#{task.issue_number} 正在执行中 "
+                                f"(已运行 {elapsed_minutes} 分钟, PID={task._worker_pid})"
+                            )
+            
+            # 仍在执行且未超时
             return
         
         # 获取工作空间路径
