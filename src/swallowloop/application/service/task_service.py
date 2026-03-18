@@ -21,6 +21,8 @@ class SourceControlPort(Protocol):
     def comment_on_issue(self, issue_number: int, body: str) -> None: ...
     def get_clone_url(self) -> str: ...
     def get_pull_request(self, pr_number: int): ...
+    def has_branch(self, branch_name: str) -> bool: ...
+    def delete_branch(self, branch_name: str) -> bool: ...
 
 
 class TaskService:
@@ -198,6 +200,32 @@ class TaskService:
         task.mark_completed()
         self._task_repo.save(task)
         logger.info(f"任务已完成: Issue#{task.issue_number}")
+        
+        # 清理：删除本地工作空间和远端分支
+        self._cleanup_task(task)
+    
+    def _cleanup_task(self, task: Task) -> None:
+        """清理任务相关资源
+        
+        1. 删除本地工作空间目录
+        2. 删除远端分支
+        """
+        # 1. 删除本地工作空间
+        if task.workspace and task.workspace.path.exists():
+            import shutil
+            try:
+                shutil.rmtree(task.workspace.path)
+                logger.info(f"已清理本地工作空间: {task.workspace.path}")
+            except Exception as e:
+                logger.warning(f"清理本地工作空间失败: {task.workspace.path}, 错误: {e}")
+        
+        # 2. 删除远端分支
+        if task.branch_name:
+            try:
+                self._source_control.delete_branch(task.branch_name)
+                logger.info(f"已删除远端分支: {task.branch_name}")
+            except Exception as e:
+                logger.warning(f"删除远端分支失败: {task.branch_name}, 错误: {e}")
     
     def abort_task(self, task: Task, reason: str) -> None:
         """终止任务"""

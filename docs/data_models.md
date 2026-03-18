@@ -79,10 +79,12 @@ SwallowLoop 使用状态机管理任务生命周期，所有数据持久化到 `
 | `prepare` | assigned | pending | - |
 | `start` | pending | in_progress | - |
 | `submit` | in_progress | submitted | - |
-| `complete` | submitted | completed | - |
+| `complete` | submitted | completed | PR 已合并 |
 | `retry` | in_progress | pending | retry_count < 5 |
 | `abort` | any | aborted | - |
 | `revise` | submitted | pending | 用户评论反馈 |
+
+> **注意**：`complete` 触发时会自动清理本地工作空间和远端分支。
 
 ---
 
