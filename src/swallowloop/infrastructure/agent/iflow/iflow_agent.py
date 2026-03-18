@@ -47,10 +47,21 @@ class IFlowAgent(Agent):
         config: IFlowConfig | None = None,
         settings: "Settings | None" = None,
     ):
-        self._config = config or IFlowConfig()
         self._settings = settings
         self._codebase_manager: "CodebaseManager | None" = None
         self._current_port: int | None = None  # 当前使用的端口
+        
+        # 如果没有传入 config，从 settings 构建
+        if config is None and settings:
+            # 从 LLMConfig 获取认证信息
+            llm_config = settings.get_llm_config()
+            self._config = IFlowConfig(
+                timeout=float(settings.agent_timeout),
+                auth_method_id=llm_config.iflow_auth_method_id,
+                auth_method_info=llm_config.to_iflow_auth_info(),
+            )
+        else:
+            self._config = config or IFlowConfig()
         
         if settings:
             from ...codebase import CodebaseManager
