@@ -291,3 +291,55 @@ class TaskService:
         workspaces_dir = Path.home() / ".swallowloop" / "workspaces"
         workspaces_dir.mkdir(parents=True, exist_ok=True)
         return workspaces_dir / workspace_id
+    
+    def generate_pr_title(self, task: Task) -> str:
+        """生成简洁的 PR 标题
+        
+        格式: {type}: {简短描述}
+        
+        Args:
+            task: 任务对象
+            
+        Returns:
+            格式化的 PR 标题，如 "feat: 自更新机制"
+        """
+        # 获取类型前缀
+        branch_type = self._get_branch_type(task.labels or [])
+        
+        # 从标题提取简短描述
+        summary = self._extract_summary(task.title)
+        
+        return f"{branch_type}: {summary}"
+    
+    def _extract_summary(self, title: str) -> str:
+        """从 Issue 标题提取简短描述
+        
+        策略：
+        1. 去掉冗余词汇
+        2. 提取核心动作和对象
+        3. 限制长度（最多 30 字符）
+        """
+        # 常见冗余词汇
+        filler_words = ["每次", "当我", "我想", "然后", "如果", "有就", "可以", "能够", "应该"]
+        
+        summary = title
+        for word in filler_words:
+            summary = summary.replace(word, "")
+        
+        # 提取第一句话（句号、逗号、换行前的内容）
+        for sep in ["。", "，", ",", "\n", "；", ";"]:
+            if sep in summary:
+                summary = summary.split(sep)[0]
+                break
+        
+        # 清理空白
+        summary = re.sub(r"\s+", "", summary).strip()
+        
+        # 限制长度
+        if len(summary) > 30:
+            summary = summary[:30]
+        
+        return summary or title[:30]
+        workspaces_dir = Path.home() / ".swallowloop" / "workspaces"
+        workspaces_dir.mkdir(parents=True, exist_ok=True)
+        return workspaces_dir / workspace_id
