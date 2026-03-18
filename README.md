@@ -12,6 +12,8 @@ SwallowLoop 是一个智能维护 Agent 系统，为程序员个人/小团队提
 - **最小侵入** - 兼容现有 Git/GitHub 流程
 - **安全隔离** - 所有改动在独立分支，主仓只接受 PR
 - **闭环追踪** - 每个任务从规划到完成形成可追踪闭环
+- **并发执行** - 支持多任务并行，可配置最大 Worker 数量
+- **Web Dashboard** - 提供实时任务状态和日志查看
 
 ## 快速开始
 
@@ -20,7 +22,7 @@ SwallowLoop 是一个智能维护 Agent 系统，为程序员个人/小团队提
 - Python 3.11+
 - [uv](https://docs.astral.sh/uv/) 包管理器
 - GitHub Personal Access Token (需要 `repo` 权限)
-- LLM API Key (OpenAI / Minimax 等)
+- IFlow CLI SDK (或 OpenAI API Key)
 
 ### 2. 安装
 
@@ -48,14 +50,14 @@ cp .env_template .env
 |-----|------|
 | `GITHUB_TOKEN` | GitHub Personal Access Token |
 | `GITHUB_REPO` | 目标仓库 (owner/repo 格式) |
-| `OPENAI_API_KEY` | LLM API Key |
-| `LLM_MODEL` | 模型名称 |
 
 ### 4. 运行
 
 ```bash
 uv run swallowloop
 ```
+
+启动后访问 `http://localhost:8080` 查看 Dashboard。
 
 ## 使用方式
 
@@ -91,9 +93,20 @@ Issue 创建 → SwallowLoop 检测 → 代码生成 → PR 提交 → 人工审
 | `completed` | 已完成（PR 已合并） |
 | `aborted` | 异常终止（Issue 关闭或重试失败） |
 
-### 重试机制
+## Web Dashboard
 
-任务执行失败时自动重试，最多 5 次。重试后状态变为 `pending`，下次轮询时重新执行。
+启动后自动运行 Web 服务（默认端口 8080）：
+
+**功能：**
+- 任务列表和详情展示
+- 实时日志（WebSocket）
+- 统计信息
+
+**API 端点：**
+- `GET /api/tasks` - 任务列表
+- `GET /api/tasks/{issue_number}` - 任务详情
+- `GET /api/stats` - 统计信息
+- `WS /ws/tasks/{issue_number}` - 实时日志
 
 ## 配置说明
 
@@ -101,28 +114,15 @@ Issue 创建 → SwallowLoop 检测 → 代码生成 → PR 提交 → 人工审
 |-----|------|--------|
 | `GITHUB_TOKEN` | GitHub Token | - |
 | `GITHUB_REPO` | 目标仓库 | - |
-| `OPENAI_API_KEY` | LLM API Key | - |
-| `OPENAI_API_BASE_URL` | API 地址 | - |
-| `LLM_MODEL` | 模型名称 | `claude-sonnet-4-20250514` |
+| `AGENT_TYPE` | Agent 类型 (iflow/aider) | `iflow` |
+| `AGENT_TIMEOUT` | Agent 超时(秒) | `600` |
+| `MAX_WORKERS` | 最大并发 Worker | `5` |
 | `POLL_INTERVAL` | 轮询间隔(秒) | `60` |
 | `ISSUE_LABEL` | Issue 标签 | `swallow` |
 | `BASE_BRANCH` | 基础分支 | `main` |
-| `WORKER_TIMEOUT` | Worker 超时(秒) | `600` |
-
-### Minimax 配置示例
-
-```env
-OPENAI_API_KEY=your_minimax_api_key
-OPENAI_API_BASE_URL=https://api.minimaxi.com/v1
-LLM_MODEL=openai/MiniMax-M2.5-highspeed
-```
-
-### OpenAI 配置示例
-
-```env
-OPENAI_API_KEY=your_openai_api_key
-LLM_MODEL=gpt-4o
-```
+| `WEB_ENABLED` | 启用 Web Dashboard | `true` |
+| `WEB_PORT` | Web 端口 | `8080` |
+| `ENABLE_SELF_UPDATE` | 启用自更新 | `true` |
 
 ## 架构
 
@@ -131,15 +131,19 @@ LLM_MODEL=gpt-4o
 │   GitHub    │───▶│   Orchestrator  │───▶│   多 Worker     │
 │   Issues    │    │    (调度器)      │    │   (并行执行)     │
 └─────────────┘    └─────────────────┘    └─────────────────┘
-                         │
-                         ▼
-                 ┌─────────────────┐
-                 │  TaskManager    │
-                 │  (任务持久化)    │
-                 └─────────────────┘
+                         │                        │
+                         ▼                        ▼
+                 ┌─────────────────┐      ┌─────────────────┐
+                 │  Web Dashboard  │      │  TaskManager    │
+                 │  (FastAPI)      │      │  (持久化)        │
+                 └─────────────────┘      └─────────────────┘
 ```
 
-**并行执行**: 支持多任务同时执行。通过多 Worker 进程 + iFlow 多 Session 实现，每个任务独立工作空间。
+**核心特性：**
+- **并发控制**: 最大 Worker 数量可配置，超出的任务排队等待
+- **超时检测**: Worker 2 小时超时自动终止
+- **AI Commit**: 根据代码 diff 自动生成 commit message
+- **自更新**: 周期检查远程版本并自动更新
 
 详细架构文档请参阅 [docs/architecture.md](docs/architecture.md)
 
@@ -150,33 +154,21 @@ swallowloop/
 ├── src/swallowloop/
 │   ├── main.py                    # 主入口
 │   ├── application/               # 应用层
-│   │   ├── dto/                   # 数据传输对象
-│   │   └── service/               # 应用服务
-│   │       ├── task_service.py    # 任务服务
-│   │       └── execution_service.py # 执行服务
 │   ├── domain/                    # 领域层
-│   │   ├── model/                 # 领域模型
-│   │   │   ├── task.py            # 任务聚合根
-│   │   │   ├── workspace.py       # 工作空间
-│   │   │   └── enums.py           # 枚举定义
-│   │   ├── event/                 # 领域事件
-│   │   └── repository/            # 仓库接口
 │   ├── infrastructure/            # 基础设施层
-│   │   ├── agent/                 # Agent 实现
-│   │   │   ├── aider/             # Aider Agent
-│   │   │   └── iflow/             # IFlow Agent
-│   │   ├── config/                # 配置管理
-│   │   ├── persistence/           # 持久化实现
-│   │   └── source_control/        # 源码控制
-│   │       └── github/            # GitHub API
+│   │   ├── agent/                 # Agent 实现 (IFlow/Aider)
+│   │   ├── persistence/           # 持久化
+│   │   ├── source_control/        # GitHub API
+│   │   └── self_update.py         # 自更新
 │   └── interfaces/                # 接口层
-│       └── cli/                   # CLI 入口
-│           └── orchestrator.py    # 主调度器
+│       ├── cli/                   # CLI 入口
+│       └── web/                   # Web Dashboard
 ├── docs/
 │   ├── architecture.md            # 架构文档
 │   ├── data_models.md             # 数据模型文档
-│   └── vision.md                  # 项目愿景
-├── .env_template                  # 配置模板
+│   ├── vision.md                  # 项目愿景
+│   └── test_scenarios.md          # 测试场景
+├── tests/                         # 测试用例
 └── pyproject.toml                 # 项目配置
 ```
 
@@ -189,11 +181,14 @@ swallowloop/
 - [x] 自动创建 PR
 - [x] 用户评论触发修改
 - [x] 任务持久化存储
-- [x] 并行任务调度
+- [x] 并行任务调度（最大 Worker 可配置）
 - [x] 任务重试机制（最多 5 次）
+- [x] AI 生成 Commit Message
+- [x] Worker 超时检测
+- [x] 自更新机制
+- [x] Web Dashboard
 - [ ] 巡检与技术债治理
 - [ ] 经验/风格记忆
-- [ ] Web 前端面板
 
 ## 许可证
 

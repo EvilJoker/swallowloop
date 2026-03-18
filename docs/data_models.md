@@ -2,7 +2,7 @@
 
 ## 概述
 
-SwallowLoop 使用状态机管理任务生命周期，所有数据持久化到 `~/.swallowloop/tasks.json`。
+SwallowLoop 使用状态机管理任务生命周期，所有数据持久化到 `~/.swallowloop/` 目录。
 
 ---
 
@@ -19,17 +19,17 @@ SwallowLoop 使用状态机管理任务生命周期，所有数据持久化到 `
 | `task_type` | TaskType | 任务类型 | 否 |
 | `branch_name` | str \| None | 分支名称 | 否 |
 | `repo_url` | str \| None | Git 仓库地址 | 否 |
-| `workspace_id` | str \| None | 工作空间 ID | 否 |
-| `pr_number` | int \| None | PR 编号 | 否 |
-| `pr_url` | str \| None | PR 链接 | 否 |
-| `comments` | list[dict] | 用户评论列表 | 否 |
-| `latest_comment` | str \| None | 最新评论内容 | 否 |
+| `labels` | list[str] | Issue 标签列表 | 否 |
+| `workspace` | Workspace \| None | 关联的工作空间 | 否 |
+| `pr` | PullRequest \| None | 关联的 PR | 否 |
+| `comments` | list[Comment] | 用户评论列表 | 否 |
+| `latest_comment` | Comment \| None | 最新评论 | 否 |
 | `retry_count` | int | 重试次数 | 否 |
 | `submission_count` | int | 提交次数 | 否 |
 | `worker_pid` | int \| None | Worker 进程 PID | 否 |
+| `started_at` | datetime \| None | 开始时间 | 否 |
 | `created_at` | datetime | 创建时间 | 否 |
 | `updated_at` | datetime | 更新时间 | 否 |
-| `started_at` | datetime \| None | 开始时间 | 否 |
 | `state` | str | 当前状态 | 是 |
 
 ### JSON 存储示例
@@ -38,26 +38,20 @@ SwallowLoop 使用状态机管理任务生命周期，所有数据持久化到 `
 {
   "task_id": "task-3",
   "issue_number": 3,
-  "title": "[SwallowLoop Test] 添加一个简单的 hello 函数",
-  "description": "请在项目中创建一个 hello.py 文件...",
+  "title": "添加用户登录功能",
+  "description": "请实现用户登录功能...",
   "task_type": "new_task",
   "state": "submitted",
-  "branch_name": "Issue3_swallowloop-test-hello",
-  "repo_url": "https://github.com/EvilJoker/hubble-pad.git",
-  "workspace_id": "issue3_hubble-pad_20260312",
+  "branch_name": "feature_3_0318-user-login",
+  "repo_url": "https://github.com/owner/repo.git",
+  "labels": ["swallow", "feature"],
   "pr_number": 4,
-  "pr_url": "https://github.com/EvilJoker/hubble-pad/pull/4",
+  "pr_url": "https://github.com/owner/repo/pull/4",
   "retry_count": 0,
   "submission_count": 1,
-  "comments": [
-    {
-      "id": 123456,
-      "body": "请修改函数名",
-      "created_at": "2026-03-12T10:00:00Z"
-    }
-  ],
-  "latest_comment": "请修改函数名",
-  "updated_at": "2026-03-12T19:30:00"
+  "comments": [],
+  "created_at": "2026-03-18T10:00:00",
+  "updated_at": "2026-03-18T12:30:00"
 }
 ```
 
@@ -77,32 +71,6 @@ SwallowLoop 使用状态机管理任务生命周期，所有数据持久化到 `
 | `COMPLETED` | `completed` | 已完成（Issue 关闭） |
 | `ABORTED` | `aborted` | 异常终止 |
 
-### 状态流转图
-
-```
-                    ┌──────────────────────────────────────────┐
-                    │                                          │
-                    ▼                                          │
-┌─────┐  assign  ┌──────────┐  prepare  ┌─────────┐  start  ┌────────────┐
-│ NEW │ ──────── │ ASSIGNED │ ───────── │ PENDING │ ─────── │ IN_PROGRESS │
-└─────┘          └──────────┘           └─────────┘         └────────────┘
-                                                          │         │
-                                           ┌──────────────┤         ├──────────────┐
-                                           │              │         │              │
-                                           ▼              │         ▼              ▼
-                                      ┌──────────┐        │   ┌──────────┐   ┌─────────┐
-                                      │ PENDING  │◄───────┤   │ SUBMITTED│   │ ABORTED │
-                                      └──────────┘  retry │   └──────────┘   └─────────┘
-                                           ▲              │         │
-                                           │              │         │
-                                      ┌────┴─────┐        │         │
-                                      │  revise  │────────┘         │
-                                      └──────────┘                  ▼
-                                                              ┌───────────┐
-                                                              │ COMPLETED │
-                                                              └───────────┘
-```
-
 ### 状态转换触发器
 
 | 触发器 | 源状态 | 目标状态 | 条件 |
@@ -112,8 +80,8 @@ SwallowLoop 使用状态机管理任务生命周期，所有数据持久化到 `
 | `start` | pending | in_progress | - |
 | `submit` | in_progress | submitted | - |
 | `complete` | submitted | completed | - |
-| `retry` | in_progress | pending | retry_count < max_retries |
-| `abort` | in_progress | aborted | - |
+| `retry` | in_progress | pending | retry_count < 5 |
+| `abort` | any | aborted | - |
 | `revise` | submitted | pending | 用户评论反馈 |
 
 ---
@@ -123,7 +91,7 @@ SwallowLoop 使用状态机管理任务生命周期，所有数据持久化到 `
 | 类型 | 值 | 说明 |
 |-----|-----|------|
 | `NEW_TASK` | `new_task` | 新任务，需要 clone 仓库 |
-| `REVISION` | `revision` | 修改任务，在现有代码空间继续工作 |
+| `REVISION` | `revision` | 修改任务，在现有分支继续工作 |
 
 ---
 
@@ -142,17 +110,17 @@ SwallowLoop 使用状态机管理任务生命周期，所有数据持久化到 `
 
 ### 命名规则
 
-**工作空间 ID**: `issue{issue_number}_{repo_name}_{date}`
+**工作空间 ID**: `{type}_{issue_number}_{date}-{slug}`
 
-示例: `issue3_hubble-pad_20260312`
+示例: `feature_3_0318-user-login`
 
-**分支名称**: `Issue{issue_number}_{slug}`
+**分支名称**: `{type}_{issue_number}_{date}-{slug}`
 
-示例: `Issue3_swallowloop-test-hello`
+示例: `feature_3_0318-user-login`
 
 ---
 
-## 5. TaskResult (执行结果)
+## 5. ExecutionResult (执行结果)
 
 Worker 执行完成后返回的结果对象。
 
@@ -164,12 +132,11 @@ Worker 执行完成后返回的结果对象。
 | `message` | str | 结果消息 |
 | `files_changed` | list[str] | 修改的文件列表 |
 | `output` | str | 执行输出 |
-| `pr_url` | str \| None | PR 链接 |
-| `pr_number` | int \| None | PR 编号 |
+| `commit_message` | str \| None | AI 生成的 commit message |
 
 ---
 
-## 6. Config (配置模型)
+## 6. Settings (配置模型)
 
 ### 字段定义
 
@@ -177,15 +144,20 @@ Worker 执行完成后返回的结果对象。
 |-------|------|------|--------|
 | `github_token` | str | GitHub Token | - |
 | `github_repo` | str | 目标仓库 | - |
-| `openai_api_key` | str \| None | OpenAI API Key | None |
-| `openai_api_base_url` | str \| None | API Base URL | None |
+| `llm_model` | str | LLM 模型 | `gpt-4o` |
+| `agent_type` | str | Agent 类型 | `iflow` |
+| `agent_timeout` | int | Agent 超时(秒) | `600` |
+| `max_workers` | int | 最大并发 Worker | `5` |
 | `work_dir` | Path \| None | 工作目录 | `~/.swallowloop` |
-| `poll_interval` | int | 轮询间隔(秒) | 60 |
+| `poll_interval` | int | 轮询间隔(秒) | `60` |
 | `issue_label` | str | Issue 标签 | `swallow` |
 | `base_branch` | str | 基础分支 | `main` |
-| `llm_model` | str | LLM 模型 | `claude-sonnet-4-20250514` |
-| `worker_timeout` | int | Worker 超时(秒) | 600 |
-| `auto_test` | bool | 自动测试 | False |
+| `log_level` | str | 日志级别 | `INFO` |
+| `web_enabled` | bool | 启用 Web | `true` |
+| `web_port` | int | Web 端口 | `8080` |
+| `web_host` | str | Web 监听地址 | `0.0.0.0` |
+| `enable_self_update` | bool | 启用自更新 | `true` |
+| `self_update_interval` | int | 更新检查间隔(秒) | `300` |
 
 ---
 
@@ -194,20 +166,35 @@ Worker 执行完成后返回的结果对象。
 | 文件 | 路径 | 说明 |
 |-----|------|------|
 | 任务数据 | `~/.swallowloop/tasks.json` | 任务持久化存储 |
-| 工作空间 | `~/.swallowloop/workspaces/` | 代码仓库工作目录 |
+| 工作空间数据 | `~/.swallowloop/workspaces.json` | 工作空间记录 |
+| 工作空间目录 | `~/.swallowloop/workspaces/` | 代码仓库工作目录 |
+| 代码缓存 | `~/.swallowloop/codebase/` | 代码库缓存 |
+| 日志目录 | `~/.swallowloop/logs/` | 日志文件 |
 
 ---
 
-## 评论数据结构
+## Worker 进程管理
 
-存储在 Task 的 `comments` 字段中，排除 Bot 评论。
+### 进程信息
 
-```python
-comment = {
-    "id": 123456,           # GitHub Comment ID
-    "body": "请修改...",     # 评论内容
-    "created_at": "2026-03-12T10:00:00Z"  # 创建时间
-}
-```
+| 字段 | 说明 |
+|-----|------|
+| `worker_pid` | Worker 子进程 PID |
+| `started_at` | 启动时间（用于超时检测） |
 
-**用途**: Worker 收到修改任务时，可以从 `latest_comment` 获取用户最新的反馈意见。
+### 超时处理
+
+- 默认超时: 2 小时
+- 超时后自动终止进程
+- 任务状态标记为失败，进入重试流程
+
+---
+
+## JSON 并发写入保护
+
+使用 `fcntl` 文件锁保护并发写入：
+
+1. 获取排他锁
+2. 写入临时文件
+3. 原子替换原文件
+4. 释放锁
