@@ -87,10 +87,12 @@ class ExecutionService:
             result_file.unlink()
             logger.debug(f"清理旧结果文件: {result_file}")
         
-        # 启动子进程
+        # 启动子进程，设置有意义的进程名称
+        process_name = f"Worker-{task.issue_number}"
         process = multiprocessing.Process(
             target=self._worker_main,
             args=(task, workspace.path, self._agent, self._source_control, self._base_branch),
+            name=process_name,
         )
         process.start()
         
