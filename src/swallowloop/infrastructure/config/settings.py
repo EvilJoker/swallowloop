@@ -17,7 +17,8 @@ class Settings:
     
     # GitHub 配置
     github_token: str
-    github_repo: str  # owner/repo 格式
+    github_repo: str  # 单个仓库 owner/repo 格式（兼容旧配置）
+    github_repos: list[str] = field(default_factory=list)  # 多仓库列表
     
     # Agent 配置
     agent_type: str = "iflow"  # iflow, aider
@@ -66,6 +67,15 @@ class Settings:
         if not github_repo:
             raise ValueError("GITHUB_REPO 环境变量未设置 (格式: owner/repo)")
         
+        # 支持多仓库配置（逗号分隔）
+        github_repos_str = os.getenv("GITHUB_REPOS", "")
+        if github_repos_str:
+            # 解析逗号分隔的仓库列表
+            github_repos = [r.strip() for r in github_repos_str.split(",") if r.strip()]
+        else:
+            # 兼容旧配置：单仓库
+            github_repos = [github_repo] if github_repo else []
+        
         work_dir = os.getenv("WORK_DIR")
         if work_dir:
             work_dir = Path(work_dir)
@@ -80,6 +90,7 @@ class Settings:
         return cls(
             github_token=github_token,
             github_repo=github_repo,
+            github_repos=github_repos,
             agent_type=os.getenv("AGENT_TYPE", "iflow"),
             agent_timeout=int(os.getenv("AGENT_TIMEOUT", "1200")),
             max_workers=int(os.getenv("MAX_WORKERS", "5")),

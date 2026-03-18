@@ -47,10 +47,13 @@ class TaskService:
         self._base_branch = base_branch
         self._processed_comments: set[int] = set()
     
-    def scan_issues(self) -> tuple[list[Task], list[Task]]:
+    def scan_issues(self, repo: str | None = None) -> tuple[list[Task], list[Task]]:
         """
         扫描 Issue 并创建/更新任务
         
+        Args:
+            repo: 仓库标识 owner/repo，如果为 None 则使用任务的 repo 字段匹配
+            
         Returns:
             tuple: (新任务列表, 需要中止的任务列表)
         """
@@ -95,8 +98,8 @@ class TaskService:
             
             if task is None:
                 # 本地无此任务，创建新任务
-                logger.info(f"创建新任务: Issue#{issue.number} - {issue.title}")
-                task = self._create_task_from_issue(issue)
+                logger.info(f"创建新任务: Issue#{issue.number} - {issue.title}, repo={repo}")
+                task = self._create_task_from_issue(issue, repo or "")
                 tasks.append(task)
             else:
                 # 本地已有任务，检查评论
@@ -112,9 +115,9 @@ class TaskService:
         except Exception:
             return False
     
-    def _create_task_from_issue(self, issue: IssueDTO) -> Task:
+    def _create_task_from_issue(self, issue: IssueDTO, repo: str) -> Task:
         """从 Issue 创建任务"""
-        branch_name = self._generate_branch_name(issue.number, issue.title, issue.labels)
+        branch_name = self._generate_branch_name(issue.number, issue.title, issue.labels, repo)
         
         task = Task(
             task_id=TaskId(f"task-{issue.number}"),
@@ -122,6 +125,7 @@ class TaskService:
             title=issue.title,
             description=issue.body or "",
             branch_name=branch_name,
+            repo=repo,  # 关联仓库
         )
         
         self._task_repo.save(task)
@@ -264,16 +268,23 @@ class TaskService:
         count = task.submission_count + 1
         return f"[SwallowLoop Bot][{timestamp}][提交次数 {count}] {message}"
     
-    def _generate_branch_name(self, issue_number: int, title: str, labels: list[str] | None = None) -> str:
+    def _generate_branch_name(self, issue_number: int, title: str, labels: list[str] | None = None, repo: str = "") -> str:
         """生成分支名
         
-        格式: {type}_{number}_{date}-{slug}
+        格式: {repo_prefix}_{type}_{number}_{date}-{slug}
+        - repo_prefix: 仓库前缀 (owner_repo)
         - type: 根据标签判断 (feature/fix/docs/chore)
         - number: Issue 编号
         - date: 月日格式 (MMDD)
         - slug: 标题中的英文关键词，最多 20 字符
         """
         from datetime import datetime
+        
+        # 生成 repo 前缀
+        repo_prefix = ""
+        if repo:
+            # owner/repo -> owner_repo
+            repo_prefix = repo.replace("/", "_") + "_"
         
         # 根据标签判断类型
         branch_type = self._get_branch_type(labels or [])
@@ -286,10 +297,11 @@ class TaskService:
         slug = re.sub(r"[\s]+", "-", slug).strip("-")[:20]
         
         # 构建分支名（使用下划线分隔）
+        base_name = f"{branch_type}_{issue_number}_{date_str}"
         if slug:
-            return f"{branch_type}_{issue_number}_{date_str}-{slug}"
-        else:
-            return f"{branch_type}_{issue_number}_{date_str}"
+            base_name = f"{base_name}-{slug}"
+        
+        return f"{repo_prefix}{base_name}"
     
     def _get_branch_type(self, labels: list[str]) -> str:
         """根据标签获取分支类型"""

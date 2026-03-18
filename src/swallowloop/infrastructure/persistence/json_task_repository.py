@@ -146,6 +146,7 @@ class JsonTaskRepository(TaskRepository):
             "task_type": task.task_type.value,
             "state": task.state,
             "branch_name": task.branch_name,
+            "repo": task.repo,  # 仓库标识
             "repo_url": task.repo_url,
             "workspace_id": task.workspace.id if task.workspace else None,
             "pr_number": task.pr.number if task.pr else None,
@@ -176,6 +177,7 @@ class JsonTaskRepository(TaskRepository):
             description=data.get("description", ""),
             task_type=TaskType(data.get("task_type", "new_task")),
             branch_name=data.get("branch_name"),
+            repo=data.get("repo"),  # 仓库标识
             repo_url=data.get("repo_url"),
             initial_state=saved_state,
         )

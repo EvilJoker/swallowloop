@@ -71,6 +71,7 @@ class Task:
         description: str = "",
         task_type: TaskType = TaskType.NEW_TASK,
         branch_name: str | None = None,
+        repo: str | None = None,  # 新增：仓库标识 owner/repo
         repo_url: str | None = None,
         max_retries: int = 5,
         initial_state: str | None = None,
@@ -81,7 +82,8 @@ class Task:
         self._title = title
         self._description = description
         self._task_type = task_type
-        self._branch_name = branch_name or f"Issue{issue_number}"
+        self._branch_name = branch_name or f"issue_{issue_number}"
+        self._repo = repo  # 仓库标识 owner/repo
         self._repo_url = repo_url
         
         # 关联实体
@@ -219,6 +221,11 @@ class Task:
     @property
     def branch_name(self) -> str:
         return self._branch_name
+    
+    @property
+    def repo(self) -> str | None:
+        """仓库标识 owner/repo"""
+        return self._repo
     
     @property
     def repo_url(self) -> str | None:

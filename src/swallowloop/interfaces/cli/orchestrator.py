@@ -98,6 +98,7 @@ class Orchestrator:
     主调度器
     
     协调 TaskService 和 ExecutionService，实现完整的任务处理流程
+    支持多仓库管理
     """
     
     def __init__(self, settings: Settings):
@@ -110,12 +111,20 @@ class Orchestrator:
         self._task_repo: TaskRepository = JsonTaskRepository(settings.work_dir)
         self._workspace_repo: WorkspaceRepository = JsonWorkspaceRepository(settings.work_dir)
         
-        # 初始化 GitHub 客户端
-        github_client = GitHubSourceControl(
-            token=settings.github_token,
-            repo=settings.github_repo,
-        )
-        self._source_control = SourceControlAdapter(github_client)
+        # 确定要管理的仓库列表
+        self._repos = settings.github_repos if settings.github_repos else [settings.github_repo]
+        
+        # 为每个仓库创建 GitHub 客户端
+        self._source_controls: dict[str, SourceControlPort] = {}
+        for repo in self._repos:
+            github_client = GitHubSourceControl(
+                token=settings.github_token,
+                repo=repo,
+            )
+            self._source_controls[repo] = SourceControlAdapter(github_client)
+        
+        # 默认使用第一个仓库的 source_control（向后兼容）
+        self._source_control = self._source_controls[self._repos[0]]
         
         # 初始化 Agent
         self._agent = self._create_agent()
@@ -233,8 +242,19 @@ class Orchestrator:
         # 1. 清理过期资源
         self._cleanup_expired()
         
-        # 2. 扫描 Issue
-        _, tasks_to_abort = self._task_service.scan_issues()
+        # 2. 扫描所有仓库的 Issue
+        all_new_tasks = []
+        all_tasks_to_abort = []
+        for repo, source_control in self._source_controls.items():
+            # 切换到对应仓库的 source_control
+            self._task_service._source_control = source_control
+            new_tasks, tasks_to_abort = self._task_service.scan_issues(repo)
+            all_new_tasks.extend(new_tasks)
+            all_tasks_to_abort.extend(tasks_to_abort)
+            logger.info(f"仓库 {repo}: 发现 {len(new_tasks)} 个新任务, {len(tasks_to_abort)} 个待中止")
+        
+        # 恢复默认 source_control
+        self._task_service._source_control = self._source_control
         
         # 3. 处理需要中止的任务（Issue 已关闭）
         for task in tasks_to_abort:
@@ -292,7 +312,13 @@ class Orchestrator:
     def _process_task(self, task: Task) -> None:
         """处理单个任务"""
         retry_info = f" (重试 {task.retry_count}/{task._max_retries})" if task.retry_count > 0 else ""
-        logger.info(f"处理 Issue#{task.issue_number}: {task.title}{retry_info}")
+        
+        # 根据任务的 repo 切换 source_control
+        repo = task.repo or self._repos[0]
+        source_control = self._source_controls.get(repo, self._source_control)
+        self._execution_service._source_control = source_control
+        
+        logger.info(f"处理 Issue#{task.issue_number} (repo={repo}): {task.title}{retry_info}")
         
         # 根据状态区分处理
         if task.state == TaskState.NEW.value:
