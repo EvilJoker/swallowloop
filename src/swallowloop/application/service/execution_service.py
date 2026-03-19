@@ -11,6 +11,7 @@ from typing import Protocol
 from ...domain.model import Task, Workspace, PullRequest
 from ...domain.repository import TaskRepository, WorkspaceRepository
 from ...infrastructure.agent import ExecutionResult
+from .environment_checker import EnvironmentChecker
 
 
 logger = logging.getLogger(__name__)
@@ -49,13 +50,20 @@ class PullRequestInfo:
 class ExecutionService:
     """
     执行应用服务
-    
+
     负责任务的执行和监控
+    支持全能 Worker 模式：
+    0. 环境检查 (EnvironmentChecker)
+    1. 分析 (Analyze)
+    2. 方案设计 (Plan)
+    3. 开发 (Implement)
+    4. 测试 (Test)
+    5. 提交 (Submit) - PR + 报告
     """
-    
+
     MONITOR_INTERVAL = 600  # 监控间隔：10分钟
     WORKER_TIMEOUT_HOURS = 2  # Worker 超时时间：2小时
-    
+
     def __init__(
         self,
         task_repository: TaskRepository,
@@ -69,7 +77,7 @@ class ExecutionService:
         self._source_control = source_control
         self._agent = agent
         self._base_branch = base_branch
-        
+
         # Worker 进程管理
         self._worker_processes: dict[int, multiprocessing.Process] = {}
         self._worker_start_times: dict[int, datetime] = {}  # 记录启动时间
@@ -80,7 +88,19 @@ class ExecutionService:
         workspace = self._workspace_repo.get(task.issue_number)
         if not workspace:
             raise ValueError(f"工作空间不存在: Issue#{task.issue_number}")
-        
+
+        # Step 0: 环境检查
+        logger.info(f"[检查] 开始环境检查: Issue#{task.issue_number}")
+        checker = EnvironmentChecker(
+            workspace.path,
+            agent_check=self._agent.check_available,
+        )
+        check_result = checker.check()
+        if not check_result.ok:
+            logger.error(f"[检查] 环境检查失败: {check_result.message}")
+            raise RuntimeError(f"环境检查失败: {check_result.message}")
+        logger.info(f"[检查] 环境检查通过")
+
         # 清理可能存在的旧结果文件
         result_file = workspace.path.parent / f"result-{task.issue_number}"
         if result_file.exists():

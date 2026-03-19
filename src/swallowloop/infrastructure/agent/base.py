@@ -12,7 +12,8 @@ if TYPE_CHECKING:
     from ..codebase import CodebaseManager
 
 # 任务报告文件名
-REPORT_FILENAME = ".swallowloop_report.md"
+# 任务报告目录（相对于 workspace）
+REPORT_DIR = "reports"
 
 
 @dataclass
@@ -159,7 +160,7 @@ class Agent(ABC):
     @classmethod
     def _commit_and_push(cls, task: "Task", workspace_path: Path, files_changed: list[str]) -> ExecutionResult:
         """提交并推送
-        
+
         确保一个 PR 只有一个 commit：
         - 如果分支已有自己的 commit，使用 --amend
         - 如果是新分支，创建新 commit
@@ -170,7 +171,7 @@ class Agent(ABC):
             result = cls._run_git(["branch", "--show-current"], workspace_path)
             current_branch = result.stdout.strip()
             print(f"[Git] 当前分支: {current_branch}, 目标分支: {task.branch_name}")
-            
+
             if current_branch != task.branch_name:
                 # 当前分支不正确，需要切换或创建
                 print(f"[Git] 分支不匹配，尝试切换到 {task.branch_name}")
@@ -181,14 +182,22 @@ class Agent(ABC):
                     cls._run_git(["checkout", "-b", task.branch_name], workspace_path)
         except subprocess.CalledProcessError as e:
             return ExecutionResult(False, f"分支检查失败: {e.stderr or str(e)}", files_changed)
-        
+
+        # 在提交前生成报告（确保报告一起被提交）
+        print(f"[Report] 生成任务报告...")
+        report_result = ExecutionResult(True, "报告已生成")
+        try:
+            cls.generate_report(task, workspace_path, report_result)
+        except Exception as e:
+            print(f"[Report] 报告生成失败（不影响提交）: {e}")
+
         # 检查分支上是否已有自己的 commit（相对于 main）
         has_own_commit = cls._has_own_commit(workspace_path)
-        
+
         try:
             print(f"[Git] 添加文件到暂存区...")
             cls._run_git(["add", "-A"], workspace_path)
-            
+
             if has_own_commit:
                 # 已有 commit，使用 amend 保持单个 commit
                 print(f"[Git] Amend 提交: Issue#{task.issue_number}: {task.title}")
@@ -199,7 +208,7 @@ class Agent(ABC):
                 cls._run_git(["commit", "-m", f"Issue#{task.issue_number}: {task.title}"], workspace_path)
         except subprocess.CalledProcessError as e:
             return ExecutionResult(False, f"提交失败: {e.stderr or str(e)}", files_changed)
-        
+
         try:
             print(f"[Git] 推送分支到远程: {task.branch_name}")
             # 检查远程分支是否存在
@@ -209,7 +218,7 @@ class Agent(ABC):
                 check=False
             )
             remote_exists = bool(result.stdout.strip())
-            
+
             if remote_exists or has_own_commit:
                 # 远程已有分支或 amend 过，需要强制推送
                 print(f"[Git] 强制推送（已有远程分支）")
@@ -222,7 +231,7 @@ class Agent(ABC):
             error_msg = e.stderr or str(e)
             print(f"[Git] 推送失败: {error_msg}")
             return ExecutionResult(False, f"推送失败: {error_msg}", files_changed)
-        
+
         return ExecutionResult(True, "任务完成，等待 PR 创建", files_changed)
     
     @classmethod
@@ -379,58 +388,47 @@ class Agent(ABC):
         workspace_path: Path,
         result: ExecutionResult,
         pr_url: str | None = None,
-    ) -> None:
-        """生成/更新任务执行报告
-        
+    ) -> Path:
+        """生成任务执行报告（会随 PR 一起提交）
+
+        报告位置: reports/issue-{issue_number}-report.md
+
         Args:
             task: 任务对象
             workspace_path: 工作空间路径
             result: 执行结果
             pr_url: PR 链接（如果有）
+
+        Returns:
+            报告文件路径
         """
-        from ...domain.model import TaskType
-        
-        report_path = workspace_path / REPORT_FILENAME
-        
-        # 确保 .gitignore 中包含报告文件
-        cls._ensure_gitignore(workspace_path)
-        
+        # 创建 reports 目录
+        report_dir = workspace_path / REPORT_DIR
+        report_dir.mkdir(exist_ok=True)
+
+        # 报告路径
+        report_path = report_dir / f"issue-{task.issue_number}-report.md"
+
         # 读取现有报告（如果存在）
         existing_content = ""
         if report_path.exists():
             existing_content = report_path.read_text(encoding="utf-8")
-        
+
         # 解析现有报告中的执行历史
         history = cls._parse_history(existing_content)
-        
+
         # 添加新的执行记录
         new_record = cls._format_execution_record(task, result, pr_url, workspace_path)
         history.append(new_record)
-        
+
         # 生成完整报告
         report_content = cls._build_report_content(task, history, result, pr_url)
-        
+
         # 写入报告
         report_path.write_text(report_content, encoding="utf-8")
-        print(f"[Report] 报告已更新: {report_path}")
-    
-    @staticmethod
-    def _ensure_gitignore(workspace_path: Path) -> None:
-        """确保 .gitignore 中包含报告文件"""
-        gitignore_path = workspace_path / ".gitignore"
-        
-        gitignore_content = ""
-        if gitignore_path.exists():
-            gitignore_content = gitignore_path.read_text(encoding="utf-8")
-        
-        # 检查是否已包含报告文件
-        if REPORT_FILENAME not in gitignore_content:
-            # 添加到 .gitignore
-            with open(gitignore_path, "a", encoding="utf-8") as f:
-                if gitignore_content and not gitignore_content.endswith("\n"):
-                    f.write("\n")
-                f.write(f"\n# SwallowLoop task report\n{REPORT_FILENAME}\n")
-            print(f"[Report] 已添加 {REPORT_FILENAME} 到 .gitignore")
+        print(f"[Report] 报告已生成: {report_path}")
+
+        return report_path
     
     @staticmethod
     def _parse_history(content: str) -> list[str]:
@@ -583,7 +581,7 @@ class Agent(ABC):
         
         content += """---
 
-*此文件不应提交到版本控制，已在 .gitignore 中忽略*
+*此报告由 SwallowLoop 自动生成，随 PR 一起提交*
 """
-        
+
         return content
