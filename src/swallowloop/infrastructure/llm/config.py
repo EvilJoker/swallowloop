@@ -41,7 +41,7 @@ class LLMConfig:
             if not self.base_url:
                 self.base_url = "https://api.minimaxi.com/v1"
             if not self.model_name:
-                self.model_name = "MiniMax-M2.5-highspeed"
+                self.model_name = "m2.7"
         elif self.provider == LLMProvider.OPENAI:
             if not self.base_url:
                 self.base_url = "https://api.openai.com/v1"
@@ -116,7 +116,7 @@ class LLMConfig:
         )
     
     @classmethod
-    def minimax(cls, api_key: str, model_name: str = "MiniMax-M2.5-highspeed") -> "LLMConfig":
+    def minimax(cls, api_key: str, model_name: str = "m2.7") -> "LLMConfig":
         """创建 Minimax 配置"""
         return cls(
             provider=LLMProvider.MINIMAX,

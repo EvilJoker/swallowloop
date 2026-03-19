@@ -15,7 +15,7 @@ from ...infrastructure.config import Settings
 from ...infrastructure.logger import setup_logging, get_logger
 from ...infrastructure.persistence import JsonTaskRepository, JsonWorkspaceRepository
 from ...infrastructure.source_control import GitHubSourceControl
-from ...infrastructure.agent import IFlowAgent, AiderAgent, Agent
+from ...infrastructure.agent import IFlowAgent, Agent
 from ...infrastructure.agent.base import ExecutionResult
 from ...infrastructure.self_update import SelfUpdater
 
@@ -168,22 +168,13 @@ class Orchestrator:
         self._running = True
     
     def _create_agent(self) -> Agent:
-        """根据配置创建 Agent"""
-        if self._settings.agent_type == "iflow":
-            from ...infrastructure.agent.iflow import IFlowConfig
-            
-            config = IFlowConfig(
-                timeout=float(self._settings.agent_timeout),
-            )
-            return IFlowAgent(config, settings=self._settings)
-        else:
-            from ...infrastructure.agent.aider import AiderConfig
-            
-            config = AiderConfig(
-                model=self._settings.llm_model,
-                timeout=self._settings.agent_timeout,
-            )
-            return AiderAgent(config, settings=self._settings)
+        """创建 IFlow Agent"""
+        from ...infrastructure.agent.iflow import IFlowConfig
+
+        config = IFlowConfig(
+            timeout=float(self._settings.agent_timeout),
+        )
+        return IFlowAgent(config, settings=self._settings)
     
     def run(self) -> None:
         """主循环"""

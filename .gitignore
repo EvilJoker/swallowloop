@@ -37,7 +37,7 @@ ENV/
 .env.*.local
 
 # Claude Code
-.claude/
+.claude/worktrees
 
 # Specstory
 .specstory/

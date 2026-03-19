@@ -5,7 +5,6 @@ description = "SwallowLoop - 燕子回环：围绕代码仓的智能维护Agent"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
 dependencies = [
-    "aider-chat>=0.86.0",
     "iflow-cli-sdk>=0.1.11",
     "psutil>=6.1.0",
     "pygithub>=2.8.1",

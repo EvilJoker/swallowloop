@@ -8,7 +8,7 @@ from .application.dto import IssueDTO, TaskDTO, WorkspaceDTO
 from .infrastructure.config import Settings
 from .infrastructure.persistence import JsonTaskRepository, JsonWorkspaceRepository
 from .infrastructure.source_control import GitHubSourceControl
-from .infrastructure.agent import Agent, IFlowAgent, AiderAgent
+from .infrastructure.agent import Agent, IFlowAgent
 
 __version__ = "0.1.0"
 __all__ = [
@@ -39,5 +39,4 @@ __all__ = [
     "GitHubSourceControl",
     "Agent",
     "IFlowAgent",
-    "AiderAgent",
 ]

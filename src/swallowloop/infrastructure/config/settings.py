@@ -21,7 +21,6 @@ class Settings:
     github_repos: list[str] = field(default_factory=list)  # 多仓库列表
     
     # Agent 配置
-    agent_type: str = "iflow"  # iflow, aider
     agent_timeout: int = 1200  # Agent 超时时间（秒），默认 20 分钟
     
     # Worker 并发配置
@@ -91,7 +90,6 @@ class Settings:
             github_token=github_token,
             github_repo=github_repo,
             github_repos=github_repos,
-            agent_type=os.getenv("AGENT_TYPE", "iflow"),
             agent_timeout=int(os.getenv("AGENT_TIMEOUT", "1200")),
             max_workers=int(os.getenv("MAX_WORKERS", "5")),
             work_dir=work_dir,
