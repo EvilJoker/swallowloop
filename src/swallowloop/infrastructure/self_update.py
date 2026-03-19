@@ -116,29 +116,41 @@ class SelfUpdater:
     def check_for_update(self) -> bool:
         """
         检查是否有新版本
-        
-        Returns:
-            True 如果有新版本可用
+
+        只有当远程有本地没有的 commit 时才需要更新
         """
         if not self.should_check():
             return False
-        
+
         self._last_check_time = datetime.now()
-        
+
         # 获取当前和远程 commit
         current = self._get_current_commit()
         remote = self._get_remote_commit()
-        
+
         if not current or not remote:
             logger.warning("无法获取版本信息，跳过更新检查")
             return False
-        
+
         self._current_commit = current
-        
-        if current != remote:
-            logger.info(f"发现新版本: {current[:8]} -> {remote[:8]}")
-            return True
-        
+
+        # 检查远程是否有本地没有的 commit
+        # git log current..origin/main 会显示远程有而本地没有的 commit
+        try:
+            result = subprocess.run(
+                ["git", "log", "--oneline", f"{current}..origin/main"],
+                cwd=self._repo_path,
+                capture_output=True,
+                text=True,
+            )
+            if result.stdout.strip():
+                # 远程有本地没有的 commit，需要更新
+                ahead_count = len(result.stdout.strip().split("\n"))
+                logger.info(f"发现新版本: 本地落后 {ahead_count} 个 commit")
+                return True
+        except subprocess.CalledProcessError:
+            pass
+
         logger.debug("当前已是最新版本")
         return False
     
