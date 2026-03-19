@@ -36,6 +36,9 @@ ENV/
 .env.local
 .env.*.local
 
+# Claude Code
+.claude/
+
 # Specstory
 .specstory/
 
