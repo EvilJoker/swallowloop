@@ -195,7 +195,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional
 
-from .stage import Stage, StageStatus, IssueStatus, TodoStatus, ExecutionState, ExecutionState
+from .stage import Stage, StageStatus, IssueStatus, TodoStatus, ExecutionState
 
 
 @dataclass
@@ -651,7 +651,7 @@ class IssueService:
         logger.info(f"Issue {issue_id} 阶段 {stage.value} 审批通过")
 
         # 自动进入下一阶段并触发 AI
-        self._advance_and_trigger(issue, stage)
+        await self._advance_and_trigger(issue, stage)
         return issue
 
     def reject_stage(self, issue_id: str, stage: Stage, reason: str) -> Issue | None:
@@ -677,33 +677,40 @@ class IssueService:
         # 触发执行
         return self._executor.execute_stage(issue, stage)
 
-    def archive_issue(self, issue_id: str) -> Issue | None:
-        """归档 Issue"""
+    def update_issue(self, issue_id: str, **kwargs) -> Issue | None:
+        """更新 Issue"""
         issue = self._repo.get(IssueId(issue_id))
         if not issue:
             return None
 
-        issue.status = IssueStatus.ARCHIVED
-        issue.archived_at = datetime.now()
+        if "title" in kwargs:
+            issue.title = kwargs["title"]
+        if "description" in kwargs:
+            issue.description = kwargs["description"]
+        if "status" in kwargs:
+            if kwargs["status"] == "archived":
+                issue.status = IssueStatus.ARCHIVED
+                issue.archived_at = datetime.now()
+            elif kwargs["status"] == "discarded":
+                issue.status = IssueStatus.DISCARDED
+                issue.discarded_at = datetime.now()
+
         self._repo.save(issue)
         return issue
+
+    def archive_issue(self, issue_id: str) -> Issue | None:
+        """归档 Issue"""
+        return self.update_issue(issue_id, status="archived")
 
     def discard_issue(self, issue_id: str) -> Issue | None:
         """废弃 Issue"""
-        issue = self._repo.get(IssueId(issue_id))
-        if not issue:
-            return None
-
-        issue.status = IssueStatus.DISCARDED
-        issue.discarded_at = datetime.now()
-        self._repo.save(issue)
-        return issue
+        return self.update_issue(issue_id, status="discarded")
 
     def delete_issue(self, issue_id: str) -> bool:
         """删除 Issue"""
         return self._repo.delete(IssueId(issue_id))
 
-    def _advance_and_trigger(self, issue: Issue, current_stage: Stage) -> None:
+    async def _advance_and_trigger(self, issue: Issue, current_stage: Stage) -> None:
         """进入下一阶段并触发 AI"""
         # 计算下一阶段
         stages = list(Stage)
@@ -739,6 +746,7 @@ git commit -m "feat(application): 添加 IssueService"
 
 **Files:**
 - Create: `src/swallowloop/application/service/executor_service.py`
+- Modify: `src/swallowloop/application/service/__init__.py`
 
 - [ ] **Step 1: 创建 executor_service.py**
 
@@ -749,10 +757,11 @@ import asyncio
 import logging
 import shutil
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from ...infrastructure.agent.iflow import IFlowAgent
+    from ...domain.repository import IssueRepository
 
 from ...domain.model import Issue, Stage
 
@@ -765,8 +774,9 @@ INSTRUCTIONS_DIR = Path.home() / ".swallowloop" / "instructions"
 class ExecutorService:
     """AI 执行服务"""
 
-    def __init__(self, iflow_agent: "IFlowAgent"):
+    def __init__(self, iflow_agent: "IFlowAgent", repository: "IssueRepository"):
         self._agent = iflow_agent
+        self._repo = repository
         self._running_tasks: dict[str, asyncio.Task] = {}
 
     def get_workspace_dir(self, project: str, issue_id: str) -> Path:
@@ -801,51 +811,18 @@ class ExecutorService:
         context_path.write_text(context_content, encoding="utf-8")
         logger.debug(f"生成 context.md: {context_path}")
 
-    def execute_stage(self, issue: Issue, stage: Stage) -> dict:
-        """同步执行阶段（阻塞）"""
+    async def execute_stage(self, issue: Issue, stage: Stage) -> dict:
+        """异步执行阶段"""
         project = "default"  # TODO: 从配置获取
 
         # 准备上下文
         stage_state = issue.get_stage_state(stage)
         self.prepare_stage_context(project, str(issue.id), stage, stage_state.document)
 
-        # 执行
+        # 在线程池中执行（避免阻塞事件循环）
         context_path = self.get_stage_dir(project, str(issue.id), stage) / "context.md"
-        result = self._agent.execute(
-            instruction=str(INSTRUCTIONS_DIR / f"{stage.value}.md"),
-            context=str(context_path),
-        )
-
-        # 保存产出
-        if result.get("success"):
-            output_path = self.get_stage_dir(project, str(issue.id), stage) / "output.md"
-            output_path.write_text(result.get("output", ""), encoding="utf-8")
-
-        return result
-
-    def execute_stage_async(self, issue: Issue, stage: Stage) -> None:
-        """异步执行阶段（非阻塞）"""
-        task_key = f"{issue.id}_{stage.value}"
-        if task_key in self._running_tasks:
-            logger.warning(f"任务已在执行中: {task_key}")
-            return
-
         loop = asyncio.get_event_loop()
-        task = loop.create_task(self._execute_stage_async(issue, stage))
-        self._running_tasks[task_key] = task
-        task.add_done_callback(lambda _: self._running_tasks.pop(task_key, None))
-
-    async def _execute_stage_async(self, issue: Issue, stage: Stage) -> None:
-        """异步执行阶段"""
-        project = "default"
-        stage_state = issue.get_stage_state(stage)
-
-        # 准备上下文
-        self.prepare_stage_context(project, str(issue.id), stage, stage_state.document)
-
-        # 执行
-        context_path = self.get_stage_dir(project, str(issue.id), stage) / "context.md"
-        result = await asyncio.get_event_loop().run_in_executor(
+        result = await loop.run_in_executor(
             None,
             lambda: self._agent.execute(
                 instruction=str(INSTRUCTIONS_DIR / f"{stage.value}.md"),
@@ -858,8 +835,36 @@ class ExecutorService:
             output_path = self.get_stage_dir(project, str(issue.id), stage) / "output.md"
             output_path.write_text(result.get("output", ""), encoding="utf-8")
 
-            # 更新 document 字段
+            # 更新 document 字段并保存
             stage_state.document = result.get("output", "")
+            self._repo.save(issue)
+
+        return result
+
+    def execute_stage_async(self, issue: Issue, stage: Stage) -> None:
+        """异步执行阶段（非阻塞）"""
+        task_key = f"{issue.id}_{stage.value}"
+        if task_key in self._running_tasks:
+            logger.warning(f"任务已在执行中: {task_key}")
+            return
+
+        loop = asyncio.get_event_loop()
+        task = loop.create_task(self.execute_stage(issue, stage))
+        self._running_tasks[task_key] = task
+        task.add_done_callback(lambda _: self._running_tasks.pop(task_key, None))
+```
+
+- [ ] **Step 2: 更新 __init__.py**
+
+```python
+from .executor_service import ExecutorService
+```
+
+- [ ] **Step 3: 提交**
+
+```bash
+git add src/swallowloop/application/service/executor_service.py src/swallowloop/application/service/__init__.py
+git commit -m "feat(application): 添加 ExecutorService"
 ```
 
 - [ ] **Step 2: 提交**
@@ -1095,20 +1100,297 @@ mkdir -p ~/.swallowloop/instructions
 ```
 ```
 
-- [ ] **Step 4: detailedDesign.md, taskSplit.md, execution.md, updateDocs.md, submit.md**
+- [ ] **Step 4: detailedDesign.md**
 
-按照类似格式创建，聚焦于各阶段的特定目标。
+```markdown
+# 详细设计阶段指令
 
-- [ ] **Step 5: 提交**
+## 目标
+将方案成型阶段的整体思路细化为可执行的技术设计。
+
+## 输入
+- 上一阶段（方案成型）的产出：见 ../planFormed/output.md
+- Issue 描述：见 context.md
+
+## 输出格式
+```markdown
+# 详细设计
+
+## 模块划分
+...
+
+## 数据结构
+...
+
+## API 设计（如适用）
+...
+
+## 关键算法
+...
+```
+```
+
+- [ ] **Step 5: taskSplit.md**
+
+```markdown
+# 任务拆分阶段指令
+
+## 目标
+将详细设计拆分为可执行的小任务。
+
+## 输入
+- 上一阶段（详细设计）的产出：见 ../detailedDesign/output.md
+
+## 输出格式
+```markdown
+# 任务拆分
+
+## TODO 列表
+- [ ] 任务1：...
+- [ ] 任务2：...
+- [ ] 任务3：...
+
+## 任务依赖
+1. 任务1 → 任务2
+2. 任务2 → 任务3
+```
+```
+
+- [ ] **Step 6: execution.md**
+
+```markdown
+# 执行阶段指令
+
+## 目标
+按照任务拆分阶段的 TODO 列表逐步执行代码任务。
+
+## 输入
+- 任务拆分阶段的 TODO 列表：见 context.md
+- 详细设计文档：见 ../detailedDesign/output.md
+
+## 执行方式
+循环执行每个 TODO：
+1. 读取当前 TODO 内容
+2. 执行代码修改
+3. 完成后标记状态
+4. 进入下一个 TODO
+
+## 输出格式
+```markdown
+# 执行进度
+
+## 当前任务
+- [x] 任务1：完成
+- [x] 任务2：完成
+- [ ] 任务3：进行中
+- [ ] 任务4：待开始
+```
+```
+
+- [ ] **Step 7: updateDocs.md**
+
+```markdown
+# 更新文档阶段指令
+
+## 目标
+更新代码文档和编写总结报告。
+
+## 输入
+- 执行阶段的产出：见 ../execution/output.md
+- 相关代码变更：见 context.md
+
+## 输出格式
+```markdown
+# 总结报告
+
+## 执行摘要
+...
+
+## 代码变更
+...
+
+## 文档更新
+...
+```
+```
+
+- [ ] **Step 8: submit.md**
+
+```markdown
+# 提交阶段指令
+
+## 目标
+创建 PR 并提交代码。
+
+## 输入
+- 更新文档阶段的产出：见 ../updateDocs/output.md
+- 代码变更：见 context.md
+
+## 执行方式
+1. 确保所有代码变更已提交
+2. 创建 PR 描述
+3. 提交 PR
+
+## 输出格式
+```markdown
+# PR 信息
+
+## 标题
+...
+
+## 描述
+...
+
+## 链接
+PR: ...
+```
+```
+
+- [ ] **Step 9: 提交**
 
 ```bash
-git add ~/.swallowloop/instructions/  # 如果需要提交到 repo
-# 或仅创建在 ~/.swallowloop/ 下
+mkdir -p ~/.swallowloop/instructions
+# 创建上述所有指令文件
 ```
 
 ---
 
-## Task 10: 配置更新
+## Task 10: WebSocket 执行日志
+
+**Files:**
+- Modify: `src/swallowloop/interfaces/web/dashboard.py`
+
+- [ ] **Step 1: 添加 WebSocket 连接管理器**
+
+在 `ConnectionManager` 类中添加：
+
+```python
+# 在 DashboardServer.__init__ 中添加
+self._issue_connections: dict[str, list[WebSocket]] = defaultdict(list)
+
+# 添加 WebSocket 端点
+@app.websocket("/ws/execution/{issue_id}")
+async def ws_execution(websocket: WebSocket, issue_id: str):
+    await websocket.accept()
+    self._issue_connections[issue_id].append(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            # 客户端可以发送 ping
+            if data == "ping":
+                await websocket.send_text("pong")
+    except WebSocketDisconnect:
+        self._issue_connections[issue_id].remove(websocket)
+```
+
+- [ ] **Step 2: 添加广播方法**
+
+```python
+async def broadcast_execution_log(self, issue_id: str, log: dict) -> None:
+    """广播执行日志到指定 Issue 的所有连接"""
+    for ws in self._issue_connections.get(issue_id, []):
+        try:
+            await ws.send_json(log)
+        except Exception:
+            pass
+```
+
+- [ ] **Step 3: 在 ExecutorService 中集成**
+
+修改 `ExecutorService` 接收 `dashboard` 引用以发送日志：
+
+```python
+class ExecutorService:
+    def __init__(self, iflow_agent, repository, dashboard=None):
+        self._agent = iflow_agent
+        self._repo = repository
+        self._dashboard = dashboard
+        # ...
+
+    async def execute_stage(self, issue: Issue, stage: Stage) -> dict:
+        # ... 执行逻辑 ...
+
+        # 发送日志
+        if self._dashboard:
+            await self._dashboard.broadcast_execution_log(
+                str(issue.id),
+                {"level": "info", "message": "开始执行...", "timestamp": datetime.now().isoformat()}
+            )
+```
+
+- [ ] **Step 4: 提交**
+
+```bash
+git add src/swallowloop/interfaces/web/dashboard.py
+git commit -m "feat(web): 添加 WebSocket 执行日志支持"
+```
+
+---
+
+## Task 11: Dashboard 依赖注入
+
+**Files:**
+- Modify: `src/swallowloop/interfaces/web/dashboard.py`
+- Modify: `src/swallowloop/interfaces/web/standalone.py`
+
+- [ ] **Step 1: 更新 DashboardServer 初始化**
+
+```python
+class DashboardServer:
+    def __init__(
+        self,
+        task_repository: TaskRepository,
+        workspace_repository: WorkspaceRepository,
+        issue_repository: IssueRepository,
+        iflow_agent: IFlowAgent,
+        settings: Settings,
+        port: int = 8080,
+    ):
+        # 现有初始化 ...
+        self._issue_service = IssueService(
+            repository=issue_repository,
+            executor=ExecutorService(
+                iflow_agent=iflow_agent,
+                repository=issue_repository,
+                dashboard=self,  # 传入 self 以便发送 WebSocket 日志
+            )
+        )
+```
+
+- [ ] **Step 2: 更新 standalone.py**
+
+```python
+def main():
+    # ... 现有代码 ...
+
+    # 初始化 Issue 相关组件
+    issue_repo = JsonIssueRepository(
+        project=settings.issue_project,
+        data_dir=settings.work_dir,
+    )
+    iflow_agent = IFlowAgent(config=settings.get_llm_config())
+
+    # 创建 Dashboard
+    dashboard = DashboardServer(
+        task_repository=task_repo,
+        workspace_repository=workspace_repo,
+        issue_repository=issue_repo,
+        iflow_agent=iflow_agent,
+        settings=settings,
+        port=args.port,
+    )
+```
+
+- [ ] **Step 3: 提交**
+
+```bash
+git add src/swallowloop/interfaces/web/dashboard.py src/swallowloop/interfaces/web/standalone.py
+git commit -m "feat(web): 集成 IssueService 到 Dashboard"
+```
+
+---
+
+## Task 12: 配置更新
 
 **Files:**
 - Modify: `src/swallowloop/infrastructure/config/settings.py`
@@ -1131,7 +1413,7 @@ git commit -m "feat(config): 添加 issue_project 配置"
 
 ---
 
-## Task 11: 测试
+## Task 13: 测试
 
 **Files:**
 - Create: `tests/test_issue_service.py`
@@ -1246,5 +1528,7 @@ git commit -m "test: 添加 IssueService 单元测试"
 7. Task 7: 应用服务 - ExecutorService
 8. Task 8: Web API - Dashboard 扩展
 9. Task 9: 指令文件
-10. Task 10: 配置更新
-11. Task 11: 测试
+10. Task 10: WebSocket 执行日志
+11. Task 11: Dashboard 依赖注入
+12. Task 12: 配置更新
+13. Task 13: 测试
