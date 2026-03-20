@@ -522,7 +522,7 @@ class JsonIssueRepository(IssueRepository):
 
     def _deserialize(self, data: dict) -> Issue:
         """反序列化 Issue"""
-        from ...domain.model import StageState, TodoItem
+        from ...domain.model import StageState, TodoItem, Comment
 
         stages = {}
         for stage_str, state_data in data.get("stages", {}).items():
@@ -603,6 +603,10 @@ import logging
 import uuid
 from datetime import datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .executor_service import ExecutorService
 
 from ...domain.model import Issue, IssueId, Stage, StageStatus, IssueStatus
 from ...domain.repository import IssueRepository
@@ -640,7 +644,7 @@ class IssueService:
         logger.info(f"创建 Issue: {issue_id} - {title}")
         return issue
 
-    def approve_stage(self, issue_id: str, stage: Stage, comment: str = "") -> Issue | None:
+    async def approve_stage(self, issue_id: str, stage: Stage, comment: str = "") -> Issue | None:
         """审批通过阶段"""
         issue = self._repo.get(IssueId(issue_id))
         if not issue:
@@ -665,7 +669,7 @@ class IssueService:
         logger.info(f"Issue {issue_id} 阶段 {stage.value} 已打回: {reason}")
         return issue
 
-    def trigger_ai(self, issue_id: str, stage: Stage) -> dict:
+    async def trigger_ai(self, issue_id: str, stage: Stage) -> dict:
         """手动触发 AI 执行"""
         issue = self._repo.get(IssueId(issue_id))
         if not issue:
@@ -675,7 +679,7 @@ class IssueService:
         self._repo.save(issue)
 
         # 触发执行
-        return self._executor.execute_stage(issue, stage)
+        return await self._executor.execute_stage(issue, stage)
 
     def update_issue(self, issue_id: str, **kwargs) -> Issue | None:
         """更新 Issue"""
@@ -864,13 +868,6 @@ from .executor_service import ExecutorService
 
 ```bash
 git add src/swallowloop/application/service/executor_service.py src/swallowloop/application/service/__init__.py
-git commit -m "feat(application): 添加 ExecutorService"
-```
-
-- [ ] **Step 2: 提交**
-
-```bash
-git add src/swallowloop/application/service/executor_service.py
 git commit -m "feat(application): 添加 ExecutorService"
 ```
 
