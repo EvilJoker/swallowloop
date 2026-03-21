@@ -6,6 +6,7 @@ from .comment import Comment
 from .pull_request import PullRequest
 from .workspace import Workspace
 from .task import Task, TaskId
+from .issue import Issue, IssueId, StageState, TodoItem
 
 __all__ = [
     "Task",
@@ -21,4 +22,8 @@ __all__ = [
     "IssueStatus",
     "TodoStatus",
     "ExecutionState",
+    "Issue",
+    "IssueId",
+    "StageState",
+    "TodoItem",
 ]
