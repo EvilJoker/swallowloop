@@ -1,9 +1,8 @@
 """数据传输对象"""
 
-from .issue_dto import IssueDTO, TaskDTO, WorkspaceDTO
+from .issue_dto import IssueDTO, WorkspaceDTO
 
 __all__ = [
     "IssueDTO",
-    "TaskDTO",
     "WorkspaceDTO",
 ]

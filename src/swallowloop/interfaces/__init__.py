@@ -1,5 +1,5 @@
 """接口层"""
 
-from .cli import Orchestrator
+from .web import app
 
-__all__ = ["Orchestrator"]
+__all__ = ["app"]

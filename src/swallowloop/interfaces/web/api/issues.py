@@ -19,7 +19,7 @@ def init_services():
     """初始化服务实例"""
     global _issue_service, _executor_service
     repository = JsonIssueRepository(project="default")
-    _executor_service = ExecutorService(agent=None, repository=repository)
+    _executor_service = ExecutorService(repository=repository)
     _issue_service = IssueService(repository=repository, executor=_executor_service)
 
 

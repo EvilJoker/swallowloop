@@ -18,23 +18,6 @@ class IssueDTO:
 
 
 @dataclass
-class TaskDTO:
-    """任务数据传输对象"""
-    task_id: str
-    issue_number: int
-    title: str
-    description: str
-    state: str
-    branch_name: str
-    task_type: str
-    retry_count: int = 0
-    submission_count: int = 0
-    pr_url: str | None = None
-    created_at: datetime = field(default_factory=datetime.now)
-    updated_at: datetime = field(default_factory=datetime.now)
-
-
-@dataclass
 class WorkspaceDTO:
     """工作空间数据传输对象"""
     id: str

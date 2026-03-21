@@ -43,7 +43,6 @@ export interface Comment {
 
 // 阶段状态
 export interface StageState {
-  issueId: string;
   stage: Stage;
   status: StageStatus;
   document: string;

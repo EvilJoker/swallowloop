@@ -48,3 +48,4 @@ ENV/
 
 # SwallowLoop task reports
 .swallowloop_report.md
+docs/superpowers

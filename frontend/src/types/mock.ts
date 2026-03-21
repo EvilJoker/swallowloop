@@ -1,9 +1,8 @@
 import type { Issue, Stage, StageState } from './index';
 
 // 创建空的阶段状态
-function createEmptyStageState(issueId: string, stage: Stage): StageState {
+function createEmptyStageState(stage: Stage): StageState {
   return {
-    issueId,
     stage,
     status: 'pending',
     document: '',
@@ -22,7 +21,7 @@ export const mockIssue1: Issue = {
   createdAt: new Date('2026-03-18'),
   stages: {
     brainstorm: {
-      ...createEmptyStageState('issue-1', 'brainstorm'),
+      ...createEmptyStageState('brainstorm'),
       status: 'running',
       startedAt: new Date('2026-03-18T10:00:00'),
       document: `# 用户登录功能方案
@@ -60,12 +59,12 @@ export const mockIssue1: Issue = {
         },
       ],
     },
-    planFormed: createEmptyStageState('issue-1', 'planFormed'),
-    detailedDesign: createEmptyStageState('issue-1', 'detailedDesign'),
-    taskSplit: createEmptyStageState('issue-1', 'taskSplit'),
-    execution: createEmptyStageState('issue-1', 'execution'),
-    updateDocs: createEmptyStageState('issue-1', 'updateDocs'),
-    submit: createEmptyStageState('issue-1', 'submit'),
+    planFormed: createEmptyStageState('planFormed'),
+    detailedDesign: createEmptyStageState('detailedDesign'),
+    taskSplit: createEmptyStageState('taskSplit'),
+    execution: createEmptyStageState('execution'),
+    updateDocs: createEmptyStageState('updateDocs'),
+    submit: createEmptyStageState('submit'),
   },
 };
 
@@ -79,7 +78,7 @@ export const mockIssue2: Issue = {
   createdAt: new Date('2026-03-15'),
   stages: {
     brainstorm: {
-      ...createEmptyStageState('issue-2', 'brainstorm'),
+      ...createEmptyStageState('brainstorm'),
       status: 'approved',
       document: '# CI/CD 流水线方案\n\n采用 GitHub Actions 实现...',
       comments: [],
@@ -88,7 +87,7 @@ export const mockIssue2: Issue = {
       completedAt: new Date('2026-03-15T09:30:00'),
     },
     planFormed: {
-      ...createEmptyStageState('issue-2', 'planFormed'),
+      ...createEmptyStageState('planFormed'),
       status: 'approved',
       document: '# 实现计划\n\n1. 配置 workflow\n2. 添加测试步骤\n3. 配置部署...',
       comments: [],
@@ -97,7 +96,7 @@ export const mockIssue2: Issue = {
       completedAt: new Date('2026-03-15T10:30:00'),
     },
     detailedDesign: {
-      ...createEmptyStageState('issue-2', 'detailedDesign'),
+      ...createEmptyStageState('detailedDesign'),
       status: 'approved',
       document: '# 详细设计\n\nYAML 配置详解...',
       comments: [],
@@ -106,7 +105,7 @@ export const mockIssue2: Issue = {
       completedAt: new Date('2026-03-15T12:00:00'),
     },
     taskSplit: {
-      ...createEmptyStageState('issue-2', 'taskSplit'),
+      ...createEmptyStageState('taskSplit'),
       status: 'approved',
       document: '# 任务拆分\n\nTODO 列表已创建',
       comments: [],
@@ -115,7 +114,7 @@ export const mockIssue2: Issue = {
       completedAt: new Date('2026-03-15T12:30:00'),
     },
     execution: {
-      ...createEmptyStageState('issue-2', 'execution'),
+      ...createEmptyStageState('execution'),
       status: 'running',
       document: '# 执行中\n\n正在配置 GitHub Actions...',
       todoList: [
@@ -131,8 +130,8 @@ export const mockIssue2: Issue = {
       documentVersions: [],
       startedAt: new Date('2026-03-15T12:30:00'),
     },
-    updateDocs: createEmptyStageState('issue-2', 'updateDocs'),
-    submit: createEmptyStageState('issue-2', 'submit'),
+    updateDocs: createEmptyStageState('updateDocs'),
+    submit: createEmptyStageState('submit'),
   },
 };
 
@@ -146,21 +145,21 @@ export const mockIssue3: Issue = {
   createdAt: new Date('2026-03-10'),
   stages: {
     brainstorm: {
-      ...createEmptyStageState('issue-3', 'brainstorm'),
+      ...createEmptyStageState('brainstorm'),
       status: 'approved',
       document: '# 性能优化方案\n\n决定采用索引优化方案...',
       comments: [],
       documentVersions: [],
     },
     planFormed: {
-      ...createEmptyStageState('issue-3', 'planFormed'),
+      ...createEmptyStageState('planFormed'),
       status: 'approved',
       document: '# 实现计划\n\n分阶段进行优化...',
       comments: [],
       documentVersions: [],
     },
     detailedDesign: {
-      ...createEmptyStageState('issue-3', 'detailedDesign'),
+      ...createEmptyStageState('detailedDesign'),
       status: 'rejected',
       document: '# 详细设计\n\n索引设计：\n1. idx_user_id\n2. idx_created_at',
       comments: [
@@ -174,10 +173,10 @@ export const mockIssue3: Issue = {
       ],
       documentVersions: [],
     },
-    taskSplit: createEmptyStageState('issue-3', 'taskSplit'),
-    execution: createEmptyStageState('issue-3', 'execution'),
-    updateDocs: createEmptyStageState('issue-3', 'updateDocs'),
-    submit: createEmptyStageState('issue-3', 'submit'),
+    taskSplit: createEmptyStageState('taskSplit'),
+    execution: createEmptyStageState('execution'),
+    updateDocs: createEmptyStageState('updateDocs'),
+    submit: createEmptyStageState('submit'),
   },
 };
 
@@ -192,7 +191,7 @@ export const mockIssue4: Issue = {
   archivedAt: new Date('2026-03-16'),
   stages: {
     brainstorm: {
-      ...createEmptyStageState('issue-4', 'brainstorm'),
+      ...createEmptyStageState('brainstorm'),
       status: 'approved',
       document: '# 文档更新计划',
       comments: [],
@@ -201,7 +200,7 @@ export const mockIssue4: Issue = {
       completedAt: new Date('2026-03-01T10:30:00'),
     },
     planFormed: {
-      ...createEmptyStageState('issue-4', 'planFormed'),
+      ...createEmptyStageState('planFormed'),
       status: 'approved',
       document: '# 更新计划',
       comments: [],
@@ -210,7 +209,7 @@ export const mockIssue4: Issue = {
       completedAt: new Date('2026-03-01T11:00:00'),
     },
     detailedDesign: {
-      ...createEmptyStageState('issue-4', 'detailedDesign'),
+      ...createEmptyStageState('detailedDesign'),
       status: 'approved',
       document: '# 设计',
       comments: [],
@@ -219,7 +218,7 @@ export const mockIssue4: Issue = {
       completedAt: new Date('2026-03-01T12:00:00'),
     },
     taskSplit: {
-      ...createEmptyStageState('issue-4', 'taskSplit'),
+      ...createEmptyStageState('taskSplit'),
       status: 'approved',
       document: '# 任务',
       comments: [],
@@ -228,7 +227,7 @@ export const mockIssue4: Issue = {
       completedAt: new Date('2026-03-01T12:30:00'),
     },
     execution: {
-      ...createEmptyStageState('issue-4', 'execution'),
+      ...createEmptyStageState('execution'),
       status: 'approved',
       document: '# 执行',
       comments: [],
@@ -237,7 +236,7 @@ export const mockIssue4: Issue = {
       completedAt: new Date('2026-03-01T14:00:00'),
     },
     updateDocs: {
-      ...createEmptyStageState('issue-4', 'updateDocs'),
+      ...createEmptyStageState('updateDocs'),
       status: 'approved',
       document: '# 文档更新',
       comments: [],
@@ -246,7 +245,7 @@ export const mockIssue4: Issue = {
       completedAt: new Date('2026-03-01T15:00:00'),
     },
     submit: {
-      ...createEmptyStageState('issue-4', 'submit'),
+      ...createEmptyStageState('submit'),
       status: 'approved',
       document: '# 提交\n\nPR 已合并',
       comments: [],
@@ -267,7 +266,7 @@ export const mockIssue5: Issue = {
   createdAt: new Date('2026-03-19'),
   stages: {
     brainstorm: {
-      ...createEmptyStageState('issue-5', 'brainstorm'),
+      ...createEmptyStageState('brainstorm'),
       status: 'error',
       document: '# 邮件通知方案\n\n采用 SendGrid API...',
       comments: [
@@ -281,12 +280,12 @@ export const mockIssue5: Issue = {
       ],
       documentVersions: [],
     },
-    planFormed: createEmptyStageState('issue-5', 'planFormed'),
-    detailedDesign: createEmptyStageState('issue-5', 'detailedDesign'),
-    taskSplit: createEmptyStageState('issue-5', 'taskSplit'),
-    execution: createEmptyStageState('issue-5', 'execution'),
-    updateDocs: createEmptyStageState('issue-5', 'updateDocs'),
-    submit: createEmptyStageState('issue-5', 'submit'),
+    planFormed: createEmptyStageState('planFormed'),
+    detailedDesign: createEmptyStageState('detailedDesign'),
+    taskSplit: createEmptyStageState('taskSplit'),
+    execution: createEmptyStageState('execution'),
+    updateDocs: createEmptyStageState('updateDocs'),
+    submit: createEmptyStageState('submit'),
   },
 };
 
@@ -300,24 +299,24 @@ export const mockIssue6: Issue = {
   createdAt: new Date('2026-03-17'),
   stages: {
     brainstorm: {
-      ...createEmptyStageState('issue-6', 'brainstorm'),
+      ...createEmptyStageState('brainstorm'),
       status: 'approved',
       document: '# WebSocket 方案\n\n采用 Socket.io...',
       comments: [],
       documentVersions: [],
     },
     planFormed: {
-      ...createEmptyStageState('issue-6', 'planFormed'),
+      ...createEmptyStageState('planFormed'),
       status: 'running',
       document: '# 整体实现思路\n\n1. 建立连接\n2. 心跳检测\n3. 消息推送...',
       comments: [],
       documentVersions: [],
     },
-    detailedDesign: createEmptyStageState('issue-6', 'detailedDesign'),
-    taskSplit: createEmptyStageState('issue-6', 'taskSplit'),
-    execution: createEmptyStageState('issue-6', 'execution'),
-    updateDocs: createEmptyStageState('issue-6', 'updateDocs'),
-    submit: createEmptyStageState('issue-6', 'submit'),
+    detailedDesign: createEmptyStageState('detailedDesign'),
+    taskSplit: createEmptyStageState('taskSplit'),
+    execution: createEmptyStageState('execution'),
+    updateDocs: createEmptyStageState('updateDocs'),
+    submit: createEmptyStageState('submit'),
   },
 };
 
@@ -331,30 +330,30 @@ export const mockIssue7: Issue = {
   createdAt: new Date('2026-03-12'),
   stages: {
     brainstorm: {
-      ...createEmptyStageState('issue-7', 'brainstorm'),
+      ...createEmptyStageState('brainstorm'),
       status: 'approved',
       document: '# 权限管理方案\n\n采用 RBAC 模型...',
       comments: [],
       documentVersions: [],
     },
     planFormed: {
-      ...createEmptyStageState('issue-7', 'planFormed'),
+      ...createEmptyStageState('planFormed'),
       status: 'approved',
       document: '# 实现计划\n\n采用 RBAC 模型...',
       comments: [],
       documentVersions: [],
     },
     detailedDesign: {
-      ...createEmptyStageState('issue-7', 'detailedDesign'),
+      ...createEmptyStageState('detailedDesign'),
       status: 'approved',
       document: '# 详细设计\n\n角色定义...\n权限表设计...',
       comments: [],
       documentVersions: [],
     },
-    taskSplit: createEmptyStageState('issue-7', 'taskSplit'),
-    execution: createEmptyStageState('issue-7', 'execution'),
-    updateDocs: createEmptyStageState('issue-7', 'updateDocs'),
-    submit: createEmptyStageState('issue-7', 'submit'),
+    taskSplit: createEmptyStageState('taskSplit'),
+    execution: createEmptyStageState('execution'),
+    updateDocs: createEmptyStageState('updateDocs'),
+    submit: createEmptyStageState('submit'),
   },
 };
 
@@ -368,36 +367,36 @@ export const mockIssue8: Issue = {
   createdAt: new Date('2026-03-14'),
   stages: {
     brainstorm: {
-      ...createEmptyStageState('issue-8', 'brainstorm'),
+      ...createEmptyStageState('brainstorm'),
       status: 'approved',
       document: '# 移动端适配方案\n\n采用响应式设计...',
       comments: [],
       documentVersions: [],
     },
     planFormed: {
-      ...createEmptyStageState('issue-8', 'planFormed'),
+      ...createEmptyStageState('planFormed'),
       status: 'approved',
       document: '# 实现计划\n\n1. 响应式布局\n2. 触摸优化...',
       comments: [],
       documentVersions: [],
     },
     detailedDesign: {
-      ...createEmptyStageState('issue-8', 'detailedDesign'),
+      ...createEmptyStageState('detailedDesign'),
       status: 'approved',
       document: '# 详细设计\n\n断点设计...\n组件适配...',
       comments: [],
       documentVersions: [],
     },
     taskSplit: {
-      ...createEmptyStageState('issue-8', 'taskSplit'),
+      ...createEmptyStageState('taskSplit'),
       status: 'pending',
       document: '# 任务拆分\n\nTODO 列表创建中...',
       comments: [],
       documentVersions: [],
     },
-    execution: createEmptyStageState('issue-8', 'execution'),
-    updateDocs: createEmptyStageState('issue-8', 'updateDocs'),
-    submit: createEmptyStageState('issue-8', 'submit'),
+    execution: createEmptyStageState('execution'),
+    updateDocs: createEmptyStageState('updateDocs'),
+    submit: createEmptyStageState('submit'),
   },
 };
 
@@ -411,35 +410,35 @@ export const mockIssue9: Issue = {
   createdAt: new Date('2026-03-08'),
   stages: {
     brainstorm: {
-      ...createEmptyStageState('issue-9', 'brainstorm'),
+      ...createEmptyStageState('brainstorm'),
       status: 'approved',
       document: '# 日志重构方案\n\n采用 ELK 技术栈...',
       comments: [],
       documentVersions: [],
     },
     planFormed: {
-      ...createEmptyStageState('issue-9', 'planFormed'),
+      ...createEmptyStageState('planFormed'),
       status: 'approved',
       document: '# 实现计划\n\n1. 搭建 ELK\n2. 迁移数据...',
       comments: [],
       documentVersions: [],
     },
     detailedDesign: {
-      ...createEmptyStageState('issue-9', 'detailedDesign'),
+      ...createEmptyStageState('detailedDesign'),
       status: 'approved',
       document: '# 详细设计\n\nElasticsearch 配置...',
       comments: [],
       documentVersions: [],
     },
     taskSplit: {
-      ...createEmptyStageState('issue-9', 'taskSplit'),
+      ...createEmptyStageState('taskSplit'),
       status: 'approved',
       document: '# 任务拆分\n\nTODO 列表已完成',
       comments: [],
       documentVersions: [],
     },
     execution: {
-      ...createEmptyStageState('issue-9', 'execution'),
+      ...createEmptyStageState('execution'),
       status: 'pending',
       document: '# 执行中\n\n正在部署 Elasticsearch...',
       todoList: [
@@ -454,8 +453,8 @@ export const mockIssue9: Issue = {
       comments: [],
       documentVersions: [],
     },
-    updateDocs: createEmptyStageState('issue-9', 'updateDocs'),
-    submit: createEmptyStageState('issue-9', 'submit'),
+    updateDocs: createEmptyStageState('updateDocs'),
+    submit: createEmptyStageState('submit'),
   },
 };
 
@@ -469,48 +468,48 @@ export const mockIssue10: Issue = {
   createdAt: new Date('2026-03-05'),
   stages: {
     brainstorm: {
-      ...createEmptyStageState('issue-10', 'brainstorm'),
+      ...createEmptyStageState('brainstorm'),
       status: 'approved',
       document: '# API 文档方案\n\n采用 Swagger...',
       comments: [],
       documentVersions: [],
     },
     planFormed: {
-      ...createEmptyStageState('issue-10', 'planFormed'),
+      ...createEmptyStageState('planFormed'),
       status: 'approved',
       document: '# 实现计划\n\n1. 集成 Swagger\n2. 配置注解...',
       comments: [],
       documentVersions: [],
     },
     detailedDesign: {
-      ...createEmptyStageState('issue-10', 'detailedDesign'),
+      ...createEmptyStageState('detailedDesign'),
       status: 'approved',
       document: '# 详细设计\n\nSwagger 配置...',
       comments: [],
       documentVersions: [],
     },
     taskSplit: {
-      ...createEmptyStageState('issue-10', 'taskSplit'),
+      ...createEmptyStageState('taskSplit'),
       status: 'approved',
       document: '# 任务拆分\n\nTODO 列表已完成',
       comments: [],
       documentVersions: [],
     },
     execution: {
-      ...createEmptyStageState('issue-10', 'execution'),
+      ...createEmptyStageState('execution'),
       status: 'approved',
       document: '# 执行完成\n\nAPI 文档已生成',
       comments: [],
       documentVersions: [],
     },
     updateDocs: {
-      ...createEmptyStageState('issue-10', 'updateDocs'),
+      ...createEmptyStageState('updateDocs'),
       status: 'pending',
       document: '# 文档更新\n\n正在更新 API 文档...',
       comments: [],
       documentVersions: [],
     },
-    submit: createEmptyStageState('issue-10', 'submit'),
+    submit: createEmptyStageState('submit'),
   },
 };
 
@@ -524,49 +523,49 @@ export const mockIssue11: Issue = {
   createdAt: new Date('2026-03-01'),
   stages: {
     brainstorm: {
-      ...createEmptyStageState('issue-11', 'brainstorm'),
+      ...createEmptyStageState('brainstorm'),
       status: 'approved',
       document: '# 监控方案\n\n采用 Prometheus...',
       comments: [],
       documentVersions: [],
     },
     planFormed: {
-      ...createEmptyStageState('issue-11', 'planFormed'),
+      ...createEmptyStageState('planFormed'),
       status: 'approved',
       document: '# 实现计划\n\n1. 部署 Prometheus\n2. 配置告警规则...',
       comments: [],
       documentVersions: [],
     },
     detailedDesign: {
-      ...createEmptyStageState('issue-11', 'detailedDesign'),
+      ...createEmptyStageState('detailedDesign'),
       status: 'approved',
       document: '# 详细设计\n\n监控指标定义...',
       comments: [],
       documentVersions: [],
     },
     taskSplit: {
-      ...createEmptyStageState('issue-11', 'taskSplit'),
+      ...createEmptyStageState('taskSplit'),
       status: 'approved',
       document: '# 任务拆分\n\nTODO 列表已完成',
       comments: [],
       documentVersions: [],
     },
     execution: {
-      ...createEmptyStageState('issue-11', 'execution'),
+      ...createEmptyStageState('execution'),
       status: 'approved',
       document: '# 执行完成\n\n监控系统已部署',
       comments: [],
       documentVersions: [],
     },
     updateDocs: {
-      ...createEmptyStageState('issue-11', 'updateDocs'),
+      ...createEmptyStageState('updateDocs'),
       status: 'approved',
       document: '# 文档更新\n\n已更新监控文档',
       comments: [],
       documentVersions: [],
     },
     submit: {
-      ...createEmptyStageState('issue-11', 'submit'),
+      ...createEmptyStageState('submit'),
       status: 'pending',
       document: '# 待提交\n\n等待最终审核...',
       comments: [],

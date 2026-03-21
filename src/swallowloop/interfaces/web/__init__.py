@@ -1,5 +1,5 @@
 """Web 接口层"""
 
-from .dashboard import DashboardServer
+from .issue_api import app
 
-__all__ = ["DashboardServer"]
+__all__ = ["app"]

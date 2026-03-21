@@ -1,35 +1,38 @@
 """领域层"""
 
-from .model import Task, TaskId, TaskState, TaskType, Workspace, Comment, PullRequest
-from .event import (
-    DomainEvent,
-    TaskAssigned,
-    TaskStarted,
-    TaskSubmitted,
-    TaskRevised,
-    TaskCompleted,
-    TaskAborted,
+from .model import (
+    Workspace,
+    PullRequest,
+    # Issue pipeline
+    Stage,
+    StageStatus,
+    IssueStatus,
+    TodoStatus,
+    ExecutionState,
+    Issue,
+    IssueId,
+    StageState,
+    TodoItem,
+    ReviewComment,
 )
-from .repository import TaskRepository, WorkspaceRepository
+from .repository import WorkspaceRepository, IssueRepository
 
 __all__ = [
     # 模型
-    "Task",
-    "TaskId",
-    "TaskState",
-    "TaskType",
     "Workspace",
-    "Comment",
     "PullRequest",
-    # 事件
-    "DomainEvent",
-    "TaskAssigned",
-    "TaskStarted",
-    "TaskSubmitted",
-    "TaskRevised",
-    "TaskCompleted",
-    "TaskAborted",
+    # Issue pipeline
+    "Stage",
+    "StageStatus",
+    "IssueStatus",
+    "TodoStatus",
+    "ExecutionState",
+    "Issue",
+    "IssueId",
+    "StageState",
+    "TodoItem",
+    "ReviewComment",
     # 仓库接口
-    "TaskRepository",
     "WorkspaceRepository",
+    "IssueRepository",
 ]
