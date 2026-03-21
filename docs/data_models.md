@@ -2,158 +2,202 @@
 
 ## 概述
 
-SwallowLoop 使用状态机管理任务生命周期，所有数据持久化到 `~/.swallowloop/` 目录。
+SwallowLoop 使用 Issue 流水线管理任务，所有数据持久化到 `~/.swallowloop/{project}/issues.json`。
 
 ---
 
-## 1. Task (任务模型)
+## 1. Issue (聚合根)
 
 ### 字段定义
 
 | 字段名 | 类型 | 说明 | 必需 |
 |-------|------|------|-----|
-| `id` | str | 任务唯一标识 | 是 |
-| `issue_number` | int | GitHub Issue 编号 | 是 |
-| `title` | str | 任务标题 | 是 |
-| `description` | str | 任务描述 | 否 |
-| `task_type` | TaskType | 任务类型 | 否 |
-| `branch_name` | str \| None | 分支名称 | 否 |
-| `repo_url` | str \| None | Git 仓库地址 | 否 |
-| `labels` | list[str] | Issue 标签列表 | 否 |
-| `workspace` | Workspace \| None | 关联的工作空间 | 否 |
-| `pr` | PullRequest \| None | 关联的 PR | 否 |
-| `comments` | list[Comment] | 用户评论列表 | 否 |
-| `latest_comment` | Comment \| None | 最新评论 | 否 |
-| `retry_count` | int | 重试次数 | 否 |
-| `submission_count` | int | 提交次数 | 否 |
-| `worker_pid` | int \| None | Worker 进程 PID | 否 |
-| `started_at` | datetime \| None | 开始时间 | 否 |
-| `created_at` | datetime | 创建时间 | 否 |
-| `updated_at` | datetime | 更新时间 | 否 |
-| `state` | str | 当前状态 | 是 |
+| `id` | str | Issue 唯一标识 | 是 |
+| `title` | str | Issue 标题 | 是 |
+| `description` | str | Issue 描述 | 是 |
+| `status` | IssueStatus | Issue 状态 | 是 |
+| `current_stage` | Stage | 当前所处阶段 | 是 |
+| `created_at` | datetime | 创建时间 | 是 |
+| `archived_at` | datetime \| None | 归档时间 | 否 |
+| `discarded_at` | datetime \| None | 废弃时间 | 否 |
+| `delete_at` | datetime \| None | 删除时间（废弃后+3天） | 否 |
+| `stages` | dict[Stage, StageState] | 各阶段状态 | 是 |
 
 ### JSON 存储示例
 
 ```json
 {
-  "task_id": "task-3",
-  "issue_number": 3,
-  "title": "添加用户登录功能",
-  "description": "请实现用户登录功能...",
-  "task_type": "new_task",
-  "state": "submitted",
-  "branch_name": "feature_3_0318-user-login",
-  "repo_url": "https://github.com/owner/repo.git",
-  "labels": ["swallow", "feature"],
-  "pr_number": 4,
-  "pr_url": "https://github.com/owner/repo/pull/4",
-  "retry_count": 0,
-  "submission_count": 1,
-  "comments": [],
-  "created_at": "2026-03-18T10:00:00",
-  "updated_at": "2026-03-18T12:30:00"
+  "id": "issue-abc12345",
+  "title": "实现用户登录功能",
+  "description": "需要实现完整的用户登录注册流程",
+  "status": "active",
+  "currentStage": "execution",
+  "createdAt": "2026-03-18T10:00:00",
+  "archivedAt": null,
+  "discardedAt": null,
+  "deleteAt": null,
+  "stages": {
+    "brainstorm": {
+      "stage": "brainstorm",
+      "status": "approved",
+      "document": "# 方案一：使用 JWT\n\n## 核心思路...",
+      "comments": [
+        {
+          "id": "comment-001",
+          "stage": "brainstorm",
+          "action": "approve",
+          "content": "选择方案一",
+          "createdAt": "2026-03-18T11:00:00"
+        }
+      ],
+      "startedAt": "2026-03-18T10:00:00",
+      "completedAt": "2026-03-18T11:00:00",
+      "todoList": null,
+      "progress": null,
+      "executionState": null
+    },
+    "planFormed": {
+      "stage": "planFormed",
+      "status": "approved",
+      "document": "# 实现计划\n\n## 整体思路...",
+      "comments": [],
+      "startedAt": "2026-03-18T11:00:00",
+      "completedAt": "2026-03-18T12:00:00",
+      "todoList": null,
+      "progress": null,
+      "executionState": null
+    },
+    "execution": {
+      "stage": "execution",
+      "status": "running",
+      "document": "",
+      "comments": [],
+      "startedAt": "2026-03-18T12:00:00",
+      "completedAt": null,
+      "todoList": [
+        {"id": "todo-1", "content": "创建用户模型", "status": "completed"},
+        {"id": "todo-2", "content": "实现登录 API", "status": "in_progress"},
+        {"id": "todo-3", "content": "添加单元测试", "status": "pending"}
+      ],
+      "progress": 33,
+      "executionState": "running"
+    }
+  }
 }
 ```
 
 ---
 
-## 2. TaskState (任务状态)
+## 2. Stage (阶段枚举)
 
-### 状态枚举
+### 阶段值
+
+| 阶段 | 值 | 说明 |
+|-----|-----|------|
+| `BRAINSTORM` | `brainstorm` | 头脑风暴 |
+| `PLAN_FORMED` | `planFormed` | 方案成型 |
+| `DETAILED_DESIGN` | `detailedDesign` | 详细设计 |
+| `TASK_SPLIT` | `taskSplit` | 任务拆分 |
+| `EXECUTION` | `execution` | 执行 |
+| `UPDATE_DOCS` | `updateDocs` | 更新文档 |
+| `SUBMIT` | `submit` | 提交 |
+
+---
+
+## 3. StageStatus (阶段状态枚举)
 
 | 状态 | 值 | 说明 |
 |-----|-----|------|
-| `NEW` | `new` | 新接受，等待分配工作空间 |
-| `ASSIGNED` | `assigned` | 已分配工作空间 |
-| `PENDING` | `pending` | 待执行，等待 Worker 启动 |
-| `IN_PROGRESS` | `in_progress` | 执行中 |
-| `SUBMITTED` | `submitted` | 已提交 PR |
-| `COMPLETED` | `completed` | 已完成（Issue 关闭） |
-| `ABORTED` | `aborted` | 异常终止 |
-
-### 状态转换触发器
-
-| 触发器 | 源状态 | 目标状态 | 条件 |
-|-------|-------|---------|------|
-| `assign` | new | assigned | - |
-| `prepare` | assigned | pending | - |
-| `start` | pending | in_progress | - |
-| `submit` | in_progress | submitted | - |
-| `complete` | submitted | completed | PR 已合并 |
-| `retry` | in_progress | pending | retry_count < 5 |
-| `abort` | any | aborted | - |
-| `revise` | submitted | pending | 用户评论反馈 |
-
-> **注意**：`complete` 触发时会自动清理本地工作空间和远端分支。
+| `PENDING` | `pending` | 待审批 |
+| `APPROVED` | `approved` | 已通过 |
+| `REJECTED` | `rejected` | 已打回 |
+| `RUNNING` | `running` | 执行中 |
+| `ERROR` | `error` | 异常 |
 
 ---
 
-## 3. TaskType (任务类型)
+## 4. IssueStatus (Issue 状态枚举)
 
-| 类型 | 值 | 说明 |
+| 状态 | 值 | 说明 |
 |-----|-----|------|
-| `NEW_TASK` | `new_task` | 新任务，需要 clone 仓库 |
-| `REVISION` | `revision` | 修改任务，在现有分支继续工作 |
+| `ACTIVE` | `active` | 活跃 |
+| `ARCHIVED` | `archived` | 已归档 |
+| `DISCARDED` | `discarded` | 已废弃 |
 
 ---
 
-## 4. Workspace (工作空间模型)
+## 5. StageState (阶段状态)
 
 ### 字段定义
 
 | 字段名 | 类型 | 说明 |
 |-------|------|------|
-| `id` | str | 工作空间 ID |
-| `issue_number` | int | 关联的 Issue |
-| `branch_name` | str | 分支名 |
-| `path` | Path | 本地路径 |
-| `pr_number` | int \| None | PR 编号 |
+| `stage` | Stage | 阶段 |
+| `status` | StageStatus | 状态 |
+| `document` | str | Markdown 文档内容 |
+| `comments` | list[Comment] | 审核意见列表 |
+| `started_at` | datetime \| None | 开始时间 |
+| `completed_at` | datetime \| None | 完成时间 |
+| `todo_list` | list[TodoItem] \| None | TODO 列表（执行阶段） |
+| `progress` | int \| None | 进度百分比（执行阶段） |
+| `execution_state` | ExecutionState \| None | 执行子状态 |
+
+---
+
+## 6. TodoItem (TODO 项)
+
+### 字段定义
+
+| 字段名 | 类型 | 说明 |
+|-------|------|------|
+| `id` | str | 唯一标识 |
+| `content` | str | 内容 |
+| `status` | TodoStatus | 状态 |
+
+### TodoStatus (TODO 状态枚举)
+
+| 状态 | 值 | 说明 |
+|-----|-----|------|
+| `PENDING` | `pending` | 待执行 |
+| `IN_PROGRESS` | `in_progress` | 执行中 |
+| `COMPLETED` | `completed` | 已完成 |
+| `FAILED` | `failed` | 失败 |
+
+---
+
+## 7. ExecutionState (执行状态枚举)
+
+| 状态 | 值 | 说明 |
+|-----|-----|------|
+| `PENDING` | `pending` | 待执行 |
+| `RUNNING` | `running` | 执行中 |
+| `PAUSED` | `paused` | 暂停 |
+| `SUCCESS` | `success` | 成功 |
+| `FAILED` | `failed` | 失败 |
+
+---
+
+## 8. Comment (评论/审核意见)
+
+### 字段定义
+
+| 字段名 | 类型 | 说明 |
+|-------|------|------|
+| `id` | str | 唯一标识 |
+| `stage` | Stage | 所属阶段 |
+| `action` | str | 操作类型（`approve`/`reject`） |
+| `content` | str | 内容 |
 | `created_at` | datetime | 创建时间 |
 
-### 命名规则
-
-**工作空间 ID**: `{type}_{issue_number}_{date}-{slug}`
-
-示例: `feature_3_0318-user-login`
-
-**分支名称**: `{type}_{issue_number}_{date}-{slug}`
-
-示例: `feature_3_0318-user-login`
-
 ---
 
-## 5. ExecutionResult (执行结果)
-
-Worker 执行完成后返回的结果对象。
-
-### 字段定义
-
-| 字段名 | 类型 | 说明 |
-|-------|------|------|
-| `success` | bool | 是否成功 |
-| `message` | str | 结果消息 |
-| `files_changed` | list[str] | 修改的文件列表 |
-| `output` | str | 执行输出 |
-| `commit_message` | str \| None | AI 生成的 commit message |
-
----
-
-## 6. Settings (配置模型)
+## 9. Settings (配置模型)
 
 ### 字段定义
 
 | 字段名 | 类型 | 说明 | 默认值 |
 |-------|------|------|--------|
-| `github_token` | str | GitHub Token | - |
-| `github_repo` | str | 目标仓库 | - |
-| `llm_config` | LLMConfig | LLM 配置 | 默认使用 iFlow |
-| `agent_type` | str | Agent 类型 | `iflow` |
-| `agent_timeout` | int | Agent 超时(秒) | `1200` (20分钟) |
-| `max_workers` | int | 最大并发 Worker | `5` |
-| `work_dir` | Path \| None | 工作目录 | `~/.swallowloop` |
-| `poll_interval` | int | 轮询间隔(秒) | `60` |
-| `issue_label` | str | Issue 标签 | `swallow` |
-| `base_branch` | str | 基础分支 | `main` |
+| `issue_project` | str | 项目名称 | `default` |
 | `log_level` | str | 日志级别 | `INFO` |
 | `web_enabled` | bool | 启用 Web | `true` |
 | `web_port` | int | Web 端口 | `8080` |
@@ -163,74 +207,11 @@ Worker 执行完成后返回的结果对象。
 
 ---
 
-## 7. LLMConfig (LLM 配置模型)
-
-支持多种 LLM 提供商的统一配置。
-
-### 字段定义
-
-| 字段名 | 类型 | 说明 |
-|-------|------|------|
-| `provider` | LLMProvider | LLM 提供商 |
-| `model_name` | str | 模型名称 |
-| `api_key` | str \| None | API Key |
-| `base_url` | str \| None | API 端点 URL |
-| `extra_params` | dict | 额外参数 |
-
-### LLMProvider (LLM 提供商枚举)
-
-| 值 | 说明 |
-|-----|------|
-| `iflow` | 使用本地 iFlow CLI 默认配置 |
-| `openai` | OpenAI API |
-| `minimax` | MiniMax API |
-| `custom` | 自定义 OpenAI 兼容 API |
-
-### 配置方式
-
-**方式一：使用 LLM_* 前缀环境变量**
-```bash
-LLM_PROVIDER=minimax
-LLM_API_KEY=your-api-key
-LLM_BASE_URL=https://api.minimaxi.com/v1
-LLM_MODEL_NAME=MiniMax-M2.5-highspeed
-```
-
-**方式二：兼容旧环境变量**
-```bash
-OPENAI_API_KEY=your-api-key  # 可用于 Minimax
-OPENAI_API_BASE_URL=https://api.minimaxi.com/v1
-LLM_MODEL=minimax/MiniMax-M2.5-highspeed
-```
-
----
-
 ## 数据文件位置
 
 | 文件 | 路径 | 说明 |
 |-----|------|------|
-| 任务数据 | `~/.swallowloop/tasks.json` | 任务持久化存储 |
-| 工作空间数据 | `~/.swallowloop/workspaces.json` | 工作空间记录 |
-| 工作空间目录 | `~/.swallowloop/workspaces/` | 代码仓库工作目录 |
-| 代码缓存 | `~/.swallowloop/codebase/` | 代码库缓存 |
-| 日志目录 | `~/.swallowloop/logs/` | 日志文件 |
-
----
-
-## Worker 进程管理
-
-### 进程信息
-
-| 字段 | 说明 |
-|-----|------|
-| `worker_pid` | Worker 子进程 PID |
-| `started_at` | 启动时间（用于超时检测） |
-
-### 超时处理
-
-- 默认超时: 2 小时
-- 超时后自动终止进程
-- 任务状态标记为失败，进入重试流程
+| Issue 数据 | `~/.swallowloop/{project}/issues.json` | Issue 持久化存储 |
 
 ---
 
