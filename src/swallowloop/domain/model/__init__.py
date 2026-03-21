@@ -1,6 +1,7 @@
 """领域模型"""
 
 from .enums import TaskState, TaskType
+from .stage import Stage, StageStatus, IssueStatus, TodoStatus, ExecutionState
 from .comment import Comment
 from .pull_request import PullRequest
 from .workspace import Workspace
@@ -14,4 +15,10 @@ __all__ = [
     "Workspace",
     "Comment",
     "PullRequest",
+    # Issue pipeline
+    "Stage",
+    "StageStatus",
+    "IssueStatus",
+    "TodoStatus",
+    "ExecutionState",
 ]
