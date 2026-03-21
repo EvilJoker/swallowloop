@@ -32,15 +32,15 @@ src/swallowloop/
 ├── infrastructure/
 │   ├── persistence/
 │   │   └── json_issue_repository.py  # 新增：JsonIssueRepository
-│   ├── agent/
-│   │   └── iflow/
-│   │       └── iflow_agent.py # 修改：适配 Issue 执行
-│   └── config/
-│       └── settings.py        # 修改：添加 Issue 相关配置
+│   └── agent/
+│       └── iflow/
+│           └── iflow_agent.py # 修改：适配 Issue 执行
 │
 └── interfaces/
     └── web/
-        └── dashboard.py       # 修改：添加 Issue API 端点
+        └── api/
+            ├── issues.py     # 新增：Issue API 路由
+            └── websockets.py # 新增：WebSocket 处理
 
 ~/.swallowloop/
 ├── instructions/               # 新增：系统预置指令
@@ -873,143 +873,6 @@ git commit -m "feat(application): 添加 ExecutorService"
 
 ---
 
-## Task 8: Web API - Dashboard 扩展
-
-**Files:**
-- Modify: `src/swallowloop/interfaces/web/dashboard.py`
-
-- [ ] **Step 1: 修改 dashboard.py - 添加 Issue API 端点**
-
-在 DashboardServer 类中添加以下端点：
-
-```python
-# 在 _setup_routes 方法中添加：
-
-@app.get("/api/issues")
-async def list_issues():
-    """获取所有 Issue"""
-    issues = self._issue_service.list_issues()
-    return {"issues": [self._issue_to_dict(i) for i in issues]}
-
-@app.get("/api/issues/{issue_id}")
-async def get_issue(issue_id: str):
-    """获取单个 Issue"""
-    issue = self._issue_service.get_issue(issue_id)
-    if not issue:
-        raise HTTPException(status_code=404, detail="Issue not found")
-    return {"issue": self._issue_to_dict(issue)}
-
-@app.post("/api/issues")
-async def create_issue(request: Request):
-    """创建 Issue"""
-    data = await request.json()
-    issue = self._issue_service.create_issue(
-        title=data["title"],
-        description=data.get("description", ""),
-    )
-    return {"issue": self._issue_to_dict(issue)}, 201
-
-@app.patch("/api/issues/{issue_id}")
-async def update_issue(issue_id: str, request: Request):
-    """更新 Issue（归档/废弃）"""
-    data = await request.json()
-    issue = self._issue_service.get_issue(issue_id)
-    if not issue:
-        raise HTTPException(status_code=404, detail="Issue not found")
-
-    if "status" in data:
-        if data["status"] == "archived":
-            issue = self._issue_service.archive_issue(issue_id)
-        elif data["status"] == "discarded":
-            issue = self._issue_service.discard_issue(issue_id)
-
-    return {"issue": self._issue_to_dict(issue)}
-
-@app.delete("/api/issues/{issue_id}")
-async def delete_issue(issue_id: str):
-    """删除 Issue"""
-    success = self._issue_service.delete_issue(issue_id)
-    if not success:
-        raise HTTPException(status_code=404, detail="Issue not found")
-    return None
-
-@app.post("/api/issues/{issue_id}/stages/{stage}/approve")
-async def approve_stage(issue_id: str, stage: str, request: Request):
-    """审批通过阶段"""
-    data = await request.json()
-    issue = self._issue_service.approve_stage(
-        issue_id,
-        Stage(stage),
-        comment=data.get("comment", ""),
-    )
-    if not issue:
-        raise HTTPException(status_code=404, detail="Issue not found")
-    return {"issue": self._issue_to_dict(issue)}
-
-@app.post("/api/issues/{issue_id}/stages/{stage}/reject")
-async def reject_stage(issue_id: str, stage: str, request: Request):
-    """打回阶段"""
-    data = await request.json()
-    issue = self._issue_service.reject_stage(
-        issue_id,
-        Stage(stage),
-        reason=data["reason"],
-    )
-    if not issue:
-        raise HTTPException(status_code=404, detail="Issue not found")
-    return {"issue": self._issue_to_dict(issue)}
-
-@app.post("/api/issues/{issue_id}/trigger")
-async def trigger_issue(issue_id: str, request: Request):
-    """手动触发 AI 执行"""
-    data = await request.json()
-    result = self._issue_service.trigger_ai(
-        issue_id,
-        Stage(data["stage"]),
-    )
-    return result
-```
-
-- [ ] **Step 2: 添加辅助方法**
-
-```python
-def _issue_to_dict(self, issue: Issue) -> dict:
-    """Issue 转字典"""
-    return {
-        "id": str(issue.id),
-        "title": issue.title,
-        "description": issue.description,
-        "status": issue.status.value,
-        "currentStage": issue.current_stage.value,
-        "createdAt": issue.created_at.isoformat(),
-        "archivedAt": issue.archived_at.isoformat() if issue.archived_at else None,
-        "discardedAt": issue.discarded_at.isoformat() if issue.discarded_at else None,
-        "stages": {
-            stage.value: {
-                "stage": stage.value,
-                "status": state.status.value,
-                "document": state.document,
-                "comments": [...],  # 序列化 comments
-                "startedAt": state.started_at.isoformat() if state.started_at else None,
-                "completedAt": state.completed_at.isoformat() if state.completed_at else None,
-                "todoList": [...],  # 序列化 todo_list
-                "progress": state.progress,
-                "executionState": state.execution_state.value if state.execution_state else None,
-            }
-            for stage, state in issue.stages.items()
-        },
-    }
-```
-
-- [ ] **Step 3: 提交**
-
-```bash
-git add src/swallowloop/interfaces/web/dashboard.py
-git commit -m "feat(web): 扩展 Dashboard 添加 Issue API 端点"
-```
-
----
-
 ## Task 9: 指令文件
 
 **Files:**
@@ -1252,142 +1115,198 @@ mkdir -p ~/.swallowloop/instructions
 
 ---
 
-## Task 10: WebSocket 执行日志
+## Task 10: 独立 FastAPI 服务
 
 **Files:**
-- Modify: `src/swallowloop/interfaces/web/dashboard.py`
+- Create: `src/swallowloop/interfaces/web/api/issues.py`
+- Create: `src/swallowloop/interfaces/web/api/websockets.py`
+- Modify: `src/swallowloop/interfaces/web/__init__.py`
 
-- [ ] **Step 1: 添加 WebSocket 连接管理器**
-
-在 `ConnectionManager` 类中添加：
+- [ ] **Step 1: 创建 FastAPI 应用入口**
 
 ```python
-# 在 DashboardServer.__init__ 中添加
-self._issue_connections: dict[str, list[WebSocket]] = defaultdict(list)
+"""FastAPI Issue API 服务入口"""
 
-# 添加 WebSocket 端点
-@app.websocket("/ws/execution/{issue_id}")
-async def ws_execution(websocket: WebSocket, issue_id: str):
-    await websocket.accept()
-    self._issue_connections[issue_id].append(websocket)
-    try:
-        while True:
-            data = await websocket.receive_text()
-            # 客户端可以发送 ping
-            if data == "ping":
-                await websocket.send_text("pong")
-    except WebSocketDisconnect:
-        self._issue_connections[issue_id].remove(websocket)
+import uvicorn
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from .issues import router as issues_router
+
+app = FastAPI(title="SwallowLoop Issue API", version="1.0.0")
+
+# CORS 配置
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# 注册路由
+app.include_router(issues_router, prefix="/api", tags=["issues"])
+
+@app.get("/health")
+async def health():
+    return {"status": "healthy"}
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
 ```
 
-- [ ] **Step 2: 添加广播方法**
+- [ ] **Step 2: 创建 issues 路由**
 
 ```python
-async def broadcast_execution_log(self, issue_id: str, log: dict) -> None:
-    """广播执行日志到指定 Issue 的所有连接"""
-    for ws in self._issue_connections.get(issue_id, []):
-        try:
-            await ws.send_json(log)
-        except Exception:
-            pass
+"""Issue API 路由"""
+
+from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel
+
+from ....application.service import IssueService
+from ....domain.model import Stage
+
+router = APIRouter()
+
+# 全局服务实例（依赖注入简化处理）
+_issue_service: IssueService = None
+
+def set_issue_service(service: IssueService):
+    global _issue_service
+    _issue_service = service
+
+@router.get("/issues")
+async def list_issues():
+    issues = _issue_service.list_issues()
+    return {"issues": [_issue_to_dict(i) for i in issues]}
+
+@router.get("/issues/{issue_id}")
+async def get_issue(issue_id: str):
+    issue = _issue_service.get_issue(issue_id)
+    if not issue:
+        raise HTTPException(status_code=404, detail="Issue not found")
+    return {"issue": _issue_to_dict(issue)}
+
+@router.post("/issues")
+async def create_issue(request: Request):
+    data = await request.json()
+    issue = _issue_service.create_issue(
+        title=data["title"],
+        description=data.get("description", ""),
+    )
+    return {"issue": _issue_to_dict(issue)}, 201
+
+@router.patch("/issues/{issue_id}")
+async def update_issue(issue_id: str, request: Request):
+    data = await request.json()
+    issue = _issue_service.update_issue(issue_id, **data)
+    if not issue:
+        raise HTTPException(status_code=404, detail="Issue not found")
+    return {"issue": _issue_to_dict(issue)}
+
+@router.delete("/issues/{issue_id}")
+async def delete_issue(issue_id: str):
+    success = _issue_service.delete_issue(issue_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Issue not found")
+    return None
+
+@router.post("/issues/{issue_id}/stages/{stage}/approve")
+async def approve_stage(issue_id: str, stage: str, request: Request):
+    data = await request.json()
+    issue = await _issue_service.approve_stage(
+        issue_id, Stage(stage), data.get("comment", "")
+    )
+    if not issue:
+        raise HTTPException(status_code=404, detail="Issue not found")
+    return {"issue": _issue_to_dict(issue)}
+
+@router.post("/issues/{issue_id}/stages/{stage}/reject")
+async def reject_stage(issue_id: str, stage: str, request: Request):
+    data = await request.json()
+    issue = _issue_service.reject_stage(
+        issue_id, Stage(stage), data["reason"]
+    )
+    if not issue:
+        raise HTTPException(status_code=404, detail="Issue not found")
+    return {"issue": _issue_to_dict(issue)}
+
+@router.post("/issues/{issue_id}/trigger")
+async def trigger_issue(issue_id: str, request: Request):
+    data = await request.json()
+    result = await _issue_service.trigger_ai(issue_id, Stage(data["stage"]))
+    return result
+
+def _issue_to_dict(issue) -> dict:
+    """Issue 转字典"""
+    return {
+        "id": str(issue.id),
+        "title": issue.title,
+        "description": issue.description,
+        "status": issue.status.value,
+        "currentStage": issue.current_stage.value,
+        "createdAt": issue.created_at.isoformat(),
+        "archivedAt": issue.archived_at.isoformat() if issue.archived_at else None,
+        "discardedAt": issue.discarded_at.isoformat() if issue.discarded_at else None,
+        "stages": {
+            stage.value: {
+                "stage": stage.value,
+                "status": state.status.value,
+                "document": state.document,
+                "comments": [...],  # 序列化
+                "startedAt": state.started_at.isoformat() if state.started_at else None,
+                "completedAt": state.completed_at.isoformat() if state.completed_at else None,
+                "todoList": [...],
+                "progress": state.progress,
+                "executionState": state.execution_state.value if state.execution_state else None,
+            }
+            for stage, state in issue.stages.items()
+        },
+    }
 ```
 
-- [ ] **Step 3: 在 ExecutorService 中集成**
-
-修改 `ExecutorService` 接收 `dashboard` 引用以发送日志：
+- [ ] **Step 3: 创建 WebSocket 处理**
 
 ```python
-class ExecutorService:
-    def __init__(self, iflow_agent, repository, dashboard=None):
-        self._agent = iflow_agent
-        self._repo = repository
-        self._dashboard = dashboard
-        # ...
+"""WebSocket 执行日志"""
 
-    async def execute_stage(self, issue: Issue, stage: Stage) -> dict:
-        # ... 执行逻辑 ...
+from fastapi import WebSocket, WebSocketDisconnect
+from collections import defaultdict
 
-        # 发送日志
-        if self._dashboard:
-            await self._dashboard.broadcast_execution_log(
-                str(issue.id),
-                {"level": "info", "message": "开始执行...", "timestamp": datetime.now().isoformat()}
-            )
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: dict[str, list[WebSocket]] = defaultdict(list)
+
+    async def connect(self, websocket: WebSocket, issue_id: str):
+        await websocket.accept()
+        self.active_connections[issue_id].append(websocket)
+
+    def disconnect(self, websocket: WebSocket, issue_id: str):
+        if websocket in self.active_connections[issue_id]:
+            self.active_connections[issue_id].remove(websocket)
+
+    async def send_log(self, issue_id: str, log: dict):
+        for connection in self.active_connections.get(issue_id, []):
+            try:
+                await connection.send_json(log)
+            except Exception:
+                pass
+
+manager = ConnectionManager()
+
+# WebSocket 端点将在 issues.py 中添加
 ```
 
 - [ ] **Step 4: 提交**
 
 ```bash
-git add src/swallowloop/interfaces/web/dashboard.py
-git commit -m "feat(web): 添加 WebSocket 执行日志支持"
+git add src/swallowloop/interfaces/web/api/
+git commit -m "feat(api): 添加独立 FastAPI Issue 服务"
 ```
 
 ---
 
-## Task 11: Dashboard 依赖注入
-
-**Files:**
-- Modify: `src/swallowloop/interfaces/web/dashboard.py`
-- Modify: `src/swallowloop/interfaces/web/standalone.py`
-
-- [ ] **Step 1: 更新 DashboardServer 初始化**
-
-```python
-class DashboardServer:
-    def __init__(
-        self,
-        task_repository: TaskRepository,
-        workspace_repository: WorkspaceRepository,
-        issue_repository: IssueRepository,
-        iflow_agent: IFlowAgent,
-        settings: Settings,
-        port: int = 8080,
-    ):
-        # 现有初始化 ...
-        self._issue_service = IssueService(
-            repository=issue_repository,
-            executor=ExecutorService(
-                iflow_agent=iflow_agent,
-                repository=issue_repository,
-                dashboard=self,  # 传入 self 以便发送 WebSocket 日志
-            )
-        )
-```
-
-- [ ] **Step 2: 更新 standalone.py**
-
-```python
-def main():
-    # ... 现有代码 ...
-
-    # 初始化 Issue 相关组件
-    issue_repo = JsonIssueRepository(
-        project=settings.issue_project,
-        data_dir=settings.work_dir,
-    )
-    iflow_agent = IFlowAgent(config=settings.get_llm_config())
-
-    # 创建 Dashboard
-    dashboard = DashboardServer(
-        task_repository=task_repo,
-        workspace_repository=workspace_repo,
-        issue_repository=issue_repo,
-        iflow_agent=iflow_agent,
-        settings=settings,
-        port=args.port,
-    )
-```
-
-- [ ] **Step 3: 提交**
-
-```bash
-git add src/swallowloop/interfaces/web/dashboard.py src/swallowloop/interfaces/web/standalone.py
-git commit -m "feat(web): 集成 IssueService 到 Dashboard"
-```
-
----
-
-## Task 12: 配置更新
+## Task 11: 服务启动入口
 
 **Files:**
 - Modify: `src/swallowloop/infrastructure/config/settings.py`
@@ -1410,7 +1329,7 @@ git commit -m "feat(config): 添加 issue_project 配置"
 
 ---
 
-## Task 13: 测试
+## Task 12: 测试
 
 **Files:**
 - Create: `tests/test_issue_service.py`
@@ -1523,9 +1442,7 @@ git commit -m "test: 添加 IssueService 单元测试"
 5. Task 5: 持久化 - JsonIssueRepository
 6. Task 6: 应用服务 - IssueService
 7. Task 7: 应用服务 - ExecutorService
-8. Task 8: Web API - Dashboard 扩展
-9. Task 9: 指令文件
-10. Task 10: WebSocket 执行日志
-11. Task 11: Dashboard 依赖注入
-12. Task 12: 配置更新
-13. Task 13: 测试
+8. Task 9: 指令文件
+9. Task 10: 独立 FastAPI 服务
+10. Task 11: 服务启动入口
+11. Task 12: 测试
