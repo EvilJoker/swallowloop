@@ -4,6 +4,7 @@ from .task_service import TaskService
 from .execution_service import ExecutionService
 from .environment_checker import EnvironmentChecker, EnvironmentCheckResult
 from .report_generator import ReportGenerator, ReportData, DocumentationChecker
+from .issue_service import IssueService
 
 __all__ = [
     "TaskService",
@@ -13,4 +14,5 @@ __all__ = [
     "ReportGenerator",
     "ReportData",
     "DocumentationChecker",
+    "IssueService",
 ]
