@@ -17,6 +17,19 @@ from .environment_checker import EnvironmentChecker
 logger = logging.getLogger(__name__)
 
 
+def _fix_term_for_tmux() -> None:
+    """修复 tmux 环境下的 TERM 变量，解决颜色显示问题
+    
+    tmux 会设置 TERM=screen，但如果 iFlow 或其他工具需要 xterm-256color，
+    会导致颜色显示异常。此函数检测是否在 tmux 中运行，并设置合适的 TERM 值。
+    """
+    if os.environ.get("TMUX"):
+        # 在 tmux 中运行时，设置 TERM 为 xterm-256color
+        # 这解决了许多工具（包括 iflow）的颜色显示问题
+        os.environ["TERM"] = "xterm-256color"
+        logger.debug("检测到 tmux 环境，已设置 TERM=xterm-256color")
+
+
 class AgentPort(Protocol):
     """Agent 端口"""
     @property

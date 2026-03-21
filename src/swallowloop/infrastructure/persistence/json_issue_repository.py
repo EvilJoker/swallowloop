@@ -140,7 +140,7 @@ class JsonIssueRepository(IssueRepository):
 
     def _deserialize(self, data: dict) -> Issue:
         """反序列化 Issue"""
-        from ...domain.model import StageState, TodoItem, Comment
+        from ...domain.model import StageState, TodoItem, ReviewComment
 
         stages = {}
         for stage_str, state_data in data.get("stages", {}).items():
@@ -158,7 +158,7 @@ class JsonIssueRepository(IssueRepository):
 
             comments = []
             for c in state_data.get("comments", []):
-                comments.append(Comment(
+                comments.append(ReviewComment(
                     id=c["id"],
                     stage=Stage(c["stage"]),
                     action=c["action"],

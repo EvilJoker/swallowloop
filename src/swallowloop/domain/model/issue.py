@@ -78,16 +78,16 @@ class Issue:
         state.status = StageStatus.APPROVED
         state.completed_at = datetime.now()
         if comment:
-            from .comment import Comment
-            state.comments.append(Comment.create(stage, "approve", comment))
+            from .comment import ReviewComment
+            state.comments.append(ReviewComment.create(stage, "approve", comment))
 
     def reject_stage(self, stage: Stage, reason: str) -> None:
         """打回阶段"""
         state = self.stages[stage]
         state.status = StageStatus.REJECTED
         if reason:
-            from .comment import Comment
-            state.comments.append(Comment.create(stage, "reject", reason))
+            from .comment import ReviewComment
+            state.comments.append(ReviewComment.create(stage, "reject", reason))
 
     def start_stage(self, stage: Stage) -> None:
         """开始阶段执行"""

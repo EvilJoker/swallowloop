@@ -2,7 +2,7 @@
 
 from .enums import TaskState, TaskType
 from .stage import Stage, StageStatus, IssueStatus, TodoStatus, ExecutionState
-from .comment import Comment
+from .comment import Comment, ReviewComment
 from .pull_request import PullRequest
 from .workspace import Workspace
 from .task import Task, TaskId
@@ -26,4 +26,5 @@ __all__ = [
     "IssueId",
     "StageState",
     "TodoItem",
+    "ReviewComment",
 ]

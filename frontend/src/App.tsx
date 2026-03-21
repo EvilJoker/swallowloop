@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
 import { MainContent } from '@/components/layout/MainContent';
@@ -7,10 +7,10 @@ import { IssueDetail } from '@/components/issue/IssueDetail';
 import { Overview } from '@/pages/Overview';
 import { Settings } from '@/pages/Settings';
 import { Archive } from '@/pages/Archive';
-import { mockIssues } from '@/types/mock';
 import type { Issue } from '@/types';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { issueApi } from '@/lib/api';
 
 type Page = 'home' | 'overview' | 'archive' | 'settings';
 
@@ -25,6 +25,28 @@ function App() {
   const [currentPage, setCurrentPage] = useState<Page>('home');
   const [tabs, setTabs] = useState<Tab[]>([{ id: 'kanban', type: 'kanban', title: '泳道图' }]);
   const [activeTabId, setActiveTabId] = useState('kanban');
+  const [issues, setIssues] = useState<Issue[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // 从 API 加载 Issues
+  const loadIssues = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await issueApi.getAll();
+      setIssues(data);
+    } catch (err) {
+      console.error('Failed to load issues:', err);
+      setError(err instanceof Error ? err.message : '加载失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadIssues();
+  }, []);
 
   // 打开 Issue 详情 Tab
   const openIssueTab = (issue: Issue) => {
@@ -53,28 +75,60 @@ function App() {
     }
   };
 
+  // 刷新 Issue 数据
+  const refreshIssue = async (issueId: string) => {
+    try {
+      const updated = await issueApi.getById(issueId);
+      setIssues((prev) => prev.map((i) => (i.id === issueId ? updated : i)));
+      // 同时更新 tab 中的 issue
+      setTabs((prev) =>
+        prev.map((t) => (t.issue?.id === issueId ? { ...t, issue: updated } : t))
+      );
+    } catch (err) {
+      console.error('Failed to refresh issue:', err);
+    }
+  };
+
   // 渲染当前 Tab 内容
   const renderTabContent = () => {
     const activeTab = tabs.find((t) => t.id === activeTabId);
-    if (!activeTab) return <KanbanBoard issues={mockIssues} onIssueClick={openIssueTab} />;
+    if (!activeTab) return <KanbanBoard issues={issues} onIssueClick={openIssueTab} />;
 
     switch (activeTab.type) {
       case 'kanban':
-        return <KanbanBoard issues={mockIssues} onIssueClick={openIssueTab} />;
+        return <KanbanBoard issues={issues} onIssueClick={openIssueTab} />;
       case 'issue':
         return activeTab.issue ? (
           <IssueDetail
             issue={activeTab.issue}
-            onApprove={() => {
-              console.log('Issue approved:', activeTab.issue?.id);
-              closeTab(activeTab.id);
+            onApprove={async () => {
+              if (!activeTab.issue) return;
+              try {
+                await issueApi.approveStage(activeTab.issue.id, activeTab.issue.currentStage);
+                await refreshIssue(activeTab.issue.id);
+                closeTab(activeTab.id);
+              } catch (err) {
+                console.error('Failed to approve:', err);
+              }
             }}
-            onReject={(reason) => {
-              console.log('Issue rejected:', activeTab.issue?.id, reason);
-              closeTab(activeTab.id);
+            onReject={async (reason) => {
+              if (!activeTab.issue) return;
+              try {
+                await issueApi.rejectStage(activeTab.issue.id, activeTab.issue.currentStage, reason);
+                await refreshIssue(activeTab.issue.id);
+                closeTab(activeTab.id);
+              } catch (err) {
+                console.error('Failed to reject:', err);
+              }
             }}
-            onTrigger={() => {
-              console.log('Trigger AI update for:', activeTab.issue?.id);
+            onTrigger={async () => {
+              if (!activeTab.issue) return;
+              try {
+                await issueApi.trigger(activeTab.issue.id);
+                await refreshIssue(activeTab.issue.id);
+              } catch (err) {
+                console.error('Failed to trigger:', err);
+              }
             }}
           />
         ) : null;

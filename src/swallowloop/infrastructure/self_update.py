@@ -116,22 +116,23 @@ class SelfUpdater:
     def check_for_update(self) -> bool:
         """
         检查是否有新版本
-
-        只有当远程有本地没有的 commit 时才需要更新
+        
+        Returns:
+            True 如果有新版本可用
         """
         if not self.should_check():
             return False
-
+        
         self._last_check_time = datetime.now()
-
+        
         # 获取当前和远程 commit
         current = self._get_current_commit()
         remote = self._get_remote_commit()
-
+        
         if not current or not remote:
             logger.warning("无法获取版本信息，跳过更新检查")
             return False
-
+        
         self._current_commit = current
 
         # 检查远程是否有本地没有的 commit

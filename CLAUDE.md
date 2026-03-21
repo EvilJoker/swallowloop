@@ -87,3 +87,21 @@ LLM 配置与 Agent 类型独立，支持通过 `LLM_PROVIDER`/`LLM_API_KEY`/`LL
 2. **并发控制**: Orchestrator 控制最大 Worker 数量，超出任务排队
 3. **资源清理**: 任务完成后自动删除本地工作空间和远端分支
 4. **持久化**: 使用 JSON 文件存储任务和工作空间，带文件锁
+
+## Git Workflow
+
+- Always confirm before running git push operations - show pending commits first
+
+## Configuration
+
+- When I mention a setting, always show me the exact file path and current value before making changes
+- Before editing any config file, say: "Your current [setting name] in [file path] is [value]. I'll change it to [new value]. OK?"
+
+## Working with URLs
+
+- Before attempting browser/URL access, ask if I want to use web_search or WebFetch tools
+- If my requested method isn't possible, say: "I can't do [X], but I can [alternative approach]. Want me to try that?"
+
+## Tool Installation
+
+- Before recommending plugins/tools: "Let me check your [tool] version first: [command]"
