@@ -42,6 +42,9 @@ class Settings:
     web_enabled: bool = True  # 是否启用 Web Dashboard
     web_port: int = 8080  # Web 服务端口
     web_host: str = "0.0.0.0"  # Web 服务监听地址
+
+    # Issue Pipeline 配置
+    issue_project: str = "default"  # Issue 项目名
     
     # 自更新配置
     enable_self_update: bool = True  # 是否启用自更新
@@ -104,6 +107,7 @@ class Settings:
             enable_self_update=os.getenv("ENABLE_SELF_UPDATE", "true").lower() == "true",
             self_update_interval=int(os.getenv("SELF_UPDATE_INTERVAL", "300")),
             llm_config=llm_config,
+            issue_project=os.getenv("ISSUE_PROJECT", "default"),
         )
     
     @staticmethod
