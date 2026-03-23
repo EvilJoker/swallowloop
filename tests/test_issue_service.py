@@ -40,8 +40,13 @@ class MockExecutor:
         self.called.append((str(issue.id), stage))
         return {"status": "success", "output": "mock output"}
 
-    def execute_stage_async(self, issue, stage):
+    async def execute_stage_async(self, issue, stage):
         self.called.append((str(issue.id), stage))
+
+    async def execute_stage(self, issue, stage):
+        """异步版本"""
+        self.called.append((str(issue.id), stage))
+        return {"status": "success", "output": "mock output"}
 
 
 def test_create_issue():

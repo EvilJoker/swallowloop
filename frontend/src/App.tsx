@@ -26,21 +26,14 @@ function App() {
   const [tabs, setTabs] = useState<Tab[]>([{ id: 'kanban', type: 'kanban', title: '泳道图' }]);
   const [activeTabId, setActiveTabId] = useState('kanban');
   const [issues, setIssues] = useState<Issue[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   // 从 API 加载 Issues
   const loadIssues = async () => {
     try {
-      setLoading(true);
-      setError(null);
       const data = await issueApi.getAll();
       setIssues(data);
     } catch (err) {
       console.error('Failed to load issues:', err);
-      setError(err instanceof Error ? err.message : '加载失败');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -89,14 +82,19 @@ function App() {
     }
   };
 
+  // 新建 Issue 后的回调
+  const handleIssueCreated = (issue: Issue) => {
+    setIssues((prev) => [...prev, issue]);
+  };
+
   // 渲染当前 Tab 内容
   const renderTabContent = () => {
     const activeTab = tabs.find((t) => t.id === activeTabId);
-    if (!activeTab) return <KanbanBoard issues={issues} onIssueClick={openIssueTab} />;
+    if (!activeTab) return <KanbanBoard issues={issues} onIssueClick={openIssueTab} onIssueCreated={handleIssueCreated} />;
 
     switch (activeTab.type) {
       case 'kanban':
-        return <KanbanBoard issues={issues} onIssueClick={openIssueTab} />;
+        return <KanbanBoard issues={issues} onIssueClick={openIssueTab} onIssueCreated={handleIssueCreated} />;
       case 'issue':
         return activeTab.issue ? (
           <IssueDetail

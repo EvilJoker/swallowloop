@@ -1,5 +1,7 @@
+import { useState, useEffect } from 'react';
 import { STAGES } from '@/types';
-import { mockIssues } from '@/types/mock';
+import { issueApi } from '@/lib/api';
+import type { Issue } from '@/types';
 import { Clock, CheckCircle, PlayCircle } from 'lucide-react';
 
 interface StageStat {
@@ -25,8 +27,8 @@ function MetricCard({ icon: Icon, label, value, color }: { icon: any; label: str
 }
 
 // 最近执行的任务
-function RecentExecution() {
-  const activeIssues = mockIssues.filter((i) => i.status === 'active');
+function RecentExecution({ issues }: { issues: Issue[] }) {
+  const activeIssues = issues.filter((i) => i.status === 'active');
   const runningIssues = activeIssues.filter((i) =>
     Object.values(i.stages).some((s) => s.executionState === 'running' || s.status === 'running')
   );
@@ -68,8 +70,8 @@ function RecentExecution() {
 }
 
 // 阶段详细统计表格
-function StageStatsTable() {
-  const activeIssues = mockIssues.filter((i) => i.status === 'active');
+function StageStatsTable({ issues }: { issues: Issue[] }) {
+  const activeIssues = issues.filter((i) => i.status === 'active');
 
   // 计算各阶段统计
   const stats = STAGES.reduce<Record<string, StageStat>>((acc, stage) => {
@@ -138,11 +140,39 @@ function StageStatsTable() {
 }
 
 export function Overview() {
-  const activeIssues = mockIssues.filter((i) => i.status === 'active');
-  const totalIssues = mockIssues.length;
+  const [issues, setIssues] = useState<Issue[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadIssues = async () => {
+      try {
+        const data = await issueApi.getAll();
+        setIssues(data);
+      } catch (err) {
+        console.error('Failed to load issues:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadIssues();
+  }, []);
+
+  const activeIssues = issues.filter((i) => i.status === 'active');
+  const totalIssues = issues.length;
   const runningCount = activeIssues.filter((i) =>
     Object.values(i.stages).some((s) => s.executionState === 'running' || s.status === 'running')
   ).length;
+
+  if (loading) {
+    return (
+      <div className="p-6 space-y-6">
+        <h1 className="text-2xl font-semibold text-slate-800">概览</h1>
+        <div className="flex items-center justify-center py-12">
+          <div className="text-slate-400">加载中...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -156,10 +186,10 @@ export function Overview() {
       </div>
 
       {/* 阶段统计 */}
-      <StageStatsTable />
+      <StageStatsTable issues={issues} />
 
       {/* 最近执行 */}
-      <RecentExecution />
+      <RecentExecution issues={issues} />
     </div>
   );
 }

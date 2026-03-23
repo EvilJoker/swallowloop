@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, X, FileText, CheckCircle, Clock, ArrowRight } from 'lucide-react';
-import { mockIssues } from '@/types/mock';
+import type { Issue } from '@/types';
+import { issueApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 interface ArchiveModalProps {
-  issue: typeof mockIssues[0];
+  issue: Issue;
   onClose: () => void;
 }
 
@@ -84,8 +85,8 @@ function ArchiveModal({ issue, onClose }: ArchiveModalProps) {
         {/* 底部 */}
         <div className="px-5 py-4 border-t border-slate-200 bg-slate-50">
           <div className="flex items-center justify-between text-xs text-slate-500">
-            <span>创建于 {issue.createdAt.toLocaleDateString('zh-CN')}</span>
-            <span>归档于 {issue.archivedAt?.toLocaleDateString('zh-CN') || '-'}</span>
+            <span>创建于 {new Date(issue.createdAt).toLocaleDateString('zh-CN')}</span>
+            <span>归档于 {issue.archivedAt ? new Date(issue.archivedAt).toLocaleDateString('zh-CN') : '-'}</span>
           </div>
         </div>
       </div>
@@ -94,11 +95,28 @@ function ArchiveModal({ issue, onClose }: ArchiveModalProps) {
 }
 
 export function Archive() {
+  const [issues, setIssues] = useState<Issue[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedIssue, setSelectedIssue] = useState<typeof mockIssues[0] | null>(null);
-  const archivedIssues = mockIssues
+  const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadIssues = async () => {
+      try {
+        const data = await issueApi.getAll();
+        setIssues(data);
+      } catch (err) {
+        console.error('Failed to load issues:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadIssues();
+  }, []);
+
+  const archivedIssues = issues
     .filter((issue) => issue.status === 'archived')
-    .sort((a, b) => (b.archivedAt?.getTime() || 0) - (a.archivedAt?.getTime() || 0));
+    .sort((a, b) => (b.archivedAt ? new Date(b.archivedAt).getTime() : 0) - (a.archivedAt ? new Date(a.archivedAt).getTime() : 0));
 
   const filteredIssues = archivedIssues.filter((issue) => {
     if (!searchQuery.trim()) return true;
@@ -108,6 +126,17 @@ export function Archive() {
       issue.description.toLowerCase().includes(query)
     );
   });
+
+  if (loading) {
+    return (
+      <div className="p-6 space-y-5">
+        <h1 className="text-2xl font-semibold text-slate-800">归档</h1>
+        <div className="flex items-center justify-center py-12">
+          <div className="text-slate-400">加载中...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-5">
@@ -152,7 +181,7 @@ export function Archive() {
               </div>
               <div className="flex items-center gap-2 text-xs text-slate-400 shrink-0">
                 <Clock className="h-3 w-3" />
-                {issue.archivedAt?.toLocaleDateString('zh-CN') || issue.createdAt.toLocaleDateString('zh-CN')}
+                {issue.archivedAt ? new Date(issue.archivedAt).toLocaleDateString('zh-CN') : new Date(issue.createdAt).toLocaleDateString('zh-CN')}
               </div>
               <ArrowRight className="h-4 w-4 text-slate-300 group-hover:text-blue-400 transition-colors shrink-0" />
             </div>

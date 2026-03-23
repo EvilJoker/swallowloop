@@ -66,7 +66,7 @@ async def get_issue(issue_id: str):
     return {"issue": _issue_to_dict(issue)}
 
 
-@router.post("/issues")
+@router.post("/issues", status_code=201)
 async def create_issue(request: IssueCreate):
     """创建 Issue"""
     if _issue_service is None:
@@ -75,7 +75,7 @@ async def create_issue(request: IssueCreate):
         title=request.title,
         description=request.description,
     )
-    return {"issue": _issue_to_dict(issue)}, 201
+    return {"issue": _issue_to_dict(issue)}
 
 
 @router.patch("/issues/{issue_id}")

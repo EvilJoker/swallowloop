@@ -4,16 +4,16 @@
 
 ## 简介
 
-SwallowLoop 是一个智能维护 Agent 系统，为程序员个人/小团队提供常驻的代码开发助手。只需配置仓库地址和 API Key，就能在不改变现有 Git 工作流的前提下，模拟「有一个远程实习生帮你写代码」。
+SwallowLoop 是一个智能维护 Agent 系统，为程序员个人/小团队提供常驻的代码开发助手。通过监听 GitHub Issue 并自动生成 PR 来完成代码任务。
 
 **核心特点：**
 
-- **PR 驱动** - 所有改动以 PR 形式交付，人类保留最终审批权
-- **最小侵入** - 兼容现有 Git/GitHub 流程
+- **Issue 驱动** - 通过 GitHub Issue 创建任务
+- **7 阶段流水线** - 头脑风暴 → 方案成型 → 详细设计 → 任务拆分 → 执行 → 更新文档 → 提交
+- **Human-in-the-loop** - 每个阶段人类审批，保留最终控制权
 - **安全隔离** - 所有改动在独立分支，主仓只接受 PR
-- **闭环追踪** - 每个任务从规划到完成形成可追踪闭环
-- **并发执行** - 支持多任务并行，可配置最大 Worker 数量
-- **Web Dashboard** - 提供实时任务状态和日志查看
+- **Web Dashboard** - 实时查看任务状态、日志和进度
+- **完整测试** - 58 测试用例覆盖前后端
 
 ## 快速开始
 
@@ -21,8 +21,9 @@ SwallowLoop 是一个智能维护 Agent 系统，为程序员个人/小团队提
 
 - Python 3.11+
 - [uv](https://docs.astral.sh/uv/) 包管理器
+- Node.js 18+ (前端)
 - GitHub Personal Access Token (需要 `repo` 权限)
-- IFlow CLI SDK (或 OpenAI API Key)
+- IFlow CLI SDK 或 OpenAI API Key
 
 ### 2. 安装
 
@@ -31,8 +32,11 @@ SwallowLoop 是一个智能维护 Agent 系统，为程序员个人/小团队提
 git clone https://github.com/EvilJoker/swallowloop.git
 cd swallowloop
 
-# 安装依赖
+# 安装后端依赖
 uv sync
+
+# 安装前端依赖
+cd frontend && npm install && cd ..
 ```
 
 ### 3. 配置
@@ -53,60 +57,109 @@ cp .env_template .env
 
 ### 4. 运行
 
+**后端 API：**
 ```bash
-uv run swallowloop
+cd swallowloop
+uv run python -c "from swallowloop.interfaces.web.issue_api import run_server; run_server()"
 ```
 
-启动后访问 `http://localhost:8080` 查看 Dashboard。
-
-## 使用方式
-
-### 创建任务
-
-在目标仓库创建 GitHub Issue，添加 `swallow` 标签：
-
-```
-标题: 添加用户登录功能
-正文: 请实现用户登录功能，包括：
-- 登录表单
-- 密码验证
-- Session 管理
+**前端 Dashboard：**
+```bash
+cd frontend
+npm run dev
 ```
 
-### 工作流程
+访问 `http://localhost:5173` 查看 Dashboard。
+
+## 工作流程
+
+### Issue 7 阶段流水线
 
 ```
-Issue 创建 → SwallowLoop 检测 → 代码生成 → PR 提交 → 人工审批
-                                              ↓
-                            用户评论反馈 → 代码修改 → PR 更新
+Issue 新建 ─▶ 头脑风暴 ─▶ 方案成型 ─▶ 详细设计 ─▶ 任务拆分 ─▶ 执行 ─▶ 更新文档 ─▶ 提交 ─▶ 归档
+               │             │            │            │          │          │           │
+            多个方案        整体思路      精细设计     阶段计划   执行结果   总结报告    PR
+               │             │            │            │          │          │           │
+               ▼             ▼            ▼            ▼          ▼          ▼           ▼
+            你选择         审核         审核         审核       监控       查看        最终审核
 ```
 
-### 任务状态
+### 阶段说明
+
+| 阶段 | AI 产出 | 用户操作 |
+|-----|--------|---------|
+| **头脑风暴** | 多个方案 | 选择一个方案 |
+| **方案成型** | 整体实现思路 | 审核（通过/打回） |
+| **详细设计** | 精细化开发设计 | 审核（通过/打回） |
+| **任务拆分** | 分阶段开发计划（TODO 列表） | 审核（通过/打回） |
+| **执行** | 按计划执行代码 | 监控 + 手动触发 |
+| **更新文档** | 更新代码文档 + 总结报告 | 查看 |
+| **提交** | 提交 PR | 最终审核 |
+
+### 阶段状态
 
 | 状态 | 说明 |
 |-----|------|
-| `new` | 新接受，等待分配工作空间 |
-| `assigned` | 已分配工作空间 |
-| `pending` | 待执行（新任务或重试） |
-| `in_progress` | 执行中 |
-| `submitted` | 已提交 PR |
-| `completed` | 已完成（PR 已合并） |
-| `aborted` | 异常终止（Issue 关闭或重试失败） |
+| `pending` | 待审批 |
+| `approved` | 已通过 |
+| `rejected` | 已打回 |
+| `running` | 运行中 |
+| `error` | 异常 |
 
 ## Web Dashboard
 
-启动后自动运行 Web 服务（默认端口 8080）：
+访问 `http://localhost:5173` 查看 Dashboard。
 
 **功能：**
-- 任务列表和详情展示
-- 实时日志（WebSocket）
-- 统计信息
+- 泳道图展示所有 Issue 状态
+- Issue 详情面板（文档、评论历史、操作按钮）
+- 执行阶段进度条和 TODO 列表
+- 实时日志查看（WebSocket）
 
 **API 端点：**
-- `GET /api/tasks` - 任务列表
-- `GET /api/tasks/{issue_number}` - 任务详情
-- `GET /api/stats` - 统计信息
-- `WS /ws/tasks/{issue_number}` - 实时日志
+
+| 方法 | 端点 | 说明 |
+|-----|------|------|
+| GET | `/api/issues` | 获取所有 Issue |
+| GET | `/api/issues/{id}` | 获取单个 Issue |
+| POST | `/api/issues` | 创建 Issue |
+| PATCH | `/api/issues/{id}` | 更新 Issue |
+| DELETE | `/api/issues/{id}` | 删除 Issue |
+| POST | `/api/issues/{id}/stages/{stage}/approve` | 审批通过 |
+| POST | `/api/issues/{id}/stages/{stage}/reject` | 打回阶段 |
+| POST | `/api/issues/{id}/trigger` | 手动触发 AI |
+| WS | `/ws/execution/{issue_id}` | 实时日志 |
+
+## 测试
+
+### 运行测试
+
+**后端测试：**
+```bash
+uv run pytest tests/ -v
+```
+
+**前端组件测试：**
+```bash
+cd frontend
+npm run test:run
+```
+
+**E2E 测试：**
+```bash
+cd frontend
+npx playwright test
+```
+
+### 测试覆盖
+
+| 类型 | 数量 | 说明 |
+|-----|------|------|
+| 后端单元测试 | 25 | IssueService、API、持久化 |
+| 后端集成测试 | 12 | API 端点测试 |
+| 前端组件测试 | 13 | KanbanBoard、KanbanLane、IssueCard、NewIssueDialog |
+| E2E 测试 | 8 | 完整用户流程 |
+| **总计** | **58** | |
 
 ## 配置说明
 
@@ -130,27 +183,45 @@ Issue 创建 → SwallowLoop 检测 → 代码生成 → PR 提交 → 人工审
 
 ## 架构
 
+### DDD 分层架构
+
 ```
-┌─────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   GitHub    │───▶│   Orchestrator  │───▶│   多 Worker     │
-│   Issues    │    │    (调度器)      │    │   (并行执行)     │
-└─────────────┘    └─────────────────┘    └─────────────────┘
-                         │                        │
-                         ▼                        ▼
-                 ┌─────────────────┐      ┌─────────────────┐
-                 │  Web Dashboard  │      │  TaskManager    │
-                 │  (FastAPI)      │      │  (持久化)        │
-                 └─────────────────┘      └─────────────────┘
+src/swallowloop/
+├── domain/                    # 领域层（核心业务逻辑）
+│   ├── model/                # 聚合根、实体、值对象
+│   │   ├── issue.py          # Issue 聚合根
+│   │   ├── stage.py          # Stage、StageStatus 等枚举
+│   │   └── comment.py        # ReviewComment
+│   └── repository/           # 仓库接口定义
+├── application/               # 应用层
+│   ├── dto/                  # 数据传输对象
+│   └── service/              # 应用服务
+│       ├── issue_service.py   # Issue 生命周期管理
+│       └── executor_service.py # Worker 进程管理
+├── infrastructure/            # 基础设施层
+│   ├── agent/               # Agent 实现 (IFlow)
+│   ├── persistence/          # JSON 文件持久化
+│   ├── source_control/      # GitHub API 封装
+│   └── self_update.py       # 自更新机制
+└── interfaces/               # 接口层
+    ├── cli/                 # CLI 入口
+    └── web/                 # Web API (FastAPI)
 ```
 
-**核心特性：**
-- **并发控制**: 最大 Worker 数量可配置，超出的任务排队等待
-- **超时检测**: Worker 超时自动终止（默认 20 分钟）
-- **AI Commit**: 根据代码 diff 自动生成 commit message
-- **LLM 配置独立化**: 支持多种 LLM 提供商（iFlow/OpenAI/MiniMax/自定义）
-- **自更新**: 周期检查远程版本并自动更新
+### 前端架构
 
-详细架构文档请参阅 [docs/architecture.md](docs/architecture.md)
+```
+frontend/
+├── src/
+│   ├── components/
+│   │   ├── kanban/          # 泳道图组件
+│   │   ├── issue/          # Issue 详情组件
+│   │   └── layout/         # 布局组件
+│   ├── pages/              # 页面
+│   ├── types/              # TypeScript 类型定义
+│   └── lib/                 # API 客户端
+└── e2e/                    # Playwright E2E 测试
+```
 
 ## 目录结构
 
@@ -158,40 +229,35 @@ Issue 创建 → SwallowLoop 检测 → 代码生成 → PR 提交 → 人工审
 swallowloop/
 ├── src/swallowloop/
 │   ├── main.py                    # 主入口
-│   ├── application/               # 应用层
-│   ├── domain/                    # 领域层
-│   ├── infrastructure/            # 基础设施层
-│   │   ├── agent/                 # Agent 实现 (IFlow/Aider)
-│   │   ├── persistence/           # 持久化
-│   │   ├── source_control/        # GitHub API
-│   │   └── self_update.py         # 自更新
-│   └── interfaces/                # 接口层
-│       ├── cli/                   # CLI 入口
-│       └── web/                   # Web Dashboard
-├── docs/
-│   ├── architecture.md            # 架构文档
-│   ├── data_models.md             # 数据模型文档
-│   ├── vision.md                  # 项目愿景
-│   └── test_scenarios.md          # 测试场景
-├── tests/                         # 测试用例
-└── pyproject.toml                 # 项目配置
+│   ├── domain/                   # 领域层
+│   ├── application/              # 应用层
+│   ├── infrastructure/           # 基础设施层
+│   └── interfaces/               # 接口层
+├── frontend/                      # React 前端
+│   ├── src/
+│   │   ├── components/           # React 组件
+│   │   ├── pages/               # 页面
+│   │   ├── types/               # 类型定义
+│   │   └── lib/                 # 工具函数
+│   ├── e2e/                     # E2E 测试
+│   └── tests/                   # 组件测试
+├── tests/                        # pytest 测试用例
+├── docs/                         # 文档
+└── pyproject.toml                # 项目配置
 ```
 
 ## 开发路线
 
-- [x] Issue 监听与任务创建
-- [x] 任务状态机管理
-- [x] 工作空间隔离与分支管理
-- [x] IFlow Agent 集成
-- [x] 自动创建 PR
-- [x] 用户评论触发修改
-- [x] 任务持久化存储
-- [x] 并行任务调度（最大 Worker 可配置）
-- [x] 任务重试机制（最多 5 次）
-- [x] AI 生成 Commit Message
-- [x] Worker 超时检测
-- [x] 自更新机制
+- [x] Issue 7 阶段流水线
+- [x] 阶段审批流程（通过/打回）
+- [x] Issue 持久化存储
 - [x] Web Dashboard
+- [x] 执行阶段进度和 TODO 列表
+- [x] 实时日志（WebSocket）
+- [x] 完整测试覆盖（58 测试）
+- [x] 自更新机制
+- [x] 新建 Issue 功能（从头脑风暴开始）
+- [x] 概览/归档页面连接后端 API
 - [ ] 巡检与技术债治理
 - [ ] 经验/风格记忆
 
