@@ -119,6 +119,39 @@ stop_frontend() {
     stop_process "$FRONTEND_PID_FILE" "Frontend"
 }
 
+# 运行测试
+run_tests() {
+    echo "Running tests..."
+    cd /media/vdc/github/swallowloop
+
+    # 后端测试
+    echo "=== Backend Tests ==="
+    uv run pytest tests/ -v --tb=short
+    BACKEND_RESULT=$?
+
+    # 前端测试
+    echo "=== Frontend Tests ==="
+    cd /media/vdc/github/swallowloop/frontend
+    npm run test:run
+    FRONTEND_RESULT=$?
+
+    cd /media/vdc/github/swallowloop
+
+    if [ $BACKEND_RESULT -ne 0 ] || [ $FRONTEND_RESULT -ne 0 ]; then
+        echo "=== Tests Failed ==="
+        if [ $BACKEND_RESULT -ne 0 ]; then
+            echo "Backend tests failed (exit code: $BACKEND_RESULT)"
+        fi
+        if [ $FRONTEND_RESULT -ne 0 ]; then
+            echo "Frontend tests failed (exit code: $FRONTEND_RESULT)"
+        fi
+        return 1
+    fi
+
+    echo "=== All Tests Passed ==="
+    return 0
+}
+
 # 查看状态
 status() {
     echo "=== SwallowLoop Status ==="
@@ -204,6 +237,9 @@ case "${1:-}" in
     status)
         status
         ;;
+    test)
+        run_tests
+        ;;
     *)
         echo "Usage: run.sh [-all|-backend|-frontend|restart|stop|status]"
         echo ""
@@ -214,6 +250,7 @@ case "${1:-}" in
         echo "  restart    Restart services"
         echo "  stop       Stop services"
         echo "  status     Show service status"
+        echo "  test       Run all tests (backend + frontend)"
         echo ""
         echo "Examples:"
         echo "  run.sh -all          # Start both services"
