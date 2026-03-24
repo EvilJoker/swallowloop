@@ -57,19 +57,37 @@ cp .env_template .env
 
 ### 4. 运行
 
-**后端 API：**
+使用 `run.sh` 脚本管理前后端服务：
+
 ```bash
-cd swallowloop
-uv run python -c "from swallowloop.interfaces.web.issue_api import run_server; run_server()"
+# 启动全部服务（后端 + 前端）
+./run.sh -all
+
+# 单独启动后端或前端
+./run.sh -backend
+./run.sh -frontend
+
+# 重启服务
+./run.sh restart          # 重启全部
+./run.sh restart -backend # 只重启后端
+
+# 停止服务
+./run.sh stop             # 停止全部
+./run.sh stop -backend    # 只停止后端
+
+# 查看状态
+./run.sh status
 ```
 
-**前端 Dashboard：**
-```bash
-cd frontend
-npm run dev
-```
+**默认端口：**
+- 后端 API: `9500`
+- 前端 Dashboard: `9501`
 
-访问 `http://localhost:5173` 查看 Dashboard。
+访问 `http://localhost:9501` 查看 Dashboard。
+
+**日志文件：**
+- 后端日志：`logs/backend.log`
+- 前端日志：`logs/frontend.log`
 
 ## 工作流程
 
@@ -108,7 +126,7 @@ Issue 新建 ─▶ 头脑风暴 ─▶ 方案成型 ─▶ 详细设计 ─▶ 
 
 ## Web Dashboard
 
-访问 `http://localhost:5173` 查看 Dashboard。
+访问 `http://localhost:9501` 查看 Dashboard。
 
 **功能：**
 - 泳道图展示所有 Issue 状态
@@ -178,7 +196,9 @@ npx playwright test
 | `ISSUE_LABEL` | Issue 标签 | `swallow` |
 | `BASE_BRANCH` | 基础分支 | `main` |
 | `WEB_ENABLED` | 启用 Web Dashboard | `true` |
-| `WEB_PORT` | Web 端口 | `8080` |
+| `BACKEND_PORT` | 后端 API 端口 | `9500` |
+| `FRONTEND_PORT` | 前端 Dashboard 端口 | `9501` |
+| `WEB_PORT` | Web 端口（旧兼容） | `8080` |
 | `ENABLE_SELF_UPDATE` | 启用自更新 | `true` |
 
 ## 架构
