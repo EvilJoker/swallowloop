@@ -142,9 +142,9 @@ status() {
     fi
 }
 
-# 主命令处理
-case "$1" in
-    -all)
+# 主命令处理（无参数时默认 -all）
+case "${1:-}" in
+    ""|-all)
         start_backend
         start_frontend
         ;;
@@ -205,7 +205,7 @@ case "$1" in
         status
         ;;
     *)
-        echo "Usage: run.sh {start} {-all|-backend|-frontend|restart|stop|status}"
+        echo "Usage: run.sh [-all|-backend|-frontend|restart|stop|status]"
         echo ""
         echo "Commands:"
         echo "  -all       Start both backend and frontend (default)"
