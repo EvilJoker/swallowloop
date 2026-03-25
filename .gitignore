@@ -49,3 +49,8 @@ ENV/
 # SwallowLoop task reports
 .swallowloop_report.md
 docs/superpowers
+
+# Test outputs
+frontend/playwright-report/
+frontend/test-results/
+logs/

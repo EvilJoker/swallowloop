@@ -91,6 +91,7 @@ LLM 配置与 Agent 类型独立，支持通过 `LLM_PROVIDER`/`LLM_API_KEY`/`LL
 ## Git Workflow
 
 - Always confirm before running git push operations - show pending commits first
+- **提交代码前必须确保 `run.sh test` 测试通过**
 
 ## Configuration
 
@@ -105,3 +106,11 @@ LLM 配置与 Agent 类型独立，支持通过 `LLM_PROVIDER`/`LLM_API_KEY`/`LL
 ## Tool Installation
 
 - Before recommending plugins/tools: "Let me check your [tool] version first: [command]"
+
+## 经验教训
+
+项目经验教训存放在 `docs/lessons/` 目录。
+
+**重要原则**：发现问题并解决后，必须反思为什么测试用例没有发现，并将根因分析记录到经验目录。
+
+参考：`docs/lessons/README.md`

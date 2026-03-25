@@ -30,7 +30,7 @@ class IssueService:
         return self._repo.get(IssueId(issue_id))
 
     def create_issue(self, title: str, description: str) -> Issue:
-        """创建新 Issue"""
+        """创建新 Issue（自动启动 AI 执行）"""
         issue_id = IssueId(f"issue-{uuid.uuid4().hex[:8]}")
         issue = Issue(
             id=issue_id,
@@ -40,8 +40,14 @@ class IssueService:
             current_stage=Stage.BRAINSTORM,
             created_at=datetime.now(),
         )
+        # 启动头脑风暴阶段（状态设为 RUNNING）
+        issue.start_stage(Stage.BRAINSTORM)
         self._repo.save(issue)
-        logger.info(f"创建 Issue: {issue_id} - {title}")
+        logger.info(f"创建 Issue: {issue_id} - {title}，已启动头脑风暴阶段")
+
+        # 异步触发 AI 执行（不等待完成）
+        self._executor.execute_stage_async(issue, Stage.BRAINSTORM)
+
         return issue
 
     async def approve_stage(self, issue_id: str, stage: Stage, comment: str = "") -> Issue | None:
