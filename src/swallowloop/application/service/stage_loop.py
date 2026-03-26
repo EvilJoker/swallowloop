@@ -48,31 +48,39 @@ class StageLoop:
             all_triggerable.extend(self._repo.list_stages_by_status(status))
 
         if not all_triggerable:
+            logger.debug("无可触发的阶段")
             return
 
         logger.info(f"发现 {len(all_triggerable)} 个可触发阶段的阶段")
 
         for issue, stage in all_triggerable:
-            if self._can_trigger(issue, stage):
+            can_trigger, reason = self._can_trigger(issue, stage)
+            if can_trigger:
                 logger.info(f"触发 AI 执行: {issue.id}/{stage.value}")
-                self._worker_pool.submit(str(issue.id), stage)
+                submitted = self._worker_pool.submit(str(issue.id), stage)
+                if not submitted:
+                    logger.warning(f"提交失败（已在执行中）: {issue.id}/{stage.value}")
             else:
-                logger.debug(f"跳过（不可触发）: {issue.id}/{stage.value}")
+                logger.debug(f"跳过（不可触发）: {issue.id}/{stage.value}, 原因: {reason}")
 
-    def _can_trigger(self, issue, stage) -> bool:
-        """检查是否可以触发"""
+    def _can_trigger(self, issue, stage) -> tuple[bool, str]:
+        """检查是否可以触发
+
+        Returns:
+            (can_trigger, reason) 元组
+        """
         from ...domain.model import IssueStatus
 
         # Issue 必须是 ACTIVE
         if issue.status != IssueStatus.ACTIVE:
-            return False
+            return False, f"Issue状态={issue.status.value}，不是ACTIVE"
 
         # 必须是当前阶段才能触发
         if issue.current_stage != stage:
-            return False
+            return False, f"current_stage={issue.current_stage.value}，stage={stage.value}"
 
         # 没有正在执行的任务
         if self._worker_pool.is_running(str(issue.id), stage):
-            return False
+            return False, "任务正在执行中"
 
-        return True
+        return True, ""

@@ -54,6 +54,8 @@ def run_server(host: str = "0.0.0.0", port: int = 8000, repository=None):
         _inject_repository(repository)
     else:
         init_services()
+    # 单进程模式运行（不设置 workers 参数）
+    # 这样 _inject_repository 设置的全局变量可以跨请求共享
     uvicorn.run(app, host=host, port=port)
 
 

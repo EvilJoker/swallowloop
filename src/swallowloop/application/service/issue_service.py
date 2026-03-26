@@ -48,7 +48,8 @@ class IssueService:
         # 创建头脑风暴阶段（状态为 NEW，由 StageLoop 自动触发 AI）
         issue.create_stage(Stage.BRAINSTORM)
         self._repo.save(issue)
-        logger.info(f"创建 Issue: {issue_id} - {title}，已创建头脑风暴阶段（NEW）")
+        logger.info(f"创建 Issue: {issue_id} - {title}，current_stage={issue.current_stage.value}, "
+                    f"BRAINSTORM.status={issue.get_stage_state(Stage.BRAINSTORM).status.value}")
 
         return issue
 

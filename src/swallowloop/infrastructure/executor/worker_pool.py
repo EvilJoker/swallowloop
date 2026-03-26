@@ -39,12 +39,13 @@ class ExecutorWorkerPool:
 
         # 提交到线程池
         self._pool.submit(self._execute_in_executor, issue_id, stage)
-        logger.info(f"提交任务到 WorkerPool: {task_key}")
+        logger.info(f"提交任务到 WorkerPool: {task_key}, 当前运行中: {list(self._running_tasks.keys())}")
         return True
 
     def _execute_in_executor(self, issue_id: str, stage: "Stage") -> None:
         """在线程池中执行异步任务"""
         task_key = self._get_task_key(issue_id, stage)
+        logger.info(f"WorkerPool 开始执行: {task_key}")
         loop = None
         try:
             loop = asyncio.new_event_loop()
@@ -71,6 +72,7 @@ class ExecutorWorkerPool:
             # 任务完成后同步移除
             with self._lock:
                 self._running_tasks.pop(task_key, None)
+            logger.info(f"任务已从运行列表移除: {task_key}, 剩余: {list(self._running_tasks.keys())}")
 
     def _get_task_key(self, issue_id: str, stage: "Stage") -> str:
         """获取任务唯一标识"""
