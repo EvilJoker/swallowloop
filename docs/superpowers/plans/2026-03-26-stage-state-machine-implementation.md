@@ -4,9 +4,9 @@
 
 **Goal:** 将状态机逻辑从 Issue 类剥离为独立的 StageStateMachine，支持状态转换验证、钩子、并发控制
 
-**Architecture:** 使用 transitions 库作为状态机核心，在 domain/statemachine/ 下实现独立的 StageStateMachine 类，Issue 类保留数据模型职责
+**Architecture:** 自实现状态机核心，在 domain/statemachine/ 下实现独立的 StageStateMachine 类，Issue 类保留数据模型职责
 
-**Tech Stack:** transitions>=0.9.0
+**Tech Stack:** Python 标准库（无外部依赖）
 
 ---
 
@@ -453,19 +453,7 @@ class Issue:
 - `reject_stage`
 - `create_stage`
 
-替换为简单的数据设置方法（供状态机内部使用）：
-```python
-def _set_stage_status(self, stage: Stage, status: StageStatus) -> None:
-    """内部方法：设置阶段状态（由状态机调用）"""
-    self.stages[stage].status = status
-    self.stages[stage].started_at = datetime.now()
-    self.current_stage = stage
-
-def _set_stage_completed(self, stage: Stage, status: StageStatus) -> None:
-    """内部方法：设置阶段完成状态"""
-    self.stages[stage].status = status
-    self.stages[stage].completed_at = datetime.now()
-```
+保留 `create_stage` 方法（状态机的 `advance` 方法需要调用它来创建下一阶段）。移除硬编码的状态转换逻辑（`start_stage`, `approve_stage`, `reject_stage`），因为这些将由状态机接管。
 
 - [ ] **Step 4: 提交**
 
@@ -728,35 +716,7 @@ git commit -m "test: 添加状态机测试用例"
 
 ---
 
-## Task 5: 更新 pyproject.toml 添加 transitions 依赖
-
-**Files:**
-- Modify: `pyproject.toml`
-
-- [ ] **Step 1: 添加依赖**
-
-在 `pyproject.toml` 的 `dependencies` 部分添加：
-
-```toml
-transitions = ">=0.9.0"
-```
-
-- [ ] **Step 2: 安装依赖**
-
-```bash
-uv sync
-```
-
-- [ ] **Step 3: 提交**
-
-```bash
-git add pyproject.toml
-git commit -m "chore: 添加 transitions 依赖"
-```
-
----
-
-## Task 6: 运行完整测试确保无回归
+## Task 5: 运行完整测试确保无回归
 
 - [ ] **Step 1: 运行所有测试**
 
@@ -775,7 +735,7 @@ git commit -m "fix: 修复测试回归问题"
 
 ---
 
-## Task 7: 更新文档
+## Task 6: 更新文档
 
 **Files:**
 - Modify: `docs/architecture.md`
