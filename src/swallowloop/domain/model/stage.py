@@ -16,11 +16,12 @@ class Stage(Enum):
 
 class StageStatus(Enum):
     """阶段状态"""
-    PENDING = "pending"      # 待审批
-    APPROVED = "approved"    # 已通过
-    REJECTED = "rejected"    # 已打回
-    RUNNING = "running"      # 执行中
-    ERROR = "error"          # 异常
+    NEW = "new"            # 新建
+    RUNNING = "running"    # AI 执行中
+    PENDING = "pending"    # 待审批
+    APPROVED = "approved"   # 已通过
+    REJECTED = "rejected"  # 已打回
+    ERROR = "error"         # 异常
 
 
 class IssueStatus(Enum):

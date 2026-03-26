@@ -8,6 +8,12 @@ interface IssueCardProps {
 }
 
 const STATUS_CONFIG: Record<StageStatus, { label: string; dot: string; badge: string; border: string }> = {
+  new: {
+    label: '新建',
+    dot: 'bg-gray-400',
+    badge: 'bg-gray-50 text-gray-600 border-gray-100',
+    border: 'border-l-gray-400',
+  },
   pending: {
     label: '待审批',
     dot: 'bg-amber-400',

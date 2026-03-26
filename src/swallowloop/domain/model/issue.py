@@ -96,6 +96,12 @@ class Issue:
         state.started_at = datetime.now()
         self.current_stage = stage
 
+    def create_stage(self, stage: Stage) -> None:
+        """创建阶段（新建状态）"""
+        state = self.stages[stage]
+        state.status = StageStatus.NEW
+        self.current_stage = stage
+
     def get_latest_rejection(self, stage: Stage) -> Optional[str]:
         """获取最新的打回原因"""
         state = self.stages[stage]

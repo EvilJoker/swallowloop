@@ -45,7 +45,10 @@ class Settings:
 
     # Issue Pipeline 配置
     issue_project: str = "default"  # Issue 项目名
-    
+
+    # Agent 配置
+    agent_type: str = "mock"  # Agent 类型: mock, iflow
+
     # 自更新配置
     enable_self_update: bool = True  # 是否启用自更新
     self_update_interval: int = 300  # 检查更新的间隔（秒），默认5分钟
@@ -108,6 +111,7 @@ class Settings:
             self_update_interval=int(os.getenv("SELF_UPDATE_INTERVAL", "300")),
             llm_config=llm_config,
             issue_project=os.getenv("ISSUE_PROJECT", "default"),
+            agent_type=os.getenv("AGENT_TYPE", "mock"),
         )
     
     @staticmethod

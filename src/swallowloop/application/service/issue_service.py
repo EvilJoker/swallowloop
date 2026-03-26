@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .executor_service import ExecutorService
 
-from ...domain.model import Issue, IssueId, Stage, IssueStatus
+from ...domain.model import Issue, IssueId, Stage, IssueStatus, StageStatus
 from ...domain.repository import IssueRepository
 
 logger = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ class IssueService:
         return self._repo.get(IssueId(issue_id))
 
     def create_issue(self, title: str, description: str) -> Issue:
-        """创建新 Issue（自动启动 AI 执行）"""
+        """创建新 Issue"""
         issue_id = IssueId(f"issue-{uuid.uuid4().hex[:8]}")
         issue = Issue(
             id=issue_id,
@@ -40,13 +40,10 @@ class IssueService:
             current_stage=Stage.BRAINSTORM,
             created_at=datetime.now(),
         )
-        # 启动头脑风暴阶段（状态设为 RUNNING）
-        issue.start_stage(Stage.BRAINSTORM)
+        # 创建头脑风暴阶段（状态设为 NEW）
+        issue.create_stage(Stage.BRAINSTORM)
         self._repo.save(issue)
-        logger.info(f"创建 Issue: {issue_id} - {title}，已启动头脑风暴阶段")
-
-        # 异步触发 AI 执行（不等待完成）
-        self._executor.execute_stage_async(issue, Stage.BRAINSTORM)
+        logger.info(f"创建 Issue: {issue_id} - {title}，已创建头脑风暴阶段")
 
         return issue
 
@@ -81,7 +78,12 @@ class IssueService:
         if not issue:
             return {"status": "error", "message": "Issue not found"}
 
-        issue.start_stage(stage)
+        stage_state = issue.get_stage_state(stage)
+        # 只有 NEW 或 REJECTED 状态才能触发
+        if stage_state.status not in [StageStatus.NEW, StageStatus.REJECTED]:
+            return {"status": "error", "message": f"当前状态 {stage_state.status.value} 不能触发 AI"}
+
+        issue.start_stage(stage)  # 设为 RUNNING
         self._repo.save(issue)
 
         # 触发执行
@@ -121,7 +123,7 @@ class IssueService:
         return self._repo.delete(IssueId(issue_id))
 
     async def _advance_and_trigger(self, issue: Issue, current_stage: Stage) -> None:
-        """进入下一阶段并触发 AI"""
+        """进入下一阶段（不触发 AI，等待用户触发）"""
         # 计算下一阶段
         stages = list(Stage)
         current_idx = stages.index(current_stage)
@@ -129,9 +131,6 @@ class IssueService:
         # 如果不是最后一个阶段
         if current_idx < len(stages) - 1:
             next_stage = stages[current_idx + 1]
-            issue.start_stage(next_stage)
+            issue.create_stage(next_stage)  # 设为 NEW，不自动触发 AI
             self._repo.save(issue)
-            logger.info(f"Issue {issue.id} 进入阶段: {next_stage.value}")
-
-            # 异步触发 AI（不等待完成）
-            self._executor.execute_stage_async(issue, next_stage)
+            logger.info(f"Issue {issue.id} 进入阶段: {next_stage.value}，等待触发")

@@ -43,7 +43,7 @@ cd frontend && npm install && cd ..
 
 ```bash
 # 复制配置模板
-cp .env_template .env
+cp .env.template .env
 
 # 编辑 .env 文件，填入你的配置
 ```

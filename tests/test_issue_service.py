@@ -73,17 +73,17 @@ def test_approve_stage():
     issue = service.create_issue("测试 Issue", "测试描述")
     issue_id = str(issue.id)
 
-    # 创建后自动启动 brainstorm，状态为 RUNNING
-    assert issue.get_stage_state(Stage.BRAINSTORM).status == StageStatus.RUNNING
+    # 创建后状态为 NEW
+    assert issue.get_stage_state(Stage.BRAINSTORM).status == StageStatus.NEW
 
-    # 审批通过头脑风暴阶段（异步）
+    # 审批通过头脑风暴阶段
     import asyncio
     updated = asyncio.run(service.approve_stage(issue_id, Stage.BRAINSTORM, "通过"))
 
     assert updated.get_stage_state(Stage.BRAINSTORM).status == StageStatus.APPROVED
-    # 应该自动进入下一阶段并启动（RUNNING）
+    # 审批通过后进入下一阶段，状态为 NEW（不自动触发 AI）
     assert updated.current_stage == Stage.PLAN_FORMED
-    assert updated.get_stage_state(Stage.PLAN_FORMED).status == StageStatus.RUNNING
+    assert updated.get_stage_state(Stage.PLAN_FORMED).status == StageStatus.NEW
 
 
 def test_reject_stage():

@@ -1,17 +1,17 @@
-"""Executor Service - AI 执行编排
-
-暂不支持 AI 执行，仅提供基础阶段管理功能。
-"""
+"""Executor Service - AI 执行编排"""
 
 import asyncio
 import logging
+import os
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ...domain.repository import IssueRepository
 
-from ...domain.model import Issue, Stage
+from ...domain.model import Issue, Stage, StageStatus
+from ...infrastructure.agent import BaseAgent, MockAgent
 
 logger = logging.getLogger(__name__)
 
@@ -20,11 +20,22 @@ INSTRUCTIONS_DIR = Path.home() / ".swallowloop" / "instructions"
 
 
 class ExecutorService:
-    """AI 执行服务 - Issue 流水线阶段执行（暂不支持 AI）"""
+    """AI 执行服务 - Issue 流水线阶段执行"""
 
-    def __init__(self, repository: "IssueRepository"):
+    def __init__(self, repository: "IssueRepository", agent: BaseAgent | None = None, agent_type: str = "mock"):
         self._repo = repository
         self._running_tasks: dict[str, asyncio.Task] = {}
+        self._agent = agent or self._create_agent(agent_type)
+
+    def _create_agent(self, agent_type: str = "mock") -> BaseAgent:
+        """根据配置创建 Agent"""
+        if agent_type == "mock":
+            logger.info("使用 MockAgent，延迟 5 秒")
+            return MockAgent(delay_seconds=5.0)
+        else:
+            # 未来支持真实 Agent
+            logger.warning(f"Agent 类型 '{agent_type}' 暂不支持，使用 MockAgent")
+            return MockAgent(delay_seconds=5.0)
 
     def get_workspace_dir(self, project: str, issue_id: str) -> Path:
         """获取工作空间目录"""
@@ -61,19 +72,44 @@ class ExecutorService:
         return context_path
 
     async def execute_stage(self, issue: Issue, stage: Stage) -> dict:
-        """异步执行阶段（暂不支持 AI，仅更新文档）"""
+        """异步执行阶段"""
         project = "default"
 
         # 准备上下文
         stage_state = issue.get_stage_state(stage)
         context_path = self.prepare_stage_context(project, str(issue.id), stage, stage_state.document)
 
-        logger.warning(f"AI 执行暂不支持，请手动完成阶段 {stage.value}")
+        # 如果是 NEW 状态，先转为 RUNNING
+        if stage_state.status == StageStatus.NEW:
+            stage_state.status = StageStatus.RUNNING
+            stage_state.started_at = datetime.now()
+            self._repo.save(issue)
+            logger.info(f"阶段 {stage.value} 从 NEW 转为 RUNNING")
+
+        # 调用 Agent 执行
+        context = {
+            "issue_id": str(issue.id),
+            "title": issue.title,
+            "description": issue.description,
+            "stage": stage.value,
+            "document": stage_state.document,
+            "context_path": str(context_path),
+        }
+
+        task_description = f"执行阶段 {stage.value}：{issue.title}"
+
+        logger.info(f"开始执行 Agent 任务: {task_description}")
+        result = await self._agent.execute(task_description, context)
+
+        # AI 执行完成后，将阶段状态设置为 PENDING（待人工审批）
+        issue.get_stage_state(stage).status = StageStatus.PENDING
+        self._repo.save(issue)
+        logger.info(f"Agent 执行完成，阶段 {stage.value} 等待人工审批")
 
         return {
-            "success": True,
-            "output": "AI 执行暂不支持，阶段已准备",
-            "message": "阶段上下文已准备好，但 AI 执行功能尚未实现",
+            "success": result.success,
+            "output": result.output,
+            "error": result.error,
         }
 
     def execute_stage_async(self, issue: Issue, stage: Stage) -> None:

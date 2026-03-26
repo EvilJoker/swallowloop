@@ -17,9 +17,11 @@ _executor_service: ExecutorService = None
 
 def init_services():
     """初始化服务实例"""
+    import os
     global _issue_service, _executor_service
     repository = JsonIssueRepository(project="default")
-    _executor_service = ExecutorService(repository=repository)
+    agent_type = os.getenv("AGENT_TYPE", "mock")
+    _executor_service = ExecutorService(repository=repository, agent_type=agent_type)
     _issue_service = IssueService(repository=repository, executor=_executor_service)
 
 
