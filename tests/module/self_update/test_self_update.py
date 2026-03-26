@@ -29,7 +29,7 @@ class TestSelfUpdater:
         updater._last_check_time = datetime.now()
         assert updater.should_check() is False
 
-    @patch("swallowloop.infrastructure.self_update.subprocess.run")
+    @patch("swallowloop.infrastructure.self_update.main.subprocess.run")
     def test_check_for_update_git_error(self, mock_run, tmp_path):
         """Git 命令错误时返回 False"""
         mock_run.side_effect = subprocess.CalledProcessError(1, "git")
@@ -37,7 +37,7 @@ class TestSelfUpdater:
         result = updater.check_for_update()
         assert result is False
 
-    @patch("swallowloop.infrastructure.self_update.subprocess.run")
+    @patch("swallowloop.infrastructure.self_update.main.subprocess.run")
     def test_check_for_update_already_up_to_date(self, mock_run, tmp_path):
         """已是最新版本时不更新"""
         mock_run.return_value = MagicMock(stdout="", returncode=0)
@@ -45,7 +45,7 @@ class TestSelfUpdater:
         result = updater.check_for_update()
         assert result is False
 
-    @patch("swallowloop.infrastructure.self_update.subprocess.run")
+    @patch("swallowloop.infrastructure.self_update.main.subprocess.run")
     def test_check_for_update_needs_update(self, mock_run, tmp_path):
         """远程有新版本时返回 True"""
         mock_run.return_value = MagicMock(
