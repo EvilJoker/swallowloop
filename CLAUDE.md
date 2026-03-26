@@ -31,27 +31,44 @@ pytest tests/test_task_lifecycle.py::TestTaskLifecycle::test_task_state_transiti
 
 ```
 src/swallowloop/
-├── interfaces/          # 接口层
-│   ├── cli/orchestrator.py   # 主调度器，协调 TaskService 和 ExecutionService
-│   └── web/dashboard.py      # Web Dashboard (FastAPI)
-├── application/         # 应用层
-│   ├── dto/             # 数据传输对象
+├── domain/              # 领域层（零依赖）
+│   ├── model/          # 领域模型
+│   ├── repository/     # 仓库接口
+│   ├── statemachine/   # 状态机
+│   └── event/          # 领域事件
+├── application/         # 应用层（依赖 domain）
+│   ├── dto/           # 数据传输对象
 │   └── service/        # 应用服务
-│       ├── task_service.py      # 任务生命周期管理
-│       └── execution_service.py  # Worker 进程管理、超时检测
-├── domain/              # 领域层（核心业务逻辑，无外部依赖）
-│   ├── model/task.py   # Task 聚合根，使用 transitions 状态机
-│   ├── model/workspace.py
-│   ├── model/comment.py
-│   ├── model/pull_request.py
-│   └── repository/     # 仓库接口定义
-└── infrastructure/      # 基础设施层
-    ├── agent/          # Agent 实现 (IFlow/Aider)
-    ├── config/         # 配置管理 (Settings)
-    ├── persistence/    # JSON 文件持久化
-    ├── source_control/ # GitHub API 封装
-    └── self_update.py  # 自更新机制
+├── infrastructure/     # 基础设施层（依赖 domain 接口）
+│   ├── persistence/    # 持久化
+│   ├── executor/       # 执行器
+│   ├── agent/          # AI Agent
+│   ├── config/         # 配置
+│   ├── llm/           # 大模型配置
+│   ├── logging/        # 日志
+│   └── self_update/    # 自更新
+└── interfaces/          # 接口层（依赖 application）
+    └── web/            # Web API
 ```
+
+### 模块命名规则
+
+**所有模块必须在 `__init__.py` 中定义 `MODULE_NAME` 常量**：
+
+```python
+# 层级模块
+MODULE_NAME = "domain"
+
+# 子模块（层级.子模块）
+MODULE_NAME = "domain.model"
+MODULE_NAME = "infrastructure.persistence"
+```
+
+**规则**：
+1. 每个有 `__init__.py` 的目录都是一个模块
+2. 模块必须定义 `MODULE_NAME = "x.y.z"` 常量
+3. `__all__` 列表中必须包含 `"MODULE_NAME"`
+4. **新增模块必须经过开发者确认**，不能自行创建
 
 ## 任务状态机
 

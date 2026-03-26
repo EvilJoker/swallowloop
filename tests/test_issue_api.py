@@ -8,7 +8,7 @@ import shutil
 
 from swallowloop.interfaces.web.api.issues import router, _issue_service, _executor_service, init_services
 from swallowloop.application.service import IssueService, ExecutorService
-from swallowloop.infrastructure.persistence import JsonIssueRepository
+from swallowloop.infrastructure.persistence import InMemoryIssueRepository
 
 
 @pytest.fixture
@@ -51,10 +51,19 @@ def api_client(temp_data_dir):
                 return True
             return False
 
+        def list_stages_by_status(self, status):
+            from swallowloop.domain.model import Stage
+            result = []
+            for issue in self.list_active():
+                for stage, state in issue.stages.items():
+                    if state.status == status:
+                        result.append((issue, stage))
+            return result
+
     # 重新设置模块级别的全局变量
     import swallowloop.interfaces.web.api.issues as api_module
     repo = TestRepository()
-    executor = MockExecutor()
+    executor = MockExecutor(repository=repo)  # 传入 repo 以支持状态转换
     api_module._issue_service = IssueService(repo, executor)
     api_module._executor_service = None  # 不需要
 
@@ -142,6 +151,14 @@ class TestIssueAPI:
         create_response = api_client.post("/issues", json={"title": "测试", "description": "描述"})
         issue_id = create_response.json()["issue"]["id"]
 
+        # 先触发 AI 执行（NEW → RUNNING → PENDING）
+        trigger_response = api_client.post(
+            f"/issues/{issue_id}/trigger",
+            json={"stage": "brainstorm"}
+        )
+        assert trigger_response.status_code == 200
+
+        # 再审批通过（PENDING → APPROVED）
         response = api_client.post(
             f"/issues/{issue_id}/stages/brainstorm/approve",
             json={"comment": "通过"}
@@ -157,6 +174,14 @@ class TestIssueAPI:
         create_response = api_client.post("/issues", json={"title": "测试", "description": "描述"})
         issue_id = create_response.json()["issue"]["id"]
 
+        # 先触发 AI 执行（NEW → RUNNING → PENDING）
+        trigger_response = api_client.post(
+            f"/issues/{issue_id}/trigger",
+            json={"stage": "brainstorm"}
+        )
+        assert trigger_response.status_code == 200
+
+        # 再打回（PENDING → REJECTED）
         response = api_client.post(
             f"/issues/{issue_id}/stages/brainstorm/reject",
             json={"reason": "方案不够详细"}
@@ -175,9 +200,11 @@ class TestIssueAPI:
         create_response = api_client.post("/issues", json={"title": "测试", "description": "描述"})
         issue_id = create_response.json()["issue"]["id"]
 
+        # 创建后 BRAINSTORM 已是 PENDING（自动触发），不能再触发
+        # 所以测试一个新阶段（planFormed）触发
         response = api_client.post(
             f"/issues/{issue_id}/trigger",
-            json={"stage": "brainstorm"}
+            json={"stage": "planFormed"}
         )
         assert response.status_code == 200
         data = response.json()
@@ -201,7 +228,13 @@ class TestIssueLifecycle:
         response = api_client.get("/issues")
         assert len(response.json()["issues"]) == 1
 
-        # 3. 审批通过头脑风暴
+        # 3. 触发并审批通过头脑风暴
+        response = api_client.post(
+            f"/issues/{issue_id}/trigger",
+            json={"stage": "brainstorm"}
+        )
+        assert response.status_code == 200
+
         response = api_client.post(
             f"/issues/{issue_id}/stages/brainstorm/approve",
             json={"comment": "方案不错"}
@@ -209,7 +242,13 @@ class TestIssueLifecycle:
         assert response.status_code == 200
         assert response.json()["issue"]["currentStage"] == "planFormed"
 
-        # 4. 审批通过方案成型
+        # 4. 触发并审批通过方案成型
+        response = api_client.post(
+            f"/issues/{issue_id}/trigger",
+            json={"stage": "planFormed"}
+        )
+        assert response.status_code == 200
+
         response = api_client.post(
             f"/issues/{issue_id}/stages/planFormed/approve",
             json={"comment": "计划合理"}
@@ -217,7 +256,13 @@ class TestIssueLifecycle:
         assert response.status_code == 200
         assert response.json()["issue"]["currentStage"] == "detailedDesign"
 
-        # 5. 打回详细设计
+        # 5. 触发并打回详细设计
+        response = api_client.post(
+            f"/issues/{issue_id}/trigger",
+            json={"stage": "detailedDesign"}
+        )
+        assert response.status_code == 200
+
         response = api_client.post(
             f"/issues/{issue_id}/stages/detailedDesign/reject",
             json={"reason": "缺少错误处理"}
@@ -225,7 +270,13 @@ class TestIssueLifecycle:
         assert response.status_code == 200
         assert response.json()["issue"]["stages"]["detailedDesign"]["status"] == "rejected"
 
-        # 6. 再次审批通过
+        # 6. 再次触发并审批通过
+        response = api_client.post(
+            f"/issues/{issue_id}/trigger",
+            json={"stage": "detailedDesign"}
+        )
+        assert response.status_code == 200
+
         response = api_client.post(
             f"/issues/{issue_id}/stages/detailedDesign/approve",
             json={"comment": "已补充"}

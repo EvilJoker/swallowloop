@@ -1,6 +1,10 @@
 """Issue 仓库接口"""
 
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..model import Issue, IssueId, Stage, StageStatus
 
 from ..model import Issue, IssueId
 
@@ -27,3 +31,11 @@ class IssueRepository(ABC):
     @abstractmethod
     def delete(self, issue_id: IssueId) -> bool:
         """删除 Issue"""
+
+    @abstractmethod
+    def list_stages_by_status(self, status: "StageStatus") -> list[tuple["Issue", "Stage"]]:
+        """获取所有处于指定状态的阶段
+
+        Returns:
+            list of (Issue, Stage) tuples
+        """

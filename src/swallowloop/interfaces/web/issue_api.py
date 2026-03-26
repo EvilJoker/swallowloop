@@ -42,11 +42,34 @@ async def websocket_endpoint(websocket: WebSocket, issue_id: str):
         manager.disconnect(websocket, issue_id)
 
 
-def run_server(host: str = "0.0.0.0", port: int = 8000):
-    """启动服务"""
-    # 初始化服务
-    init_services()
+def run_server(host: str = "0.0.0.0", port: int = 8000, repository=None):
+    """启动服务
+
+    Args:
+        host: 监听地址
+        port: 监听端口
+        repository: 可选，共享的 IssueRepository 实例
+    """
+    if repository is not None:
+        _inject_repository(repository)
+    else:
+        init_services()
     uvicorn.run(app, host=host, port=port)
+
+
+def _inject_repository(repository):
+    """注入共享 repository 到 API 服务"""
+    import os
+    from ...application.service import IssueService, ExecutorService
+    from ...domain.repository import IssueRepository
+    from .api import issues as issues_module
+
+    # 创建 ExecutorService（不使用 agent_type，因为 mock 已经在 executor 中处理）
+    executor = ExecutorService(repository=repository, agent_type="mock")
+    issue_service = IssueService(repository=repository, executor=executor)
+
+    issues_module._issue_service = issue_service
+    issues_module._executor_service = executor
 
 
 if __name__ == "__main__":

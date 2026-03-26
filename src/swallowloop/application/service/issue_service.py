@@ -35,7 +35,7 @@ class IssueService:
         return self._repo.get(IssueId(issue_id))
 
     async def create_issue(self, title: str, description: str) -> Issue:
-        """创建新 Issue（自动触发 AI）"""
+        """创建新 Issue（NEW 状态，由 StageLoop 自动触发 AI）"""
         issue_id = IssueId(f"issue-{uuid.uuid4().hex[:8]}")
         issue = Issue(
             id=issue_id,
@@ -45,16 +45,10 @@ class IssueService:
             current_stage=Stage.BRAINSTORM,
             created_at=datetime.now(),
         )
-        # 创建头脑风暴阶段（状态为 NEW）
+        # 创建头脑风暴阶段（状态为 NEW，由 StageLoop 自动触发 AI）
         issue.create_stage(Stage.BRAINSTORM)
         self._repo.save(issue)
-        logger.info(f"创建 Issue: {issue_id} - {title}，已创建头脑风暴阶段")
-
-        # 自动触发 AI
-        machine = self._get_machine(issue)
-        machine.start(Stage.BRAINSTORM)  # NEW → RUNNING
-        await self._executor.execute_stage(issue, Stage.BRAINSTORM)
-        machine.execute(Stage.BRAINSTORM)  # RUNNING → PENDING（AI 执行完成）
+        logger.info(f"创建 Issue: {issue_id} - {title}，已创建头脑风暴阶段（NEW）")
 
         return issue
 
@@ -84,7 +78,11 @@ class IssueService:
         return issue
 
     async def trigger_ai(self, issue_id: str, stage: Stage) -> dict:
-        """手动触发 AI 执行"""
+        """手动触发 AI 执行
+
+        注意：executor.execute_stage() 内部已经处理了状态转换
+        (NEW → RUNNING → PENDING)，所以这里只需要触发即可
+        """
         issue = self._repo.get(IssueId(issue_id))
         if not issue:
             return {"status": "error", "message": "Issue not found"}
@@ -94,9 +92,8 @@ class IssueService:
             stage_state = issue.get_stage_state(stage)
             return {"status": "error", "message": f"当前状态 {stage_state.status.value} 不能触发 AI"}
 
-        machine.start(stage)  # NEW/REJECTED → RUNNING
+        # executor.execute_stage() 内部处理状态转换：NEW → RUNNING → PENDING
         result = await self._executor.execute_stage(issue, stage)
-        machine.execute(stage)  # RUNNING → PENDING（AI 执行完成）
         return result
 
     def update_issue(self, issue_id: str, **kwargs) -> Issue | None:

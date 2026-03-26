@@ -1,56 +1,103 @@
 """SwallowLoop - 燕子回环：围绕代码仓的智能维护Agent"""
 
-# DDD 架构导出
-from .domain.model import (
-    Workspace,
-    PullRequest,
-    # Issue pipeline
+__version__ = "0.1.0"
+
+# 领域层
+from .domain import (
+    Issue,
+    IssueId,
     Stage,
     StageStatus,
     IssueStatus,
     TodoStatus,
     ExecutionState,
-    Issue,
-    IssueId,
     StageState,
     TodoItem,
     ReviewComment,
+    Workspace,
+    PullRequest,
+    IssueRepository,
+    WorkspaceRepository,
+    StageStateMachine,
+    Hook,
+    LoggerHook,
+    DomainEvent,
 )
-from .domain.repository import WorkspaceRepository, IssueRepository
-from .application.service import IssueService, ExecutorService
-from .application.dto import IssueDTO, WorkspaceDTO
-from .infrastructure.config import Settings
-from .infrastructure.persistence import JsonWorkspaceRepository, JsonIssueRepository
 
-__version__ = "0.1.0"
+# 应用层
+from .application import IssueService, ExecutorService, StageLoop, IssueDTO, WorkspaceDTO
+
+# 基础设施层
+from .infrastructure import (
+    InMemoryIssueRepository,
+    JsonIssueRepository,
+    JsonWorkspaceRepository,
+    ExecutorWorkerPool,
+    BaseAgent,
+    MockAgent,
+    AgentResult,
+    Settings,
+    LLMConfig,
+    LLMProvider,
+    setup_logging,
+    get_logger,
+    SelfUpdater,
+)
+
+# 接口层
+from .interfaces import app, run_server
+
 __all__ = [
     # 版本
     "__version__",
-    # DDD - 领域模型
-    "Workspace",
-    "PullRequest",
-    # Issue pipeline
+    # 领域层 - 模型
+    "Issue",
+    "IssueId",
     "Stage",
     "StageStatus",
     "IssueStatus",
     "TodoStatus",
     "ExecutionState",
-    "Issue",
-    "IssueId",
     "StageState",
     "TodoItem",
     "ReviewComment",
-    # DDD - 仓库接口
-    "WorkspaceRepository",
+    "Workspace",
+    "PullRequest",
+    # 领域层 - 仓库
     "IssueRepository",
-    # DDD - 应用服务
+    "WorkspaceRepository",
+    # 领域层 - 状态机
+    "StageStateMachine",
+    "Hook",
+    "LoggerHook",
+    # 领域层 - 事件
+    "DomainEvent",
+    # 应用层
     "IssueService",
     "ExecutorService",
-    # DDD - DTO
+    "StageLoop",
     "IssueDTO",
     "WorkspaceDTO",
-    # DDD - 基础设施
-    "Settings",
-    "JsonWorkspaceRepository",
+    # 基础设施层 - 持久化
+    "InMemoryIssueRepository",
     "JsonIssueRepository",
+    "JsonWorkspaceRepository",
+    # 基础设施层 - 执行器
+    "ExecutorWorkerPool",
+    # 基础设施层 - Agent
+    "BaseAgent",
+    "MockAgent",
+    "AgentResult",
+    # 基础设施层 - 配置
+    "Settings",
+    "LLMConfig",
+    "LLMProvider",
+    # 基础设施层 - 日志
+    "setup_logging",
+    "get_logger",
+    # 基础设施层 - 自更新
+    "SelfUpdater",
+    # 接口层
+    "app",
+    "run_server",
 ]

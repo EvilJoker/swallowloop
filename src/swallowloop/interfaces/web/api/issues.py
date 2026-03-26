@@ -6,7 +6,7 @@ from typing import Optional
 
 from ....application.service import IssueService, ExecutorService
 from ....domain.model import Stage, IssueStatus
-from ....infrastructure.persistence import JsonIssueRepository
+from ....infrastructure.persistence import InMemoryIssueRepository
 
 router = APIRouter()
 
@@ -19,7 +19,7 @@ def init_services():
     """初始化服务实例"""
     import os
     global _issue_service, _executor_service
-    repository = JsonIssueRepository(project="default")
+    repository = InMemoryIssueRepository()
     agent_type = os.getenv("AGENT_TYPE", "mock")
     _executor_service = ExecutorService(repository=repository, agent_type=agent_type)
     _issue_service = IssueService(repository=repository, executor=_executor_service)

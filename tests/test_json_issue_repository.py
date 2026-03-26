@@ -10,6 +10,7 @@ from datetime import datetime
 
 from swallowloop.domain.model import Issue, IssueId, Stage, StageStatus, IssueStatus
 from swallowloop.infrastructure.persistence import JsonIssueRepository
+from swallowloop.domain.statemachine import StageStateMachine
 
 
 @pytest.fixture
@@ -199,16 +200,27 @@ class TestJsonIssueRepository:
             created_at=datetime.now(),
         )
 
+        machine = StageStateMachine(issue, repo)
+
         # 批准头脑风暴
-        issue.approve_stage(Stage.BRAINSTORM, "通过")
+        machine.start(Stage.BRAINSTORM)
+        machine.execute(Stage.BRAINSTORM)
+        machine.approve(Stage.BRAINSTORM, "通过")
         # 进入执行阶段
-        issue.start_stage(Stage.PLAN_FORMED)
-        issue.approve_stage(Stage.PLAN_FORMED, "通过")
-        issue.start_stage(Stage.DETAILED_DESIGN)
-        issue.approve_stage(Stage.DETAILED_DESIGN, "通过")
-        issue.start_stage(Stage.TASK_SPLIT)
-        issue.approve_stage(Stage.TASK_SPLIT, "通过")
-        issue.start_stage(Stage.EXECUTION)
+        machine.advance(Stage.BRAINSTORM)
+        machine.start(Stage.PLAN_FORMED)
+        machine.execute(Stage.PLAN_FORMED)
+        machine.approve(Stage.PLAN_FORMED, "通过")
+        machine.advance(Stage.PLAN_FORMED)
+        machine.start(Stage.DETAILED_DESIGN)
+        machine.execute(Stage.DETAILED_DESIGN)
+        machine.approve(Stage.DETAILED_DESIGN, "通过")
+        machine.advance(Stage.DETAILED_DESIGN)
+        machine.start(Stage.TASK_SPLIT)
+        machine.execute(Stage.TASK_SPLIT)
+        machine.approve(Stage.TASK_SPLIT, "通过")
+        machine.advance(Stage.TASK_SPLIT)
+        machine.start(Stage.EXECUTION)
 
         repo.save(issue)
         retrieved = repo.get(IssueId("stage-test"))
@@ -230,8 +242,13 @@ class TestJsonIssueRepository:
             created_at=datetime.now(),
         )
 
-        issue.reject_stage(Stage.BRAINSTORM, "方案不够详细")
-        issue.approve_stage(Stage.BRAINSTORM, "已补充")
+        machine = StageStateMachine(issue, repo)
+        machine.start(Stage.BRAINSTORM)
+        machine.execute(Stage.BRAINSTORM)
+        machine.reject(Stage.BRAINSTORM, "方案不够详细")
+        machine.start(Stage.BRAINSTORM)
+        machine.execute(Stage.BRAINSTORM)
+        machine.approve(Stage.BRAINSTORM, "已补充")
 
         repo.save(issue)
         retrieved = repo.get(IssueId("comment-test"))

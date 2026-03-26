@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from ...domain.repository import IssueRepository
 
 from ...domain.model import Issue, Stage, StageStatus
+from ...domain.statemachine import StageStateMachine, LoggerHook
 from ...infrastructure.agent import BaseAgent, MockAgent
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,7 @@ class ExecutorService:
         self._repo = repository
         self._running_tasks: dict[str, asyncio.Task] = {}
         self._agent = agent or self._create_agent(agent_type)
+        self._hooks = [LoggerHook()]
 
     def _create_agent(self, agent_type: str = "mock") -> BaseAgent:
         """根据配置创建 Agent"""
@@ -36,6 +38,10 @@ class ExecutorService:
             # 未来支持真实 Agent
             logger.warning(f"Agent 类型 '{agent_type}' 暂不支持，使用 MockAgent")
             return MockAgent(delay_seconds=5.0)
+
+    def _get_machine(self, issue: Issue) -> StageStateMachine:
+        """获取状态机实例"""
+        return StageStateMachine(issue, self._repo, self._hooks)
 
     def get_workspace_dir(self, project: str, issue_id: str) -> Path:
         """获取工作空间目录"""
@@ -72,19 +78,28 @@ class ExecutorService:
         return context_path
 
     async def execute_stage(self, issue: Issue, stage: Stage) -> dict:
-        """异步执行阶段"""
+        """异步执行阶段
+
+        状态转换:
+        - NEW → RUNNING (start)
+        - REJECTED/ERROR → RUNNING (retry)
+        - RUNNING → PENDING (execute)
+        """
         project = "default"
+        machine = self._get_machine(issue)
+
+        # 根据当前状态决定转换方式
+        current_status = issue.get_stage_state(stage).status
+        if current_status == StageStatus.NEW:
+            machine.start(stage)  # NEW → RUNNING
+            logger.info(f"阶段 {stage.value} 从 NEW 转为 RUNNING")
+        elif current_status in [StageStatus.REJECTED, StageStatus.ERROR]:
+            machine.retry(stage)  # REJECTED/ERROR → RUNNING
+            logger.info(f"阶段 {stage.value} 从 {current_status.value} 转为 RUNNING")
 
         # 准备上下文
         stage_state = issue.get_stage_state(stage)
         context_path = self.prepare_stage_context(project, str(issue.id), stage, stage_state.document)
-
-        # 如果是 NEW 状态，先转为 RUNNING
-        if stage_state.status == StageStatus.NEW:
-            stage_state.status = StageStatus.RUNNING
-            stage_state.started_at = datetime.now()
-            self._repo.save(issue)
-            logger.info(f"阶段 {stage.value} 从 NEW 转为 RUNNING")
 
         # 调用 Agent 执行
         context = {
@@ -101,10 +116,13 @@ class ExecutorService:
         logger.info(f"开始执行 Agent 任务: {task_description}")
         result = await self._agent.execute(task_description, context)
 
-        # AI 执行完成后，将阶段状态设置为 PENDING（待人工审批）
-        issue.get_stage_state(stage).status = StageStatus.PENDING
-        self._repo.save(issue)
-        logger.info(f"Agent 执行完成，阶段 {stage.value} 等待人工审批")
+        # 根据执行结果转换状态：RUNNING → PENDING 或 ERROR
+        if result.success:
+            machine.execute(stage)  # RUNNING → PENDING
+            logger.info(f"Agent 执行成功，阶段 {stage.value} 等待人工审批")
+        else:
+            machine.error(stage)  # RUNNING → ERROR
+            logger.error(f"Agent 执行失败，阶段 {stage.value} 转为 ERROR: {result.error}")
 
         return {
             "success": result.success,

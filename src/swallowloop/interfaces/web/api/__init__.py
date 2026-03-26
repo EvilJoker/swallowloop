@@ -1,5 +1,11 @@
 """Web API 接口"""
 
-from .issues import router as issues_router
+MODULE_NAME = "interfaces.web.api"
 
-__all__ = ["issues_router"]
+from .issues import router, init_services
+
+__all__ = [
+    "MODULE_NAME",
+    "router",
+    "init_services",
+]

@@ -99,6 +99,15 @@ class JsonIssueRepository(IssueRepository):
             return True
         return False
 
+    def list_stages_by_status(self, status: StageStatus) -> list[tuple[Issue, Stage]]:
+        """获取所有处于指定状态的阶段"""
+        result = []
+        for issue in self.list_active():
+            for stage, state in issue.stages.items():
+                if state.status == status:
+                    result.append((issue, stage))
+        return result
+
     def _serialize(self, issue: Issue) -> dict:
         """序列化 Issue"""
         return {

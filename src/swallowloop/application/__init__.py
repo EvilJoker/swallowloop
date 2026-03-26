@@ -1,13 +1,17 @@
-"""应用层"""
+"""应用层 - 用例编排"""
+
+MODULE_NAME = "application"
 
 from .dto import IssueDTO, WorkspaceDTO
-from .service import IssueService, ExecutorService
+from .service import IssueService, ExecutorService, StageLoop
 
 __all__ = [
+    "MODULE_NAME",
     # DTO
     "IssueDTO",
     "WorkspaceDTO",
     # Service
     "IssueService",
     "ExecutorService",
+    "StageLoop",
 ]

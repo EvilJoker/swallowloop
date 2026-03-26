@@ -29,12 +29,25 @@ class MockRepository(IssueRepository):
     def delete(self, issue_id: IssueId) -> bool:
         return self._issues.pop(str(issue_id), None) is not None
 
+    def list_stages_by_status(self, status: StageStatus) -> list[tuple[Issue, Stage]]:
+        result = []
+        for issue in self.list_active():
+            for stage, state in issue.stages.items():
+                if state.status == status:
+                    result.append((issue, stage))
+        return result
+
 
 class MockExecutor:
-    """模拟 Executor"""
+    """模拟 Executor - 正确模拟状态转换"""
 
-    def __init__(self):
+    def __init__(self, repository=None, fail_probability: float = 0.0):
+        """repository: 用于创建状态机
+        fail_probability: 模拟失败概率 (0.0-1.0)
+        """
+        self._repo = repository
         self.called = []
+        self.fail_probability = fail_probability
 
     def execute_stage(self, issue, stage):
         self.called.append((str(issue.id), stage))
@@ -44,14 +57,53 @@ class MockExecutor:
         self.called.append((str(issue.id), stage))
 
     async def execute_stage(self, issue, stage):
-        """异步版本"""
+        """异步版本 - 正确模拟状态转换"""
+        from swallowloop.domain.model import StageStatus
+        from swallowloop.domain.statemachine import StageStateMachine
+
         self.called.append((str(issue.id), stage))
-        return {"status": "success", "output": "mock output"}
+
+        if self._repo is None:
+            # 没有 repository，无法执行状态转换
+            return {"status": "success", "output": "mock output", "success": True, "error": None}
+
+        # 模拟状态转换
+        machine = StageStateMachine(issue, self._repo)
+
+        # 获取当前状态
+        state = issue.get_stage_state(stage)
+        current_status = state.status
+
+        # 根据当前状态进行转换
+        if current_status == StageStatus.NEW:
+            machine.start(stage)  # NEW → RUNNING
+        elif current_status in [StageStatus.REJECTED, StageStatus.ERROR]:
+            machine.retry(stage)  # REJECTED/ERROR → RUNNING
+
+        # 模拟 AI 执行（短暂延迟）
+        import asyncio
+        await asyncio.sleep(0.01)  # 模拟短暂执行
+
+        # 模拟执行结果
+        import random
+        success = random.random() > self.fail_probability
+
+        if success:
+            machine.execute(stage)  # RUNNING → PENDING
+        else:
+            machine.error(stage)  # RUNNING → ERROR
+
+        return {
+            "status": "success" if success else "error",
+            "output": "mock output" if success else "mock error",
+            "success": success,
+            "error": None if success else "mock execution failed",
+        }
 
 
 @pytest.mark.asyncio
 async def test_create_issue():
-    """测试创建 Issue（自动触发 AI）"""
+    """测试创建 Issue（NEW 状态，由 StageLoop 触发 AI）"""
     repo = MockRepository()
     executor = MockExecutor()
     service = IssueService(repo, executor)
@@ -63,8 +115,8 @@ async def test_create_issue():
     assert issue.status == IssueStatus.ACTIVE
     assert issue.current_stage == Stage.BRAINSTORM
     assert issue.id.value.startswith("issue-")
-    # AI 执行完成后状态为 PENDING
-    assert issue.get_stage_state(Stage.BRAINSTORM).status == StageStatus.PENDING
+    # 创建后状态为 NEW（StageLoop 会自动触发 AI）
+    assert issue.get_stage_state(Stage.BRAINSTORM).status == StageStatus.NEW
 
 
 @pytest.mark.asyncio
@@ -77,8 +129,14 @@ async def test_approve_stage():
     issue = await service.create_issue("测试 Issue", "测试描述")
     issue_id = str(issue.id)
 
-    # 创建后 AI 已执行完成，状态为 PENDING
-    assert issue.get_stage_state(Stage.BRAINSTORM).status == StageStatus.PENDING
+    # 创建后状态为 NEW，需要先执行 AI（模拟）
+    # 直接使用状态机设置到 PENDING 状态
+    from swallowloop.domain.statemachine import StageStateMachine
+    machine = StageStateMachine(issue, repo)
+    machine.start(Stage.BRAINSTORM)  # NEW → RUNNING
+    # MockExecutor 不真正执行，所以直接设置为 PENDING
+    issue.get_stage_state(Stage.BRAINSTORM).status = StageStatus.PENDING
+    repo.save(issue)
 
     # 审批通过头脑风暴阶段
     updated = await service.approve_stage(issue_id, Stage.BRAINSTORM, "通过")
@@ -89,31 +147,32 @@ async def test_approve_stage():
     assert updated.get_stage_state(Stage.PLAN_FORMED).status == StageStatus.NEW
 
 
-def test_reject_stage():
+@pytest.mark.asyncio
+async def test_reject_stage():
     """测试打回阶段"""
-    import asyncio
     repo = MockRepository()
     executor = MockExecutor()
     service = IssueService(repo, executor)
 
-    async def run_test():
-        issue = await service.create_issue("测试 Issue", "测试描述")
-        issue_id = str(issue.id)
+    issue = await service.create_issue("测试 Issue", "测试描述")
+    issue_id = str(issue.id)
 
-        # 创建后 AI 已执行完成，状态为 PENDING
-        assert issue.get_stage_state(Stage.BRAINSTORM).status == StageStatus.PENDING
+    # 创建后状态为 NEW，需要先设置为 PENDING
+    from swallowloop.domain.statemachine import StageStateMachine
+    machine = StageStateMachine(issue, repo)
+    machine.start(Stage.BRAINSTORM)  # NEW → RUNNING
+    issue.get_stage_state(Stage.BRAINSTORM).status = StageStatus.PENDING
+    repo.save(issue)
 
-        # 打回头脑风暴阶段（reject_stage 是同步方法）
-        updated = service.reject_stage(issue_id, Stage.BRAINSTORM, "方案不够详细")
+    # 打回头脑风暴阶段
+    updated = service.reject_stage(issue_id, Stage.BRAINSTORM, "方案不够详细")
 
-        assert updated.get_stage_state(Stage.BRAINSTORM).status == StageStatus.REJECTED
-        # 最新评论应该是 reject
-        comments = updated.get_stage_state(Stage.BRAINSTORM).comments
-        assert len(comments) == 1
-        assert comments[0].action == "reject"
-        assert comments[0].content == "方案不够详细"
-
-    asyncio.run(run_test())
+    assert updated.get_stage_state(Stage.BRAINSTORM).status == StageStatus.REJECTED
+    # 最新评论应该是 reject
+    comments = updated.get_stage_state(Stage.BRAINSTORM).comments
+    assert len(comments) == 1
+    assert comments[0].action == "reject"
+    assert comments[0].content == "方案不够详细"
 
 
 @pytest.mark.asyncio

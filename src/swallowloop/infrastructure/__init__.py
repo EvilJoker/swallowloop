@@ -1,20 +1,52 @@
-"""基础设施层"""
+"""基础设施层 - 技术实现"""
 
-from .persistence import JsonWorkspaceRepository, JsonIssueRepository
+MODULE_NAME = "infrastructure"
+
+# 持久化
+from .persistence import (
+    InMemoryIssueRepository,
+    JsonIssueRepository,
+    JsonWorkspaceRepository,
+)
+
+# 执行器
+from .executor import ExecutorWorkerPool
+
+# Agent
+from .agent import BaseAgent, MockAgent, AgentResult
+
+# 配置
 from .config import Settings
-from .logger import setup_logging, get_logger, DailyRotatingFileHandler
+
+# LLM
+from .llm import LLMConfig, LLMProvider
+
+# 日志
+from .logger import setup_logging, get_logger
+
+# 自更新
 from .self_update import SelfUpdater
 
 __all__ = [
-    # Persistence
-    "JsonWorkspaceRepository",
+    "MODULE_NAME",
+    # 持久化
+    "InMemoryIssueRepository",
     "JsonIssueRepository",
-    # Config
+    "JsonWorkspaceRepository",
+    # 执行器
+    "ExecutorWorkerPool",
+    # Agent
+    "BaseAgent",
+    "MockAgent",
+    "AgentResult",
+    # 配置
     "Settings",
-    # Logger
+    # LLM
+    "LLMConfig",
+    "LLMProvider",
+    # 日志
     "setup_logging",
     "get_logger",
-    "DailyRotatingFileHandler",
-    # Self Update
+    # 自更新
     "SelfUpdater",
 ]

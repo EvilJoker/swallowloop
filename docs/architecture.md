@@ -25,87 +25,74 @@
 │                         SwallowLoop System                          │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
-│  interfaces/                                                        │
-│  ┌─────────────────┐    ┌─────────────────┐                        │
-│  │   Web API       │    │   WebSocket     │                        │
-│  │   (FastAPI)     │    │   (日志推送)     │                        │
-│  └─────────────────┘    └─────────────────┘                        │
-│           │                      │                                  │
-│           ▼                      ▼                                  │
-│  application/service/                                              │
-│  ┌─────────────────┐    ┌─────────────────┐                        │
-│  │  IssueService   │    │ ExecutorService │                        │
-│  │  (生命周期管理)  │    │  (AI 执行编排)   │                        │
-│  └─────────────────┘    └─────────────────┘                        │
-│           │                      │                                  │
-│           ▼                      ▼                                  │
-│  domain/                                                            │
-│  ┌─────────────────────────────────────────┐                        │
-│  │ model: Issue, Stage, StageState        │                        │
-│  │       TodoItem, Comment                 │                        │
-│  │ repository: IssueRepository            │                        │
-│  └─────────────────────────────────────────┘                        │
-│           │                      │                                  │
-│           ▼                      ▼                                  │
-│  infrastructure/                                                    │
-│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐                 │
-│  │ persistence │ │    self_    │ │   config     │                 │
-│  │ (JSON Repo) │ │   update    │ │  (Settings)  │                 │
-│  └─────────────┘ └─────────────┘ └─────────────┘                 │
+│  Main Process (StageLoop)                                           │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │  while True:                                                 │   │
+│  │    maintain()  # 每5秒扫描可触发的阶段                      │   │
+│  │      → worker_pool.submit()                                 │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+│                           │                                          │
+│                           ▼                                          │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │              InMemoryIssueRepository                         │   │
+│  │   _issues: { issue-id: Issue, ... }                       │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+│                           ▲                                          │
+│  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐       │
+│  │ IssueService   │  │ExecutorService │  │ ExecutorWorker │       │
+│  │ (审批/打回)    │  │ (AI执行编排)   │  │ Pool (线程池)   │       │
+│  └───────┬────────┘  └───────┬────────┘  └───────┬────────┘       │
+│          │                    │                    │                  │
+│          └────────────────────┼────────────────────┘                  │
+│                               ▼                                      │
+│                      StageStateMachine                               │
+│                      (状态转换验证)                                  │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  Web Server Thread (后台线程)                                        │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │  FastAPI (port 9500)                                       │   │
+│  │  POST /issues → create_issue()                            │   │
+│  │  POST /issues/{id}/approve → approve_stage()             │   │
+│  │  POST /issues/{id}/reject → reject_stage()               │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+│                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
+### 核心组件
+
+| 组件 | 层级 | 文件 | 职责 |
+|------|------|------|------|
+| **StageLoop** | application.service | `stage_loop.py` | 后台主循环，每5秒扫描可触发阶段 |
+| **ExecutorService** | application.service | `executor_service.py` | AI 执行编排，处理 NEW→RUNNING→PENDING |
+| **ExecutorWorkerPool** | infrastructure.executor | `worker_pool.py` | 线程池，管理 AI 执行并发 |
+| **StageStateMachine** | domain.statemachine | `stage_machine.py` | 状态转换验证和执行 |
+| **IssueService** | application.service | `issue_service.py` | Issue 生命周期，审批/打回/归档 |
+| **InMemoryIssueRepository** | infrastructure.persistence | `in_memory_issue_repository.py` | 内存存储（线程安全） |
+
 ---
 
-## 分层说明
+## 模块总览
 
-### 1. Interfaces 层 (接口层)
+**4 层架构**，共 **13 个子模块**：
 
-**目录**: `src/swallowloop/interfaces/`
-
-负责接收外部请求，提供 REST API 和 WebSocket。
-
-| 目录 | 文件 | 职责 |
-|-----|------|------|
-| `web/api/` | `issues.py` | Issue REST API 路由 |
-| `web/` | `app.py` | FastAPI 应用入口 |
-
-### 2. Application 层 (应用层)
-
-**目录**: `src/swallowloop/application/`
-
-负责用例编排，协调领域对象完成业务逻辑。
-
-| 文件 | 职责 |
-|-----|------|
-| `service/issue_service.py` | Issue 生命周期管理、状态流转 |
-| `service/executor_service.py` | AI 执行编排（暂不支持 AI） |
-| `dto/issue_dto.py` | Issue 数据传输对象 |
-
-### 3. Domain 层 (领域层)
-
-**目录**: `src/swallowloop/domain/`
-
-核心业务逻辑，不依赖任何外部框架。
-
-| 文件 | 职责 |
-|-----|------|
-| `model/issue.py` | Issue 聚合根 |
-| `model/stage.py` | Stage/StageStatus/IssueStatus 枚举 |
-| `model/comment.py` | Comment 值对象 |
-| `repository/issue_repository.py` | Issue 仓库接口 |
-
-### 4. Infrastructure 层 (基础设施层)
-
-**目录**: `src/swallowloop/infrastructure/`
-
-负责技术实现细节。
-
-| 目录 | 文件 | 职责 |
-|-----|------|------|
-| `persistence/` | `json_issue_repository.py` | JSON 文件持久化（带文件锁） |
-| `config/` | `settings.py` | 配置管理 |
-| `self_update.py` | `self_update.py` | 自更新机制 |
+| 层级 | 子模块 | 职责 |
+|------|--------|------|
+| **Domain** | model | 领域模型：Issue、Stage、Workspace、PullRequest、Comment |
+| | repository | 仓库接口：IssueRepository、WorkspaceRepository |
+| | statemachine | 状态机：StageStateMachine（转换规则、钩子） |
+| | event | 领域事件基类 |
+| **Application** | dto | 数据传输对象：IssueDTO、WorkspaceDTO |
+| | service | 应用服务：IssueService、ExecutorService、StageLoop |
+| **Infrastructure** | persistence | 持久化：InMemoryIssueRepository、JsonIssueRepository |
+| | executor | 执行器：ExecutorWorkerPool（线程池） |
+| | agent | AI Agent：BaseAgent、MockAgent |
+| | config | 配置管理：Settings |
+| | llm | 大模型配置：LLMConfig、LLMProvider |
+| | logging | 日志：setup_logging、get_logger |
+| | self_update | 自更新机制 |
+| **Interfaces** | web | Web API：FastAPI 应用、REST 路由 |
 
 ---
 
@@ -127,14 +114,14 @@
 
 | 状态 | 说明 |
 |-----|------|
-| `new` | 新建（刚进入阶段，等待触发） |
+| `new` | 新建（等待 StageLoop 触发 AI） |
+| `running` | 执行中（AI 正在执行） |
 | `pending` | 待审批（AI 完成，等待人类审核） |
 | `approved` | 已通过 |
 | `rejected` | 已打回（附带修改意见） |
-| `running` | 执行中 |
 | `error` | 异常 |
 
-### 阶段流转
+### 状态流转
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -148,9 +135,44 @@
 │                      running                               │
 └─────────────────────────────────────────────────────────────┘
 
+StageLoop 触发（每5秒）:
+  - 扫描 NEW/REJECTED/ERROR 状态
+  - 检查 issue.current_stage == stage（必须是当前阶段）
+  - 提交到线程池执行
+
 跨阶段流转：
-当前阶段 approved ──► 下一阶段 new（不自动触发）
+  审批通过 → advance() → 下一阶段 new（等待 StageLoop 触发）
 ```
+
+---
+
+## StageLoop 主循环
+
+### 工作流程
+
+```
+while True:
+    1. maintain()  # 扫描可触发阶段
+       ├─ list_stages_by_status(NEW)
+       ├─ list_stages_by_status(REJECTED)
+       └─ list_stages_by_status(ERROR)
+
+    2. 对每个可触发阶段:
+       ├─ 检查 issue.status == ACTIVE
+       ├─ 检查 issue.current_stage == stage
+       ├─ 检查没有正在执行的任务
+       └─ worker_pool.submit(issue_id, stage)
+
+    3. sleep(5)
+```
+
+### ExecutorWorkerPool
+
+使用 `ThreadPoolExecutor` 管理并发执行：
+
+- `max_workers`: 最大并发数（默认 3）
+- 每个任务在线程池中执行
+- 内部创建新的 event loop 运行 asyncio 代码
 
 ---
 
@@ -159,58 +181,39 @@
 | 环境变量 | 说明 | 默认值 |
 |---------|------|--------|
 | `ISSUE_PROJECT` | 项目名称 | `default` |
-| `WEB_PORT` | Web 服务端口 | `8080` |
+| `WEB_PORT` | Web 服务端口 | `9500` |
 | `WEB_HOST` | Web 服务监听地址 | `0.0.0.0` |
+| `AGENT_TYPE` | Agent 类型 | `mock` |
 | `ENABLE_SELF_UPDATE` | 是否启用自更新 | `true` |
-| `SELF_UPDATE_INTERVAL` | 自更新检查间隔(秒) | `300` |
 
 ---
 
 ## 目录结构
 
 ```
-swallowloop/
-├── src/swallowloop/
-│   ├── application/               # 应用层
-│   │   ├── dto/                   # 数据传输对象
-│   │   └── service/               # 应用服务
-│   │       ├── issue_service.py   # Issue 服务
-│   │       └── executor_service.py # 执行服务
-│   ├── domain/                    # 领域层
-│   │   ├── model/                # 领域模型
-│   │   └── repository/           # 仓库接口
-│   ├── infrastructure/            # 基础设施层
-│   │   ├── config/               # 配置管理
-│   │   ├── persistence/          # 持久化实现
-│   │   └── self_update.py        # 自更新
-│   └── interfaces/                # 接口层
-│       └── web/                  # Web API
-├── docs/
-│   ├── architecture.md            # 架构文档
-│   ├── data_models.md            # 数据模型文档
-│   ├── vision.md                 # 项目愿景
-│   └── test_scenarios.md         # 测试场景
-├── tests/                         # 测试用例
-└── pyproject.toml                 # 项目配置
+src/swallowloop/
+├── domain/           # 领域层（零依赖）
+│   ├── model/        # 领域模型
+│   ├── repository/   # 仓库接口
+│   ├── statemachine/ # 状态机
+│   └── event/        # 领域事件
+│
+├── application/      # 应用层（依赖 domain）
+│   ├── dto/         # 数据传输对象
+│   └── service/      # 应用服务
+│
+├── infrastructure/   # 基础设施层（依赖 domain 接口）
+│   ├── persistence/  # 持久化
+│   ├── executor/     # 执行器
+│   ├── agent/        # AI Agent
+│   ├── config/       # 配置
+│   ├── llm/         # 大模型配置
+│   ├── logging/      # 日志
+│   └── self_update/  # 自更新
+│
+└── interfaces/       # 接口层（依赖 application）
+    └── web/          # Web API
 ```
-
----
-
-## 数据文件位置
-
-| 文件 | 路径 | 说明 |
-|-----|------|------|
-| Issue 数据 | `~/.swallowloop/{project}/issues.json` | Issue 持久化存储 |
-
----
-
-## 外部依赖
-
-| 依赖 | 版本 | 用途 |
-|-----|------|-----|
-| FastAPI | >=0.109.0 | Web 框架 |
-| uvicorn | >=0.27.0 | ASGI 服务器 |
-| websockets | >=12.0 | WebSocket 支持 |
 
 ---
 
@@ -220,9 +223,24 @@ swallowloop/
 # 安装依赖
 uv sync
 
-# 启动服务
+# 启动服务（StageLoop 主循环 + Web 服务器）
 uv run swallowloop
 
 # 或
 python -m swallowloop
+
+# 运行测试
+pytest tests/ -v
 ```
+
+---
+
+## 数据存储
+
+当前使用 **纯内存存储**：
+
+- `InMemoryIssueRepository`: 启动时为空，所有数据存储在内存字典中
+- 适合开发测试和单实例运行
+- 未来可扩展为 JSON 持久化或数据库
+
+> 注意：原 `JsonIssueRepository` 保留但默认不使用。

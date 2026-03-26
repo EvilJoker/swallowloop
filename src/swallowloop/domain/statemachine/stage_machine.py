@@ -186,6 +186,29 @@ class StageStateMachine:
         self._emit_after(event)
         return True
 
+    def error(self, stage: Stage) -> bool:
+        """RUNNING → ERROR（AI 执行失败）"""
+        state = self._issue.get_stage_state(stage)
+        if state.status != StageStatus.RUNNING:
+            raise InvalidTransitionError(
+                f"阶段 {stage.value} 当前状态 {state.status.value} 不能转为 error"
+            )
+
+        event = TransitionEvent(
+            issue_id=str(self._issue.id),
+            stage=stage,
+            from_status=state.status,
+            to_status=StageStatus.ERROR,
+        )
+        self._emit_before(event)
+
+        version = self._issue.version
+        state.status = StageStatus.ERROR
+        self._save(version, version + 1)
+
+        self._emit_after(event)
+        return True
+
     def advance(self, stage: Stage) -> bool:
         """APPROVED → 下一阶段 NEW（不自动触发 AI）"""
         state = self._issue.get_stage_state(stage)
@@ -209,9 +232,10 @@ class StageStateMachine:
         )
         self._emit_before(event)
 
-        # 创建下一阶段，状态为 NEW
+        # 创建下一阶段，状态为 NEW，并更新 current_stage
         version = self._issue.version
         self._issue.create_stage(next_stage)
+        self._issue.current_stage = next_stage  # 切换到下一阶段
         self._save(version, version + 1)
 
         self._emit_after(event)
