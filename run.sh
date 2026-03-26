@@ -14,6 +14,9 @@ PID_DIR="$LOG_DIR"
 DEFAULT_BACKEND_PORT=9500
 DEFAULT_FRONTEND_PORT=9501
 
+# Watchdog 检测间隔（秒）
+WATCHDOG_INTERVAL=30
+
 # 端口配置（从 .env 读取）
 load_env_ports() {
     local env_file="$PROJECT_ROOT/.env"
@@ -117,6 +120,27 @@ stop_backend() {
 # 停止前端
 stop_frontend() {
     stop_process "$FRONTEND_PID_FILE" "Frontend"
+}
+
+# Watchdog 模式：检测并重启崩溃的服务
+watchdog() {
+    echo "=== Watchdog Mode ==="
+    echo "Interval: ${WATCHDOG_INTERVAL}s"
+    echo "Press Ctrl+C to stop"
+
+    while true; do
+        if ! is_running "$BACKEND_PID_FILE"; then
+            echo "[$(date '+%H:%M:%S')] Backend is down, restarting..."
+            start_backend
+        fi
+
+        if ! is_running "$FRONTEND_PID_FILE"; then
+            echo "[$(date '+%H:%M:%S')] Frontend is down, restarting..."
+            start_frontend
+        fi
+
+        sleep "$WATCHDOG_INTERVAL"
+    done
 }
 
 # 运行测试
@@ -234,6 +258,9 @@ case "${1:-}" in
                 ;;
         esac
         ;;
+    watchdog)
+        watchdog
+        ;;
     status)
         status
         ;;
@@ -241,7 +268,7 @@ case "${1:-}" in
         run_tests
         ;;
     *)
-        echo "Usage: run.sh [-all|-backend|-frontend|restart|stop|status]"
+        echo "Usage: run.sh [-all|-backend|-frontend|restart|stop|watchdog|status]"
         echo ""
         echo "Commands:"
         echo "  -all       Start both backend and frontend (default)"
@@ -249,11 +276,13 @@ case "${1:-}" in
         echo "  -frontend  Start only frontend"
         echo "  restart    Restart services"
         echo "  stop       Stop services"
+        echo "  watchdog   Watchdog mode (auto-restart crashed services, 30s interval)"
         echo "  status     Show service status"
         echo "  test       Run all tests (backend + frontend)"
         echo ""
         echo "Examples:"
         echo "  run.sh -all          # Start both services"
+        echo "  run.sh watchdog      # Start in watchdog mode (auto-restart)"
         echo "  run.sh restart       # Restart both services"
         echo "  run.sh stop -backend # Stop only backend"
         exit 1
