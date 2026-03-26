@@ -16,14 +16,19 @@ logger = logging.getLogger(__name__)
 
 def create_services():
     """创建共享服务实例"""
+    from .infrastructure.instance_registry import register_instance
+
     # Repository
     repository: IssueRepository = InMemoryIssueRepository()
+    register_instance("repository", repository)
 
     # Executor
     executor = ExecutorService(repository=repository, agent_type="mock")
+    register_instance("executor", executor)
 
     # WorkerPool (max_workers=3)
     worker_pool = ExecutorWorkerPool(executor=executor, max_workers=3)
+    register_instance("worker_pool", worker_pool)
 
     return repository, executor, worker_pool
 
@@ -52,7 +57,7 @@ def main(port: int = 9500):
     # 3. 在后台线程启动 Web 服务器
     web_thread = threading.Thread(
         target=run_server,
-        kwargs={"port": port, "repository": repository},
+        kwargs={"port": port},
         daemon=True,
         name="WebServer"
     )

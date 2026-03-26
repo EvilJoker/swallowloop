@@ -16,13 +16,26 @@ _executor_service: ExecutorService = None
 
 
 def init_services():
-    """初始化服务实例"""
+    """初始化服务实例（从注册表获取共享实例）"""
     import os
+    from ....infrastructure.instance_registry import get_instance
+
     global _issue_service, _executor_service
-    repository = InMemoryIssueRepository()
-    agent_type = os.getenv("AGENT_TYPE", "mock")
-    _executor_service = ExecutorService(repository=repository, agent_type=agent_type)
-    _issue_service = IssueService(repository=repository, executor=_executor_service)
+
+    # 优先从注册表获取共享实例
+    repository = get_instance("repository")
+    executor = get_instance("executor")
+
+    if repository is not None and executor is not None:
+        # 使用共享实例
+        _executor_service = executor
+        _issue_service = IssueService(repository=repository, executor=_executor_service)
+    else:
+        # 注册表没有实例，创建新的（仅用于独立运行）
+        repository = InMemoryIssueRepository()
+        agent_type = os.getenv("AGENT_TYPE", "mock")
+        _executor_service = ExecutorService(repository=repository, agent_type=agent_type)
+        _issue_service = IssueService(repository=repository, executor=_executor_service)
 
 
 class IssueCreate(BaseModel):

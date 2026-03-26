@@ -27,6 +27,9 @@ from .logger import setup_logging, get_logger
 # 自更新
 from .self_update import SelfUpdater
 
+# 实例注册
+from .instance_registry import InstanceRegistry, get_instance, register_instance, clear_instances
+
 __all__ = [
     "MODULE_NAME",
     # 持久化
@@ -49,4 +52,9 @@ __all__ = [
     "get_logger",
     # 自更新
     "SelfUpdater",
+    # 实例注册
+    "InstanceRegistry",
+    "get_instance",
+    "register_instance",
+    "clear_instances",
 ]

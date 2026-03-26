@@ -118,6 +118,8 @@ class ExecutorService:
 
         # 根据执行结果转换状态：RUNNING → PENDING 或 ERROR
         if result.success:
+            # 将 Agent 输出写入 document
+            stage_state.document = result.output or ""
             machine.execute(stage)  # RUNNING → PENDING
             logger.info(f"Agent 执行成功，阶段 {stage.value} 等待人工审批")
         else:
