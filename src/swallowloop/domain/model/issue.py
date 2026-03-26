@@ -28,7 +28,7 @@ class TodoItem:
 class StageState:
     """阶段状态"""
     stage: Stage
-    status: StageStatus = StageStatus.PENDING
+    status: StageStatus = StageStatus.NEW
     document: str = ""
     comments: list = field(default_factory=list)
     started_at: Optional[datetime] = None
@@ -58,6 +58,7 @@ class Issue:
     created_at: datetime
     archived_at: Optional[datetime] = None
     discarded_at: Optional[datetime] = None
+    version: int = 0  # 乐观锁版本号
     stages: dict = field(default_factory=dict)
 
     def __post_init__(self):
@@ -71,30 +72,6 @@ class Issue:
     def get_stage_state(self, stage: Stage) -> StageState:
         """获取阶段状态"""
         return self.stages[stage]
-
-    def approve_stage(self, stage: Stage, comment: str = "") -> None:
-        """审批通过阶段"""
-        state = self.stages[stage]
-        state.status = StageStatus.APPROVED
-        state.completed_at = datetime.now()
-        if comment:
-            from .comment import ReviewComment
-            state.comments.append(ReviewComment.create(stage, "approve", comment))
-
-    def reject_stage(self, stage: Stage, reason: str) -> None:
-        """打回阶段"""
-        state = self.stages[stage]
-        state.status = StageStatus.REJECTED
-        if reason:
-            from .comment import ReviewComment
-            state.comments.append(ReviewComment.create(stage, "reject", reason))
-
-    def start_stage(self, stage: Stage) -> None:
-        """开始阶段执行"""
-        state = self.stages[stage]
-        state.status = StageStatus.RUNNING
-        state.started_at = datetime.now()
-        self.current_stage = stage
 
     def create_stage(self, stage: Stage) -> None:
         """创建阶段（新建状态）"""
