@@ -49,36 +49,39 @@ class MockExecutor:
         return {"status": "success", "output": "mock output"}
 
 
-def test_create_issue():
-    """测试创建 Issue"""
+@pytest.mark.asyncio
+async def test_create_issue():
+    """测试创建 Issue（自动触发 AI）"""
     repo = MockRepository()
     executor = MockExecutor()
     service = IssueService(repo, executor)
 
-    issue = service.create_issue("测试 Issue", "测试描述")
+    issue = await service.create_issue("测试 Issue", "测试描述")
 
     assert issue.title == "测试 Issue"
     assert issue.description == "测试描述"
     assert issue.status == IssueStatus.ACTIVE
     assert issue.current_stage == Stage.BRAINSTORM
     assert issue.id.value.startswith("issue-")
+    # AI 执行完成后状态为 PENDING
+    assert issue.get_stage_state(Stage.BRAINSTORM).status == StageStatus.PENDING
 
 
-def test_approve_stage():
+@pytest.mark.asyncio
+async def test_approve_stage():
     """测试审批通过阶段"""
     repo = MockRepository()
     executor = MockExecutor()
     service = IssueService(repo, executor)
 
-    issue = service.create_issue("测试 Issue", "测试描述")
+    issue = await service.create_issue("测试 Issue", "测试描述")
     issue_id = str(issue.id)
 
-    # 创建后状态为 NEW
-    assert issue.get_stage_state(Stage.BRAINSTORM).status == StageStatus.NEW
+    # 创建后 AI 已执行完成，状态为 PENDING
+    assert issue.get_stage_state(Stage.BRAINSTORM).status == StageStatus.PENDING
 
     # 审批通过头脑风暴阶段
-    import asyncio
-    updated = asyncio.run(service.approve_stage(issue_id, Stage.BRAINSTORM, "通过"))
+    updated = await service.approve_stage(issue_id, Stage.BRAINSTORM, "通过")
 
     assert updated.get_stage_state(Stage.BRAINSTORM).status == StageStatus.APPROVED
     # 审批通过后进入下一阶段，状态为 NEW（不自动触发 AI）
@@ -88,31 +91,39 @@ def test_approve_stage():
 
 def test_reject_stage():
     """测试打回阶段"""
+    import asyncio
     repo = MockRepository()
     executor = MockExecutor()
     service = IssueService(repo, executor)
 
-    issue = service.create_issue("测试 Issue", "测试描述")
-    issue_id = str(issue.id)
+    async def run_test():
+        issue = await service.create_issue("测试 Issue", "测试描述")
+        issue_id = str(issue.id)
 
-    # 打回头脑风暴阶段
-    updated = service.reject_stage(issue_id, Stage.BRAINSTORM, "方案不够详细")
+        # 创建后 AI 已执行完成，状态为 PENDING
+        assert issue.get_stage_state(Stage.BRAINSTORM).status == StageStatus.PENDING
 
-    assert updated.get_stage_state(Stage.BRAINSTORM).status == StageStatus.REJECTED
-    # 最新评论应该是 reject
-    comments = updated.get_stage_state(Stage.BRAINSTORM).comments
-    assert len(comments) == 1
-    assert comments[0].action == "reject"
-    assert comments[0].content == "方案不够详细"
+        # 打回头脑风暴阶段（reject_stage 是同步方法）
+        updated = service.reject_stage(issue_id, Stage.BRAINSTORM, "方案不够详细")
+
+        assert updated.get_stage_state(Stage.BRAINSTORM).status == StageStatus.REJECTED
+        # 最新评论应该是 reject
+        comments = updated.get_stage_state(Stage.BRAINSTORM).comments
+        assert len(comments) == 1
+        assert comments[0].action == "reject"
+        assert comments[0].content == "方案不够详细"
+
+    asyncio.run(run_test())
 
 
-def test_update_issue():
+@pytest.mark.asyncio
+async def test_update_issue():
     """测试更新 Issue"""
     repo = MockRepository()
     executor = MockExecutor()
     service = IssueService(repo, executor)
 
-    issue = service.create_issue("原始标题", "原始描述")
+    issue = await service.create_issue("原始标题", "原始描述")
     issue_id = str(issue.id)
 
     # 更新标题
@@ -126,13 +137,14 @@ def test_update_issue():
     assert archived.archived_at is not None
 
 
-def test_delete_issue():
+@pytest.mark.asyncio
+async def test_delete_issue():
     """测试删除 Issue"""
     repo = MockRepository()
     executor = MockExecutor()
     service = IssueService(repo, executor)
 
-    issue = service.create_issue("测试 Issue", "测试描述")
+    issue = await service.create_issue("测试 Issue", "测试描述")
     issue_id = str(issue.id)
 
     assert len(repo.list_all()) == 1
@@ -143,7 +155,12 @@ def test_delete_issue():
 
 
 def test_issue_aggregation():
-    """测试 Issue 聚合根行为"""
+    """测试 Issue 聚合根行为
+
+    注意: Issue 对象本身不再有 approve_stage/start_stage/reject_stage 方法，
+    这些状态转换现在由 StageStateMachine 处理。
+    此测试保留用于验证 Issue 的基础属性和 get_latest_rejection 等方法。
+    """
     issue = Issue(
         id=IssueId("test-issue"),
         title="测试",
@@ -153,26 +170,18 @@ def test_issue_aggregation():
         created_at=datetime.now(),
     )
 
-    # 初始所有阶段都是 pending
+    # 初始所有阶段都是 NEW
     for stage in Stage:
-        assert issue.get_stage_state(stage).status == StageStatus.PENDING
+        assert issue.get_stage_state(stage).status == StageStatus.NEW
 
-    # 审批通过 brainstorm
-    issue.approve_stage(Stage.BRAINSTORM, "通过")
-    assert issue.get_stage_state(Stage.BRAINSTORM).status == StageStatus.APPROVED
+    # 验证基础属性
+    assert issue.current_stage == Stage.BRAINSTORM
+    assert issue.is_active is True
+    assert issue.status == IssueStatus.ACTIVE
 
-    # 进入下一阶段
-    issue.start_stage(Stage.PLAN_FORMED)
-    assert issue.current_stage == Stage.PLAN_FORMED
-    assert issue.get_stage_state(Stage.PLAN_FORMED).status == StageStatus.RUNNING
-
-    # 打回
-    issue.reject_stage(Stage.PLAN_FORMED, "需要更详细")
-    assert issue.get_stage_state(Stage.PLAN_FORMED).status == StageStatus.REJECTED
-
-    # 获取最新打回原因
-    rejection = issue.get_latest_rejection(Stage.PLAN_FORMED)
-    assert rejection == "需要更详细"
+    # 验证 get_latest_rejection 对没有评论的阶段返回 None
+    rejection = issue.get_latest_rejection(Stage.BRAINSTORM)
+    assert rejection is None
 
 
 def test_todo_item():

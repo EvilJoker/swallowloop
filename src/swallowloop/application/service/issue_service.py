@@ -8,8 +8,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .executor_service import ExecutorService
 
-from ...domain.model import Issue, IssueId, Stage, IssueStatus, StageStatus
+from ...domain.model import Issue, IssueId, Stage, IssueStatus
 from ...domain.repository import IssueRepository
+from ...domain.statemachine import StageStateMachine, LoggerHook
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,10 @@ class IssueService:
     def __init__(self, repository: IssueRepository, executor: "ExecutorService"):
         self._repo = repository
         self._executor = executor
+        self._hooks = [LoggerHook()]
+
+    def _get_machine(self, issue: Issue) -> StageStateMachine:
+        return StageStateMachine(issue, self._repo, self._hooks)
 
     def list_issues(self) -> list[Issue]:
         """获取所有 Issue"""
@@ -29,8 +34,8 @@ class IssueService:
         """获取单个 Issue"""
         return self._repo.get(IssueId(issue_id))
 
-    def create_issue(self, title: str, description: str) -> Issue:
-        """创建新 Issue"""
+    async def create_issue(self, title: str, description: str) -> Issue:
+        """创建新 Issue（自动触发 AI）"""
         issue_id = IssueId(f"issue-{uuid.uuid4().hex[:8]}")
         issue = Issue(
             id=issue_id,
@@ -40,10 +45,16 @@ class IssueService:
             current_stage=Stage.BRAINSTORM,
             created_at=datetime.now(),
         )
-        # 创建头脑风暴阶段（状态设为 NEW）
+        # 创建头脑风暴阶段（状态为 NEW）
         issue.create_stage(Stage.BRAINSTORM)
         self._repo.save(issue)
         logger.info(f"创建 Issue: {issue_id} - {title}，已创建头脑风暴阶段")
+
+        # 自动触发 AI
+        machine = self._get_machine(issue)
+        machine.start(Stage.BRAINSTORM)  # NEW → RUNNING
+        await self._executor.execute_stage(issue, Stage.BRAINSTORM)
+        machine.execute(Stage.BRAINSTORM)  # RUNNING → PENDING（AI 执行完成）
 
         return issue
 
@@ -53,12 +64,11 @@ class IssueService:
         if not issue:
             return None
 
-        issue.approve_stage(stage, comment)
-        self._repo.save(issue)
-        logger.info(f"Issue {issue_id} 阶段 {stage.value} 审批通过")
+        machine = self._get_machine(issue)
+        machine.approve(stage, comment)  # → APPROVED
+        machine.advance(stage)  # → 下一阶段 NEW
 
-        # 自动进入下一阶段并触发 AI
-        await self._advance_and_trigger(issue, stage)
+        logger.info(f"Issue {issue_id} 阶段 {stage.value} 审批通过")
         return issue
 
     def reject_stage(self, issue_id: str, stage: Stage, reason: str) -> Issue | None:
@@ -67,8 +77,9 @@ class IssueService:
         if not issue:
             return None
 
-        issue.reject_stage(stage, reason)
-        self._repo.save(issue)
+        machine = self._get_machine(issue)
+        machine.reject(stage, reason)  # → REJECTED
+
         logger.info(f"Issue {issue_id} 阶段 {stage.value} 已打回: {reason}")
         return issue
 
@@ -78,16 +89,15 @@ class IssueService:
         if not issue:
             return {"status": "error", "message": "Issue not found"}
 
-        stage_state = issue.get_stage_state(stage)
-        # 只有 NEW 或 REJECTED 状态才能触发
-        if stage_state.status not in [StageStatus.NEW, StageStatus.REJECTED]:
+        machine = self._get_machine(issue)
+        if not machine.can_trigger(stage):
+            stage_state = issue.get_stage_state(stage)
             return {"status": "error", "message": f"当前状态 {stage_state.status.value} 不能触发 AI"}
 
-        issue.start_stage(stage)  # 设为 RUNNING
-        self._repo.save(issue)
-
-        # 触发执行
-        return await self._executor.execute_stage(issue, stage)
+        machine.start(stage)  # NEW/REJECTED → RUNNING
+        result = await self._executor.execute_stage(issue, stage)
+        machine.execute(stage)  # RUNNING → PENDING（AI 执行完成）
+        return result
 
     def update_issue(self, issue_id: str, **kwargs) -> Issue | None:
         """更新 Issue"""

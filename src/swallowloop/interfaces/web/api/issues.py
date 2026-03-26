@@ -73,7 +73,7 @@ async def create_issue(request: IssueCreate):
     """创建 Issue"""
     if _issue_service is None:
         init_services()
-    issue = _issue_service.create_issue(
+    issue = await _issue_service.create_issue(
         title=request.title,
         description=request.description,
     )
