@@ -6,7 +6,7 @@ import tempfile
 import shutil
 from pathlib import Path
 
-from swallowloop.infrastructure.logging import (
+from swallowloop.infrastructure.logger import (
     setup_logging,
     get_logger,
     DailyRotatingFileHandler,
