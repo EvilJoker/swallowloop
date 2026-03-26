@@ -66,7 +66,7 @@ start_backend() {
 
     echo "Starting backend on port $BACKEND_PORT..."
     > "$BACKEND_LOG_FILE"  # 清空日志
-    cd /media/vdc/github/swallowloop && uv run python -m swallowloop --port $BACKEND_PORT > "$BACKEND_LOG_FILE" 2>&1 &
+    cd /media/vdc/github/swallowloop && uv run swallowloop --port $BACKEND_PORT > "$BACKEND_LOG_FILE" 2>&1 &
     echo $! > "$BACKEND_PID_FILE"
     echo "Backend started (PID: $(cat $BACKEND_PID_FILE))"
 }
