@@ -42,6 +42,22 @@ async def websocket_endpoint(websocket: WebSocket, issue_id: str):
         manager.disconnect(websocket, issue_id)
 
 
+@app.websocket("/ws/issues")
+async def ws_issues(websocket: WebSocket):
+    """WebSocket Issue 列表广播端点"""
+    # 手动接受连接，绕过 Origin 检查
+    await websocket.accept()
+    manager.active_connections["issues"].append(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            if data == "ping":
+                await websocket.send_text("pong")
+    except WebSocketDisconnect:
+        if websocket in manager.active_connections["issues"]:
+            manager.active_connections["issues"].remove(websocket)
+
+
 def run_server(host: str = "0.0.0.0", port: int = 8000, repository=None):
     """启动服务
 
@@ -52,8 +68,15 @@ def run_server(host: str = "0.0.0.0", port: int = 8000, repository=None):
     """
     # 从注册表获取实例初始化服务
     init_services()
-    # 单进程模式运行
-    uvicorn.run(app, host=host, port=port)
+    # 单进程模式运行，禁用 WebSocket Origin 检查
+    uvicorn.run(
+        app,
+        host=host,
+        port=port,
+        ws='websockets',
+        timeout_keep_alive=5,
+        log_level='info'
+    )
 
 
 if __name__ == "__main__":

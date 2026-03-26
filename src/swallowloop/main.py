@@ -17,13 +17,17 @@ logger = logging.getLogger(__name__)
 def create_services():
     """创建共享服务实例"""
     from .infrastructure.instance_registry import register_instance
+    from .interfaces.web.api.websockets import manager
 
     # Repository
     repository: IssueRepository = InMemoryIssueRepository()
     register_instance("repository", repository)
 
-    # Executor
-    executor = ExecutorService(repository=repository, agent_type="mock")
+    # WebSocket Manager
+    register_instance("ws_manager", manager)
+
+    # Executor (注入 ws_manager 用于广播)
+    executor = ExecutorService(repository=repository, agent_type="mock", ws_manager=manager)
     register_instance("executor", executor)
 
     # WorkerPool (max_workers=3)

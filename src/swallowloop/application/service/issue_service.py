@@ -1,5 +1,6 @@
 """Issue 应用服务"""
 
+import asyncio
 import logging
 import uuid
 from datetime import datetime
@@ -18,10 +19,19 @@ logger = logging.getLogger(__name__)
 class IssueService:
     """Issue 应用服务"""
 
-    def __init__(self, repository: IssueRepository, executor: "ExecutorService"):
+    def __init__(self, repository: IssueRepository, executor: "ExecutorService", ws_manager=None):
         self._repo = repository
         self._executor = executor
         self._hooks = [LoggerHook()]
+        self._ws_manager = ws_manager
+
+    async def _broadcast(self, msg_type: str, data: dict):
+        """广播消息到 WebSocket 客户端"""
+        if self._ws_manager:
+            try:
+                await self._ws_manager.broadcast_issue({"type": msg_type, **data})
+            except Exception as e:
+                logger.warning(f"WebSocket 广播失败: {e}")
 
     def _get_machine(self, issue: Issue) -> StageStateMachine:
         return StageStateMachine(issue, self._repo, self._hooks)
@@ -51,7 +61,42 @@ class IssueService:
         logger.info(f"创建 Issue: {issue_id} - {title}，current_stage={issue.current_stage.value}, "
                     f"BRAINSTORM.status={issue.get_stage_state(Stage.BRAINSTORM).status.value}")
 
+        # 广播创建事件
+        await self._broadcast("issue_created", {"issue": self._issue_to_dict(issue)})
         return issue
+
+    def _issue_to_dict(self, issue: Issue) -> dict:
+        """将 Issue 序列化为字典"""
+        return {
+            "id": str(issue.id),
+            "title": issue.title,
+            "description": issue.description,
+            "status": issue.status.value,
+            "currentStage": issue.current_stage.value,
+            "createdAt": issue.created_at.isoformat(),
+            "archivedAt": issue.archived_at.isoformat() if issue.archived_at else None,
+            "discardedAt": issue.discarded_at.isoformat() if issue.discarded_at else None,
+            "stages": {
+                stage.value: {
+                    "stage": stage.value,
+                    "status": state.status.value,
+                    "document": state.document,
+                    "comments": [
+                        {
+                            "id": c.id,
+                            "stage": c.stage.value,
+                            "action": c.action,
+                            "content": c.content,
+                            "createdAt": c.created_at.isoformat(),
+                        }
+                        for c in state.comments
+                    ],
+                    "startedAt": state.started_at.isoformat() if state.started_at else None,
+                    "completedAt": state.completed_at.isoformat() if state.completed_at else None,
+                }
+                for stage, state in issue.stages.items()
+            },
+        }
 
     async def approve_stage(self, issue_id: str, stage: Stage, comment: str = "") -> Issue | None:
         """审批通过阶段"""
@@ -64,9 +109,10 @@ class IssueService:
         machine.advance(stage)  # → 下一阶段 NEW
 
         logger.info(f"Issue {issue_id} 阶段 {stage.value} 审批通过")
+        await self._broadcast("issue_updated", {"issue": self._issue_to_dict(issue)})
         return issue
 
-    def reject_stage(self, issue_id: str, stage: Stage, reason: str) -> Issue | None:
+    async def reject_stage(self, issue_id: str, stage: Stage, reason: str) -> Issue | None:
         """打回阶段"""
         issue = self._repo.get(IssueId(issue_id))
         if not issue:
@@ -76,6 +122,7 @@ class IssueService:
         machine.reject(stage, reason)  # → REJECTED
 
         logger.info(f"Issue {issue_id} 阶段 {stage.value} 已打回: {reason}")
+        await self._broadcast("issue_updated", {"issue": self._issue_to_dict(issue)})
         return issue
 
     async def trigger_ai(self, issue_id: str, stage: Stage) -> dict:

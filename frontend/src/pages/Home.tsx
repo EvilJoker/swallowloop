@@ -1,62 +1,61 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useEffect } from 'react';
 import type { Issue } from '@/types';
 import { KanbanBoard } from '@/components/kanban/KanbanBoard';
 import { IssueDetail } from '@/components/issue/IssueDetail';
 import { issueApi } from '@/lib/api';
+import { useIssueStore } from '@/store/issueStore';
+import { initIssueWebSocket } from '@/lib/wsClient';
 
 export function Home() {
-  const [issues, setIssues] = useState<Issue[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
+  const issues = useIssueStore((state) => state.issues);
+  const loading = useIssueStore((state) => state.loading);
+  const selectedIssueId = useIssueStore((state) => state.selectedIssueId);
+  const setIssues = useIssueStore((state) => state.setIssues);
+  const setLoading = useIssueStore((state) => state.setLoading);
+  const setSelectedIssueId = useIssueStore((state) => state.setSelectedIssueId);
 
-  // 加载 Issue 列表
-  const loadIssues = useCallback(async () => {
-    try {
-      setLoading(true);
-      const data = await issueApi.getAll();
-      setIssues(data);
-    } catch (err) {
-      console.error('Failed to load issues:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
+  // 初始化 WebSocket 和加载数据
   useEffect(() => {
-    loadIssues();
-  }, [loadIssues]);
+    // 初始化 WebSocket
+    initIssueWebSocket();
+
+    // 加载初始数据
+    setLoading(true);
+    issueApi.getAll().then((data) => {
+      setIssues(data);
+      setLoading(false);
+    });
+  }, [setIssues, setLoading]);
+
+  const selectedIssue = issues.find((i) => i.id === selectedIssueId) || null;
 
   const handleIssueClick = (issue: Issue) => {
-    setSelectedIssue(issue);
+    setSelectedIssueId(issue.id);
   };
 
   const handleCloseDetail = () => {
-    setSelectedIssue(null);
+    setSelectedIssueId(null);
   };
 
   const handleApprove = () => {
     if (!selectedIssue) return;
-    // TODO: 实现通过逻辑
     console.log('Issue approved:', selectedIssue.id);
-    setSelectedIssue(null);
+    setSelectedIssueId(null);
   };
 
   const handleReject = (reason: string) => {
     if (!selectedIssue) return;
-    // TODO: 实现打回逻辑
     console.log('Issue rejected:', selectedIssue.id, reason);
-    setSelectedIssue(null);
+    setSelectedIssueId(null);
   };
 
   const handleTrigger = () => {
     if (!selectedIssue) return;
-    // TODO: 实现触发 AI 更新逻辑
     console.log('Trigger AI update for:', selectedIssue.id);
   };
 
-  // 新建 Issue 后刷新列表
   const handleIssueCreated = (issue: Issue) => {
-    setIssues((prev) => [...prev, issue]);
+    // WebSocket 会自动更新，不需要手动处理
   };
 
   if (loading) {

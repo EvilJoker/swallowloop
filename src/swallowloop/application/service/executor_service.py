@@ -23,11 +23,20 @@ INSTRUCTIONS_DIR = Path.home() / ".swallowloop" / "instructions"
 class ExecutorService:
     """AI 执行服务 - Issue 流水线阶段执行"""
 
-    def __init__(self, repository: "IssueRepository", agent: BaseAgent | None = None, agent_type: str = "mock"):
+    def __init__(self, repository: "IssueRepository", agent: BaseAgent | None = None, agent_type: str = "mock", ws_manager=None):
         self._repo = repository
         self._running_tasks: dict[str, asyncio.Task] = {}
         self._agent = agent or self._create_agent(agent_type)
         self._hooks = [LoggerHook()]
+        self._ws_manager = ws_manager
+
+    async def _broadcast(self, msg_type: str, data: dict):
+        """广播消息到 WebSocket 客户端"""
+        if self._ws_manager:
+            try:
+                await self._ws_manager.broadcast_issue({"type": msg_type, **data})
+            except Exception as e:
+                logger.warning(f"WebSocket 广播失败: {e}")
 
     def _create_agent(self, agent_type: str = "mock") -> BaseAgent:
         """根据配置创建 Agent"""
@@ -97,6 +106,9 @@ class ExecutorService:
             machine.retry(stage)  # REJECTED/ERROR → RUNNING
             logger.info(f"阶段 {stage.value} 从 {current_status.value} 转为 RUNNING")
 
+        # 广播状态更新（NEW → RUNNING 或 REJECTED/ERROR → RUNNING）
+        await self._broadcast("issue_updated", {"issue": self._issue_to_dict(issue)})
+
         # 准备上下文
         stage_state = issue.get_stage_state(stage)
         context_path = self.prepare_stage_context(project, str(issue.id), stage, stage_state.document)
@@ -126,10 +138,46 @@ class ExecutorService:
             machine.error(stage)  # RUNNING → ERROR
             logger.error(f"Agent 执行失败，阶段 {stage.value} 转为 ERROR: {result.error}")
 
+        # 广播状态更新
+        await self._broadcast("issue_updated", {"issue": self._issue_to_dict(issue)})
+
         return {
             "success": result.success,
             "output": result.output,
             "error": result.error,
+        }
+
+    def _issue_to_dict(self, issue: Issue) -> dict:
+        """将 Issue 序列化为字典"""
+        return {
+            "id": str(issue.id),
+            "title": issue.title,
+            "description": issue.description,
+            "status": issue.status.value,
+            "currentStage": issue.current_stage.value,
+            "createdAt": issue.created_at.isoformat(),
+            "archivedAt": issue.archived_at.isoformat() if issue.archived_at else None,
+            "discardedAt": issue.discarded_at.isoformat() if issue.discarded_at else None,
+            "stages": {
+                stage.value: {
+                    "stage": stage.value,
+                    "status": state.status.value,
+                    "document": state.document,
+                    "comments": [
+                        {
+                            "id": c.id,
+                            "stage": c.stage.value,
+                            "action": c.action,
+                            "content": c.content,
+                            "createdAt": c.created_at.isoformat(),
+                        }
+                        for c in state.comments
+                    ],
+                    "startedAt": state.started_at.isoformat() if state.started_at else None,
+                    "completedAt": state.completed_at.isoformat() if state.completed_at else None,
+                }
+                for stage, state in issue.stages.items()
+            },
         }
 
     def execute_stage_async(self, issue: Issue, stage: Stage) -> None:

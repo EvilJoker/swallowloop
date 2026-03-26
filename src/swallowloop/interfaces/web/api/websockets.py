@@ -26,12 +26,21 @@ class ConnectionManager:
                 pass
 
     async def broadcast(self, issue_id: str, message: str):
-        """广播消息到所有连接"""
+        """广播消息到指定 issue 的所有连接"""
         for connection in self.active_connections.get(issue_id, []):
             try:
                 await connection.send_text(message)
             except Exception:
                 pass
+
+    async def broadcast_issue(self, message: dict):
+        """广播 issue 更新到所有连接的客户端"""
+        for issue_connections in self.active_connections.values():
+            for connection in issue_connections:
+                try:
+                    await connection.send_json(message)
+                except Exception:
+                    pass
 
 
 # 全局连接管理器实例

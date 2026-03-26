@@ -11,6 +11,8 @@ import type { Issue } from '@/types';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { issueApi } from '@/lib/api';
+import { useIssueStore } from '@/store/issueStore';
+import { initIssueWebSocket } from '@/lib/wsClient';
 
 type Page = 'home' | 'overview' | 'archive' | 'settings';
 
@@ -25,21 +27,21 @@ function App() {
   const [currentPage, setCurrentPage] = useState<Page>('home');
   const [tabs, setTabs] = useState<Tab[]>([{ id: 'kanban', type: 'kanban', title: '泳道图' }]);
   const [activeTabId, setActiveTabId] = useState('kanban');
-  const [issues, setIssues] = useState<Issue[]>([]);
 
-  // 从 API 加载 Issues
-  const loadIssues = async () => {
-    try {
-      const data = await issueApi.getAll();
-      setIssues(data);
-    } catch (err) {
-      console.error('Failed to load issues:', err);
-    }
-  };
+  // 使用 Zustand store
+  const issues = useIssueStore((state) => state.issues);
+  const setIssues = useIssueStore((state) => state.setIssues);
+  const setLoading = useIssueStore((state) => state.setLoading);
 
+  // 初始化 WebSocket 和加载数据
   useEffect(() => {
-    loadIssues();
-  }, []);
+    initIssueWebSocket();
+    setLoading(true);
+    issueApi.getAll().then((data) => {
+      setIssues(data);
+      setLoading(false);
+    });
+  }, [setIssues, setLoading]);
 
   // 打开 Issue 详情 Tab
   const openIssueTab = (issue: Issue) => {
@@ -72,7 +74,7 @@ function App() {
   const refreshIssue = async (issueId: string) => {
     try {
       const updated = await issueApi.getById(issueId);
-      setIssues((prev) => prev.map((i) => (i.id === issueId ? updated : i)));
+      useIssueStore.getState().updateIssue(updated);
       // 同时更新 tab 中的 issue
       setTabs((prev) =>
         prev.map((t) => (t.issue?.id === issueId ? { ...t, issue: updated } : t))
@@ -84,7 +86,7 @@ function App() {
 
   // 新建 Issue 后的回调
   const handleIssueCreated = (issue: Issue) => {
-    setIssues((prev) => [...prev, issue]);
+    useIssueStore.getState().addIssue(issue);
   };
 
   // 渲染当前 Tab 内容
