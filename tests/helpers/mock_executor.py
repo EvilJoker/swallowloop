@@ -1,0 +1,54 @@
+"""测试辅助 - Mock Executor"""
+
+import random
+from swallowloop.domain.model import StageStatus
+from swallowloop.domain.statemachine import StageStateMachine
+
+
+class MockExecutor:
+    """模拟 Executor - 正确模拟状态转换"""
+
+    def __init__(self, repository=None, fail_probability: float = 0.0):
+        self._repo = repository
+        self.called = []
+        self.fail_probability = fail_probability
+
+    def execute_stage(self, issue, stage):
+        self.called.append((str(issue.id), stage))
+        return {"status": "success", "output": "mock output"}
+
+    async def execute_stage_async(self, issue, stage):
+        self.called.append((str(issue.id), stage))
+
+    async def execute_stage(self, issue, stage):
+        """异步版本 - 正确模拟状态转换"""
+        self.called.append((str(issue.id), stage))
+
+        if self._repo is None:
+            return {"status": "success", "output": "mock output", "success": True, "error": None}
+
+        machine = StageStateMachine(issue, self._repo)
+        state = issue.get_stage_state(stage)
+        current_status = state.status
+
+        if current_status == StageStatus.NEW:
+            machine.start(stage)
+        elif current_status in [StageStatus.REJECTED, StageStatus.ERROR]:
+            machine.retry(stage)
+
+        import asyncio
+        await asyncio.sleep(0.01)
+
+        success = random.random() > self.fail_probability
+
+        if success:
+            machine.execute(stage)
+        else:
+            machine.error(stage)
+
+        return {
+            "status": "success" if success else "error",
+            "output": "mock output" if success else "mock error",
+            "success": success,
+            "error": None if success else "mock execution failed",
+        }
