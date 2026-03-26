@@ -161,9 +161,7 @@ async def create_issue(self, title: str, description: str) -> Issue:
 
 ## 10. 依赖
 
-```
-transitions>=0.9.0
-```
+无外部依赖，使用 Python 标准库实现。
 
 ## 11. 实施步骤
 
