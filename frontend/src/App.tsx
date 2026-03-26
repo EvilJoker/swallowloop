@@ -32,6 +32,25 @@ function App() {
   const issues = useIssueStore((state) => state.issues);
   const setIssues = useIssueStore((state) => state.setIssues);
   const setLoading = useIssueStore((state) => state.setLoading);
+  const setBackendConnected = useIssueStore((state) => state.setBackendConnected);
+
+  // 心跳检查后端状态（每15秒）
+  useEffect(() => {
+    const checkBackend = async () => {
+      try {
+        const res = await fetch('/health');
+        setBackendConnected(res.ok);
+      } catch {
+        setBackendConnected(false);
+      }
+    };
+
+    // 立即检查一次
+    checkBackend();
+    // 每15秒检查一次
+    const interval = setInterval(checkBackend, 15000);
+    return () => clearInterval(interval);
+  }, [setBackendConnected]);
 
   // 初始化 WebSocket 和加载数据
   useEffect(() => {
