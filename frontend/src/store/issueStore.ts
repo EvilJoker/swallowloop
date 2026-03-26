@@ -13,6 +13,7 @@ interface IssueStore {
   setIssues: (issues: Issue[]) => void;
   updateIssue: (issue: Issue) => void;
   addIssue: (issue: Issue) => void;
+  removeIssue: (issueId: string) => void;
   setLoading: (loading: boolean) => void;
   setConnected: (connected: boolean) => void;
   setBackendConnected: (connected: boolean) => void;
@@ -38,6 +39,10 @@ export const useIssueStore = create<IssueStore>((set) => ({
       }
       return { issues: [...state.issues, issue] };
     }),
+  removeIssue: (issueId) =>
+    set((state) => ({
+      issues: state.issues.filter((i) => i.id !== issueId),
+    })),
   setLoading: (loading) => set({ loading }),
   setConnected: (connected) => set({ connected }),
   setBackendConnected: (backendConnected) => set({ backendConnected }),

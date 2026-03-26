@@ -108,10 +108,10 @@ async def update_issue(issue_id: str, request: IssueUpdate):
 
 @router.delete("/issues/{issue_id}")
 async def delete_issue(issue_id: str):
-    """删除 Issue"""
+    """删除 Issue（硬删除）"""
     if _issue_service is None:
         init_services()
-    success = _issue_service.delete_issue(issue_id)
+    success = await _issue_service.delete_issue(issue_id)
     if not success:
         raise HTTPException(status_code=404, detail="Issue not found")
     return None
@@ -137,7 +137,7 @@ async def reject_stage(issue_id: str, stage: str, request: Request):
         init_services()
     body = await request.json()
     reason = body.get("reason", "")
-    issue = _issue_service.reject_stage(issue_id, Stage(stage), reason)
+    issue = await _issue_service.reject_stage(issue_id, Stage(stage), reason)
     if not issue:
         raise HTTPException(status_code=404, detail="Issue not found")
     return {"issue": _issue_to_dict(issue)}

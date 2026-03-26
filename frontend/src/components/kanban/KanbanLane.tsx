@@ -5,10 +5,11 @@ import { IssueCard } from './IssueCard';
 interface KanbanLaneProps {
   issues: Issue[];
   onIssueClick?: (issue: Issue) => void;
+  onIssueDelete?: (issue: Issue) => void;
   className?: string;
 }
 
-export function KanbanLane({ issues, onIssueClick, className }: KanbanLaneProps) {
+export function KanbanLane({ issues, onIssueClick, onIssueDelete, className }: KanbanLaneProps) {
   return (
     <div className={cn('flex flex-col min-w-[200px] w-[200px]', className)}>
       {/* 卡片列表 */}
@@ -18,6 +19,7 @@ export function KanbanLane({ issues, onIssueClick, className }: KanbanLaneProps)
             key={issue.id}
             issue={issue}
             onClick={() => onIssueClick?.(issue)}
+            onDelete={onIssueDelete}
           />
         ))}
 

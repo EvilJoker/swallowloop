@@ -47,6 +47,6 @@ class TestServiceWithRepository:
         issue = await service.create_issue("测试", "描述")
         issue_id = str(issue.id)
 
-        service.delete_issue(issue_id)
+        await service.delete_issue(issue_id)
 
         assert repo.get(issue.id) is None

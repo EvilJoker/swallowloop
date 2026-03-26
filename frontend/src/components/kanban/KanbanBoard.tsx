@@ -1,19 +1,59 @@
 import { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, AlertTriangle } from 'lucide-react';
 import type { Issue, Stage } from '@/types';
 import { STAGES } from '@/types';
 import { KanbanLane } from './KanbanLane';
 import { NewIssueDialog } from '@/components/issue/NewIssueDialog';
+import { issueApi } from '@/lib/api';
 
 interface KanbanBoardProps {
   issues: Issue[];
   onIssueClick?: (issue: Issue) => void;
   onIssueCreated?: (issue: Issue) => void;
+  onIssueDeleted?: () => void;
   className?: string;
 }
 
-export function KanbanBoard({ issues, onIssueClick, onIssueCreated, className }: KanbanBoardProps) {
+function DeleteConfirmDialog({
+  issueTitle,
+  onConfirm,
+  onCancel,
+}: {
+  issueTitle: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200">
+      <div className="bg-white rounded-xl p-6 shadow-xl max-w-sm w-full mx-4">
+        <div className="flex items-center gap-3 text-red-600 mb-3">
+          <AlertTriangle className="h-6 w-6" />
+          <span className="font-semibold text-lg">确认删除</span>
+        </div>
+        <p className="text-slate-600 mb-5">确定删除「{issueTitle}」？此操作不可撤销。</p>
+        <div className="flex gap-3 justify-end">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 text-sm text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+          >
+            取消
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-4 py-2 text-sm text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+          >
+            删除
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function KanbanBoard({ issues, onIssueClick, onIssueCreated, onIssueDeleted, className }: KanbanBoardProps) {
   const [showNewDialog, setShowNewDialog] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Issue | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // 按阶段分组
   const issuesByStage = STAGES.reduce<Record<Stage, Issue[]>>((acc, stage) => {
@@ -26,6 +66,25 @@ export function KanbanBoard({ issues, onIssueClick, onIssueCreated, className }:
   const handleIssueCreated = (issue: Issue) => {
     onIssueCreated?.(issue);
     setShowNewDialog(false);
+  };
+
+  const handleDelete = (issue: Issue) => {
+    setDeleteTarget(issue);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      await issueApi.delete(deleteTarget.id);
+      setDeleteTarget(null);
+      // 通知父组件刷新数据
+      onIssueDeleted?.();
+    } catch (err) {
+      console.error('删除失败:', err);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   return (
@@ -66,6 +125,7 @@ export function KanbanBoard({ issues, onIssueClick, onIssueCreated, className }:
             key={stage.key}
             issues={issuesByStage[stage.key]}
             onIssueClick={onIssueClick}
+            onIssueDelete={handleDelete}
             className="border-r border-slate-100 last:border-r-0"
           />
         ))}
@@ -77,6 +137,22 @@ export function KanbanBoard({ issues, onIssueClick, onIssueCreated, className }:
           onClose={() => setShowNewDialog(false)}
           onCreated={handleIssueCreated}
         />
+      )}
+
+      {/* 删除确认对话框 */}
+      {deleteTarget && !isDeleting && (
+        <DeleteConfirmDialog
+          issueTitle={deleteTarget.title}
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
+
+      {/* 删除中状态 */}
+      {isDeleting && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="text-white text-lg">删除中...</div>
+        </div>
       )}
     </div>
   );

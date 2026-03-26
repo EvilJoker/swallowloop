@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Github, Database, Bell, Check, Cpu, Plus, Trash2, Radio, AlertCircle, Info, X } from 'lucide-react';
+import { Github, Database, Bell, Check, Cpu, Radio, AlertCircle, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { settingsApi, type Settings, type SettingsUpdate } from '@/lib/api';
 

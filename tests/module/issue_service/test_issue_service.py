@@ -69,7 +69,7 @@ class TestIssueService:
         repo.save(issue)
 
         # 打回
-        updated = service.reject_stage(issue_id, Stage.BRAINSTORM, "方案不够详细")
+        updated = await service.reject_stage(issue_id, Stage.BRAINSTORM, "方案不够详细")
 
         assert updated.get_stage_state(Stage.BRAINSTORM).status == StageStatus.REJECTED
         comments = updated.get_stage_state(Stage.BRAINSTORM).comments
@@ -105,6 +105,6 @@ class TestIssueService:
 
         assert len(repo.list_all()) == 1
 
-        success = service.delete_issue(issue_id)
+        success = await service.delete_issue(issue_id)
         assert success is True
         assert len(repo.list_all()) == 0

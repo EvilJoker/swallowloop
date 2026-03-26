@@ -54,8 +54,15 @@ export function Home() {
     console.log('Trigger AI update for:', selectedIssue.id);
   };
 
-  const handleIssueCreated = (issue: Issue) => {
+  const handleIssueCreated = (_issue: Issue) => {
     // WebSocket 会自动更新，不需要手动处理
+  };
+
+  const handleIssueDeleted = () => {
+    // 删除成功后重新加载数据
+    issueApi.getAll().then((data) => {
+      setIssues(data);
+    });
   };
 
   if (loading) {
@@ -74,6 +81,7 @@ export function Home() {
           issues={issues}
           onIssueClick={handleIssueClick}
           onIssueCreated={handleIssueCreated}
+          onIssueDeleted={handleIssueDeleted}
           className="h-full"
         />
       </div>

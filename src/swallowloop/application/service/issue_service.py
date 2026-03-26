@@ -173,9 +173,16 @@ class IssueService:
         """废弃 Issue"""
         return self.update_issue(issue_id, status="discarded")
 
-    def delete_issue(self, issue_id: str) -> bool:
-        """删除 Issue"""
-        return self._repo.delete(IssueId(issue_id))
+    async def delete_issue(self, issue_id: str) -> bool:
+        """删除 Issue（硬删除）"""
+        issue_id_obj = IssueId(issue_id)
+        # 硬删除：直接从仓库移除
+        success = self._repo.delete(issue_id_obj)
+        if success:
+            logger.info(f"删除 Issue: {issue_id}")
+            # 广播删除事件
+            await self._broadcast("issue_deleted", {"issue_id": issue_id})
+        return success
 
     async def _advance_and_trigger(self, issue: Issue, current_stage: Stage) -> None:
         """进入下一阶段（不触发 AI，等待用户触发）"""

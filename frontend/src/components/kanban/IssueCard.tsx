@@ -1,9 +1,11 @@
+import { Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Issue, StageStatus } from '@/types';
 
 interface IssueCardProps {
   issue: Issue;
   onClick?: () => void;
+  onDelete?: (issue: Issue) => void;
   className?: string;
 }
 
@@ -46,46 +48,59 @@ const STATUS_CONFIG: Record<StageStatus, { label: string; dot: string; badge: st
   },
 };
 
-export function IssueCard({ issue, onClick, className }: IssueCardProps) {
+export function IssueCard({ issue, onClick, onDelete, className }: IssueCardProps) {
   const currentStageState = issue.stages[issue.currentStage];
   const config = STATUS_CONFIG[currentStageState.status];
   const issueNumber = issue.id.replace('issue-', '');
 
   return (
-    <button
-      onClick={onClick}
-      className={cn(
-        'w-full p-3 bg-white rounded-xl border border-slate-200 border-l-4 shadow-sm text-left',
-        'hover:shadow-md hover:border-slate-300 hover:-translate-y-0.5 transition-all cursor-pointer',
-        config.border,
-        className
-      )}
-    >
-      {/* Issue ID 标签 */}
-      <div className="flex items-center gap-2 mb-2">
-        <span className="inline-flex items-center px-2 py-0.5 bg-blue-50 text-blue-600 text-xs font-medium rounded-full">
-          #{issueNumber}
-        </span>
-      </div>
-
-      <h4 className="font-medium text-slate-800 text-sm mb-2 line-clamp-2 leading-snug">
-        {issue.title}
-      </h4>
-
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-xs text-slate-400">
-          {issue.createdAt.toLocaleDateString('zh-CN')}
-        </span>
-        <span
-          className={cn(
-            'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border',
-            config.badge
-          )}
+    <div className={cn('relative group', className)}>
+      <button
+        onClick={onClick}
+        className={cn(
+          'w-full p-3 bg-white rounded-xl border border-slate-200 border-l-4 shadow-sm text-left',
+          'hover:shadow-md hover:border-slate-300 hover:-translate-y-0.5 transition-all cursor-pointer',
+          config.border
+        )}
+      >
+        {/* 右上角删除按钮 */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete?.(issue);
+          }}
+          className="absolute top-2 right-2 p-1 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors opacity-0 group-hover:opacity-100"
+          title="删除"
         >
-          <span className={cn('w-1.5 h-1.5 rounded-full', config.dot)} />
-          {config.label}
-        </span>
-      </div>
-    </button>
+          <Trash2 className="h-3 w-3" />
+        </button>
+
+        {/* Issue ID 标签 */}
+        <div className="flex items-center gap-2 mb-2">
+          <span className="inline-flex items-center px-2 py-0.5 bg-blue-50 text-blue-600 text-xs font-medium rounded-full">
+            #{issueNumber}
+          </span>
+        </div>
+
+        <h4 className="font-medium text-slate-800 text-sm mb-2 line-clamp-2 leading-snug">
+          {issue.title}
+        </h4>
+
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs text-slate-400">
+            {issue.createdAt.toLocaleDateString('zh-CN')}
+          </span>
+          <span
+            className={cn(
+              'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border',
+              config.badge
+            )}
+          >
+            <span className={cn('w-1.5 h-1.5 rounded-full', config.dot)} />
+            {config.label}
+          </span>
+        </div>
+      </button>
+    </div>
   );
 }

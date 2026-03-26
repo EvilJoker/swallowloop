@@ -29,7 +29,11 @@ async function handleResponse<T>(response: Response): Promise<T> {
   if (response.status === 204) {
     return undefined as T;
   }
-  const data = await response.json();
+  const text = await response.text();
+  if (!text) {
+    return undefined as T;
+  }
+  const data = JSON.parse(text);
   // 后端 API 返回格式可能是 {"issues": [...]}（列表）或 {"issue": {...}}（单个）
   if (data && typeof data === 'object') {
     if ('issues' in data && Array.isArray(data.issues)) {
