@@ -1,0 +1,5 @@
+[submodule "vendor/deer-flow"]
+	path = vendor/deer-flow
+	url = https://github.com/bytedance/deer-flow.git
+	branch = main
+	# 绑定 commit: a4e4bb21e3f0843a1de2e03ea00864379fa6bb8a
