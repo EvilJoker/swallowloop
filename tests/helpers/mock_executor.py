@@ -17,6 +17,10 @@ class MockExecutor:
         self.called.append((str(issue.id), stage))
         return {"status": "success", "output": "mock output"}
 
+    async def prepare_workspace(self, issue, stage) -> bool:
+        """模拟 prepare_workspace - 始终返回成功"""
+        return True
+
     async def execute_stage_async(self, issue, stage):
         self.called.append((str(issue.id), stage))
 

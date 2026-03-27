@@ -59,9 +59,10 @@ class StageLoop:
         for issue, stage in all_triggerable:
             can_trigger, reason = self._can_trigger(issue, stage)
             if can_trigger:
-                # 1. 先准备 workspace
+                # 1. 先准备 workspace (async)
                 logger.info(f"准备 workspace: {issue.id}/{stage.value}")
-                if not self._executor.prepare_workspace(issue, stage):
+                import asyncio
+                if not asyncio.run(self._executor.prepare_workspace(issue, stage)):
                     logger.error(f"workspace 准备失败，跳过: {issue.id}/{stage.value}")
                     continue
 

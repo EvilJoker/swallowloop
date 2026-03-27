@@ -181,6 +181,14 @@ def _issue_to_dict(issue) -> dict:
         "createdAt": issue.created_at.isoformat(),
         "archivedAt": issue.archived_at.isoformat() if issue.archived_at else None,
         "discardedAt": issue.discarded_at.isoformat() if issue.discarded_at else None,
+        "workspace": {
+            "id": issue.workspace.id if issue.workspace else None,
+            "ready": issue.workspace.ready if issue.workspace else False,
+            "workspace_path": issue.workspace.workspace_path if issue.workspace else "",
+            "repo_url": issue.workspace.repo_url if issue.workspace else "",
+            "branch": issue.workspace.branch if issue.workspace else "",
+        } if issue.workspace else None,
+        "repo_url": issue.repo_url,
         "stages": {
             stage.value: _stage_to_dict(stage.value, state)
             for stage, state in issue.stages.items()

@@ -88,17 +88,16 @@ class ExecutorService:
 
         return context_path
 
-    def prepare_workspace(self, issue: Issue, stage: Stage) -> bool:
+    async def prepare_workspace(self, issue: Issue, stage: Stage) -> bool:
         """准备工作空间（在 submit 之前调用）
 
         1. 调用 agent.prepare() 创建 workspace
         2. 创建 stages/{stage}/ 目录
+        3. 保存 issue 到仓库（让 worker 能看到 workspace）
 
         Returns:
             True if success, False otherwise
         """
-        import asyncio
-
         project = "default"
         stage_state = issue.get_stage_state(stage)
 
@@ -110,7 +109,7 @@ class ExecutorService:
                 "stage": stage.value,
             }
             try:
-                workspace_info = asyncio.run(self._agent.prepare(str(issue.id), context))
+                workspace_info = await self._agent.prepare(str(issue.id), context)
                 issue.workspace = workspace_info
             except Exception as e:
                 logger.error(f"agent.prepare() 失败: {e}")
@@ -125,6 +124,9 @@ class ExecutorService:
         except Exception as e:
             logger.error(f"prepare_stage_context() 失败: {e}")
             return False
+
+        # 3. 保存 issue（workspace 已设置）
+        self._repo.save(issue)
 
         logger.info(f"工作空间准备完成: {issue.id}/{stage.value}")
         return True
