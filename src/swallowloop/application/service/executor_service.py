@@ -104,7 +104,7 @@ class ExecutorService:
         # 1. 调用 agent.prepare() 准备工作空间
         if self._agent:
             context = {
-                "repo_url": issue.repo_url or (self._settings.github_repo if self._settings else ""),
+                "repo_url": issue.repo_url or "",
                 "branch": str(issue.id),
                 "stage": stage.value,
             }
