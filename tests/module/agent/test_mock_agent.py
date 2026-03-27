@@ -70,8 +70,8 @@ class TestMockAgent:
         assert workspace_info.id == "test-issue-123"
         assert workspace_info.repo_url == "https://github.com/test/repo"
         assert workspace_info.branch == "test-issue-123"
-        assert "workspace" in workspace_info.workspace_path
-        assert workspace_info.workspace_path.endswith("test-issue-123/workspace")
+        assert "stages" in workspace_info.workspace_path
+        assert workspace_info.workspace_path.endswith("test-issue-123/stages")
 
     @pytest.mark.asyncio
     async def test_mock_agent_prepare_workspace_created(self):

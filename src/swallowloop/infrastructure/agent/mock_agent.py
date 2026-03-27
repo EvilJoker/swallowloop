@@ -33,6 +33,8 @@ class MockAgent(BaseAgent):
         """
         MockAgent 准备：在本地创建工作空间
 
+        与 ExecutorService.get_workspace_dir() 保持一致，使用 stages/ 目录结构。
+
         Args:
             issue_id: Issue ID
             context: 上下文信息（包含 repo_url、branch、stage 等）
@@ -40,7 +42,7 @@ class MockAgent(BaseAgent):
         Returns:
             Workspace: 工作空间信息
         """
-        workspace_path = Path.home() / ".swallowloop" / "default" / str(issue_id) / "workspace"
+        workspace_path = Path.home() / ".swallowloop" / "default" / str(issue_id) / "stages"
         workspace_path.mkdir(parents=True, exist_ok=True)
 
         logger.info(f"MockAgent 准备工作空间: {workspace_path}")
