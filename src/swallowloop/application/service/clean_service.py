@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING
 
 import httpx
 
+from ...domain.model import IssueStatus
+
 if TYPE_CHECKING:
     from ...domain.repository import IssueRepository
     from ...domain.model import Issue
@@ -65,7 +67,7 @@ class CleanService:
     def _should_cleanup(self, issue: "Issue") -> bool:
         """判断 Issue 是否应该清理"""
         # 必须已结束
-        if issue.status.value not in ["archived", "discarded"]:
+        if issue.status not in [IssueStatus.ARCHIVED, IssueStatus.DISCARDED]:
             return False
 
         # 已清理过
@@ -75,7 +77,7 @@ class CleanService:
         # 清理间隔检查
         if issue.cleaned_at:
             time_since_cleanup = datetime.now() - issue.cleaned_at
-            if time_since_cleanup < timedelta(hours=1):
+            if time_since_cleanup < self._interval:
                 return False
 
         return True
@@ -90,7 +92,7 @@ class CleanService:
 
         # 1. 调用 DeerFlow API 清理 Thread
         try:
-            response = await self._client.delete(f"{self._base_url}/api/threads/{thread_id}")
+            response = await self._client.delete(f"{self._base_url}/api/langgraph/threads/{thread_id}")
             if response.status_code in [200, 204]:
                 logger.info(f"DeerFlow Thread 清理成功: {thread_id}")
             else:

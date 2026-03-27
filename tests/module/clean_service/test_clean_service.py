@@ -199,7 +199,7 @@ class TestCleanService:
                 await service._cleanup_issue(issue)
 
                 # 验证调用了 DELETE API
-                mock_delete.assert_called_once_with("http://localhost:2026/api/threads/test-api-call")
+                mock_delete.assert_called_once_with("http://localhost:2026/api/langgraph/threads/test-api-call")
 
                 # 验证标记为已清理
                 assert issue.cleaned is True

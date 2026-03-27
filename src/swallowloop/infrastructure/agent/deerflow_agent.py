@@ -130,7 +130,7 @@ class DeerFlowAgent(BaseAgent):
             thread_id: Thread ID
         """
         try:
-            await self._client.delete(f"{self._base_url}/api/threads/{thread_id}")
+            await self._client.delete(f"{self._base_url}/api/langgraph/threads/{thread_id}")
             logger.info(f"DeerFlow Thread 清理成功: {thread_id}")
         except Exception as e:
             logger.warning(f"DeerFlow Thread 清理失败: {e}")

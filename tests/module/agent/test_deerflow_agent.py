@@ -135,7 +135,7 @@ class TestDeerFlowAgent:
 
                 await agent.cleanup("issue-123")
 
-                mock_delete.assert_called_once_with("http://localhost:2026/api/threads/issue-123")
+                mock_delete.assert_called_once_with("http://localhost:2026/api/langgraph/threads/issue-123")
 
     @pytest.mark.asyncio
     async def test_deerflow_agent_workspace_path_format(self):

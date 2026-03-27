@@ -82,6 +82,14 @@ class IssueService:
             "createdAt": issue.created_at.isoformat(),
             "archivedAt": issue.archived_at.isoformat() if issue.archived_at else None,
             "discardedAt": issue.discarded_at.isoformat() if issue.discarded_at else None,
+            "workspace": {
+                "id": issue.workspace.id if issue.workspace else None,
+                "ready": issue.workspace.ready if issue.workspace else False,
+                "workspace_path": issue.workspace.workspace_path if issue.workspace else "",
+                "repo_url": issue.workspace.repo_url if issue.workspace else "",
+                "branch": issue.workspace.branch if issue.workspace else "",
+            } if issue.workspace else None,
+            "repo_url": issue.repo_url,
             "stages": {
                 stage.value: {
                     "stage": stage.value,
@@ -249,16 +257,3 @@ class IssueService:
             # 广播删除事件
             await self._broadcast("issue_deleted", {"issue_id": issue_id})
         return success
-
-    async def _advance_and_trigger(self, issue: Issue, current_stage: Stage) -> None:
-        """进入下一阶段（不触发 AI，等待用户触发）"""
-        # 计算下一阶段
-        stages = list(Stage)
-        current_idx = stages.index(current_stage)
-
-        # 如果不是最后一个阶段
-        if current_idx < len(stages) - 1:
-            next_stage = stages[current_idx + 1]
-            issue.create_stage(next_stage)  # 设为 NEW，不自动触发 AI
-            self._repo.save(issue)
-            logger.info(f"Issue {issue.id} 进入阶段: {next_stage.value}，等待触发")
