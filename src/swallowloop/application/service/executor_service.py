@@ -88,8 +88,49 @@ class ExecutorService:
 
         return context_path
 
+    def prepare_workspace(self, issue: Issue, stage: Stage) -> bool:
+        """准备工作空间（在 submit 之前调用）
+
+        1. 调用 agent.prepare() 创建 workspace
+        2. 创建 stages/{stage}/ 目录
+
+        Returns:
+            True if success, False otherwise
+        """
+        import asyncio
+
+        project = "default"
+        stage_state = issue.get_stage_state(stage)
+
+        # 1. 调用 agent.prepare() 准备工作空间
+        if self._agent:
+            context = {
+                "repo_url": issue.repo_url or (self._settings.github_repo if self._settings else ""),
+                "branch": str(issue.id),
+                "stage": stage.value,
+            }
+            try:
+                workspace_info = asyncio.run(self._agent.prepare(str(issue.id), context))
+                issue.workspace = workspace_info
+            except Exception as e:
+                logger.error(f"agent.prepare() 失败: {e}")
+                return False
+
+        # 2. 创建 stages/{stage}/ 目录
+        try:
+            context_path = self.prepare_stage_context(project, str(issue.id), stage, stage_state.document)
+            if not context_path.parent.exists():
+                logger.error(f"工作空间目录创建失败: {context_path.parent}")
+                return False
+        except Exception as e:
+            logger.error(f"prepare_stage_context() 失败: {e}")
+            return False
+
+        logger.info(f"工作空间准备完成: {issue.id}/{stage.value}")
+        return True
+
     async def execute_stage(self, issue: Issue, stage: Stage) -> dict:
-        """异步执行阶段
+        """异步执行阶段（假设 workspace 已通过 prepare_workspace 创建）
 
         状态转换:
         - NEW → RUNNING (start)
@@ -98,9 +139,10 @@ class ExecutorService:
         """
         project = "default"
         machine = self._get_machine(issue)
+        stage_state = issue.get_stage_state(stage)
+        current_status = stage_state.status
 
-        # 根据当前状态决定转换方式
-        current_status = issue.get_stage_state(stage).status
+        # 1. 状态转换 NEW/REJECTED/ERROR → RUNNING
         if current_status == StageStatus.NEW:
             machine.start(stage)  # NEW → RUNNING
             logger.info(f"阶段 {stage.value} 从 NEW 转为 RUNNING")
@@ -108,21 +150,21 @@ class ExecutorService:
             machine.retry(stage)  # REJECTED/ERROR → RUNNING
             logger.info(f"阶段 {stage.value} 从 {current_status.value} 转为 RUNNING")
 
-        # 广播状态更新（NEW → RUNNING 或 REJECTED/ERROR → RUNNING）
+        # 2. 广播状态更新
         await self._broadcast("issue_updated", {"issue": self._issue_to_dict(issue)})
 
-        # 准备上下文
-        stage_state = issue.get_stage_state(stage)
-        context_path = self.prepare_stage_context(project, str(issue.id), stage, stage_state.document)
+        # 3. 调用 Agent 执行
+        # context_path 从已创建的 workspace 获取
+        workspace_path = Path(issue.workspace.workspace_path) if issue.workspace else None
+        context_path = workspace_path / stage.value / "context.md" if workspace_path else None
 
-        # 调用 Agent 执行
         context = {
             "issue_id": str(issue.id),
             "title": issue.title,
             "description": issue.description,
             "stage": stage.value,
             "document": stage_state.document,
-            "context_path": str(context_path),
+            "context_path": str(context_path) if context_path else None,
             "thread_id": issue.workspace.id if issue.workspace else None,
             "workspace_path": issue.workspace.workspace_path if issue.workspace else None,
         }

@@ -7,6 +7,7 @@ if TYPE_CHECKING:
     from ...domain.model import Stage, StageStatus
     from ...domain.repository import IssueRepository
     from ...infrastructure.executor.worker_pool import ExecutorWorkerPool
+    from .executor_service import ExecutorService
 
 logger = logging.getLogger(__name__)
 
@@ -18,10 +19,12 @@ class StageLoop:
         self,
         repository: "IssueRepository",
         worker_pool: "ExecutorWorkerPool",
+        executor: "ExecutorService",
         interval: int = 5,
     ):
         self._repo = repository
         self._worker_pool = worker_pool
+        self._executor = executor
         self._interval = interval
 
     def start(self) -> None:
@@ -56,6 +59,13 @@ class StageLoop:
         for issue, stage in all_triggerable:
             can_trigger, reason = self._can_trigger(issue, stage)
             if can_trigger:
+                # 1. 先准备 workspace
+                logger.info(f"准备 workspace: {issue.id}/{stage.value}")
+                if not self._executor.prepare_workspace(issue, stage):
+                    logger.error(f"workspace 准备失败，跳过: {issue.id}/{stage.value}")
+                    continue
+
+                # 2. 提交到 worker pool
                 logger.info(f"触发 AI 执行: {issue.id}/{stage.value}")
                 submitted = self._worker_pool.submit(str(issue.id), stage)
                 if not submitted:

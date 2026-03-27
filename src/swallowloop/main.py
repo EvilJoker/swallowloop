@@ -75,6 +75,7 @@ def main(port: int = 9500):
     stage_loop = StageLoop(
         repository=repository,
         worker_pool=worker_pool,
+        executor=executor,
         interval=5,  # 5 秒一次
     )
 
