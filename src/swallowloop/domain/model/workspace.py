@@ -1,33 +1,18 @@
-"""工作空间实体"""
+"""Workspace 领域模型"""
 
 from dataclasses import dataclass, field
-from datetime import datetime
-from pathlib import Path
 
 
 @dataclass
 class Workspace:
     """
-    工作空间实体
-    
-    表示一个代码工作空间，包含本地路径和关联信息
+    Workspace information for DeerFlow integration
+
+    Used for managing the DeerFlow Thread workspace corresponding to an Issue
     """
-    id: str                              # 工作空间ID: issue{number}_{repo}_{date}
-    issue_number: int                    # 关联的 Issue
-    branch_name: str                     # 分支名
-    path: Path                           # 本地路径
-    pr_number: int | None = None         # PR 编号
-    
-    created_at: datetime = field(default_factory=datetime.now)
-    
-    def is_active(self) -> bool:
-        """检查工作空间是否仍然活跃"""
-        return self.path.exists()
-    
-    def __hash__(self):
-        return hash(self.id)
-    
-    def __eq__(self, other):
-        if not isinstance(other, Workspace):
-            return False
-        return self.id == other.id
+    id: str = ""  # = issue_id = thread_id
+    ready: bool = False  # Whether workspace is ready
+    workspace_path: str = ""  # Workspace path (host absolute path)
+    repo_url: str = ""  # Repository URL
+    branch: str = ""  # Branch name
+    metadata: dict = field(default_factory=dict)  # Extra metadata

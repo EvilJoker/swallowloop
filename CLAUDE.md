@@ -94,10 +94,10 @@ new → assigned → pending → in_progress → submitted → completed
 ## Agent 系统
 
 两种 Agent 类型，通过 `AGENT_TYPE` 配置：
-- `iflow`: 使用 iflow-cli-sdk
-- `aider`: 使用 aider-chat
+- `mock`: 模拟 Agent（用于测试环境，固定延迟 5 秒）
+- `deerflow`: 使用 DeerFlow 2.0（通过 HTTP API 与 DeerFlow 通信）
 
-Agent 负责在 Workspace 中执行代码任务，通过 `agent.execute(task, workspace_path)` 调用。
+DeerFlow Agent 通过 HTTP API 与独立部署的 DeerFlow 通信，每个 Issue 对应一个 Thread。
 
 ## 多仓库支持
 

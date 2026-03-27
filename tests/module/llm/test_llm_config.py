@@ -8,10 +8,9 @@ class TestLLMConfig:
     """LLMConfig 功能测试"""
 
     def test_default_config(self):
-        """默认配置"""
+        """默认配置使用 OpenAI"""
         config = LLMConfig.default()
-        assert config.provider == LLMProvider.IDEFAULT
-        assert config.is_default is True
+        assert config.provider == LLMProvider.OPENAI
 
     def test_minimax_config(self):
         """Minimax 配置"""
@@ -51,40 +50,26 @@ class TestLLMConfig:
 
     def test_is_default(self):
         """is_default 属性"""
+        # 默认配置不再是 is_default（总是返回 False）
         default_config = LLMConfig.default()
-        assert default_config.is_default is True
+        assert default_config.is_default is False
 
         minimax_config = LLMConfig.minimax(api_key="key")
         assert minimax_config.is_default is False
 
-    def test_to_iflow_auth_info_default(self):
-        """默认配置的 iFlow 认证信息"""
-        config = LLMConfig.default()
-        assert config.to_iflow_auth_info() is None
-
-    def test_to_iflow_auth_info_with_credentials(self):
-        """有凭证时的 iFlow 认证信息"""
+    def test_to_llm_auth_info(self):
+        """获取 LLM 认证信息"""
         config = LLMConfig(
             provider=LLMProvider.OPENAI,
             api_key="sk-test",
             base_url="https://api.openai.com/v1",
             model_name="gpt-4o",
         )
-        auth_info = config.to_iflow_auth_info()
+        auth_info = config.to_llm_auth_info()
         assert auth_info is not None
         assert auth_info["apiKey"] == "sk-test"
         assert auth_info["baseUrl"] == "https://api.openai.com/v1"
         assert auth_info["modelName"] == "gpt-4o"
-
-    def test_iflow_auth_method_id_default(self):
-        """默认配置的认证方式"""
-        config = LLMConfig.default()
-        assert config.iflow_auth_method_id is None
-
-    def test_iflow_auth_method_id_custom(self):
-        """自定义配置的认证方式"""
-        config = LLMConfig.openai(api_key="sk-test")
-        assert config.iflow_auth_method_id == "openai-compatible"
 
     def test_repr_masks_api_key(self):
         """repr 隐藏 API key"""

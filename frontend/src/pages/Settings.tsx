@@ -52,19 +52,11 @@ function ProjectSettings({ settings, onChange }: { settings: Settings; onChange:
     <div className="space-y-5">
       <InputField
         label="GitHub 仓库"
-        value={settings.github_repo}
-        onChange={(v) => onChange({ github_repo: v })}
-        placeholder="owner/repo"
-        disabled={settings.env_overrides.github_repo}
-      />
-      <InputField
-        label="GitHub Token"
-        value={settings.github_token}
-        onChange={(v) => onChange({ github_token: v })}
-        placeholder="ghp_xxx"
-        type="password"
-        disabled={settings.env_overrides.github_token}
-        hint="用于访问 GitHub API 的 Personal Access Token"
+        value={settings.github_repos.join(', ')}
+        onChange={(v) => onChange({ github_repos: v.split(',').map(r => r.trim()).filter(r => r) })}
+        placeholder="owner/repo, owner/repo2"
+        disabled={settings.env_overrides.github_repos}
+        hint="多个仓库用逗号分隔"
       />
       <InputField
         label="Issue 标签"
@@ -126,7 +118,7 @@ function AISettings({ settings, onChange }: { settings: Settings; onChange: (upd
           )}
         >
           <option value="mock">Mock（模拟模式，延迟 5 秒）</option>
-          <option value="iflow">iFlow（使用 iFlow CLI）</option>
+          <option value="deerflow">DeerFlow（使用 DeerFlow 2.0）</option>
         </select>
       </div>
     </div>

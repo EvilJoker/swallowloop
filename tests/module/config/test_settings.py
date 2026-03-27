@@ -14,11 +14,11 @@ class TestSettings:
     def test_default_values(self):
         """测试默认值"""
         settings = Settings(
-            github_token="test-token",
             github_repo="owner/repo",
+            github_repos=["owner/repo1", "owner/repo2"],
         )
-        assert settings.github_token == "test-token"
         assert settings.github_repo == "owner/repo"
+        assert settings.github_repos == ["owner/repo1", "owner/repo2"]
         assert settings.max_workers == 5
         assert settings.agent_timeout == 1200
         assert settings.poll_interval == 60
@@ -32,8 +32,8 @@ class TestSettings:
     def test_custom_values(self):
         """测试自定义值"""
         settings = Settings(
-            github_token="token",
             github_repo="a/b",
+            github_repos=["a/b"],
             max_workers=10,
             agent_timeout=600,
             web_port=9000,
@@ -45,8 +45,8 @@ class TestSettings:
     def test_workspaces_dir(self):
         """工作空间目录"""
         settings = Settings(
-            github_token="token",
             github_repo="a/b",
+            github_repos=["a/b"],
         )
         expected = Path.home() / ".swallowloop" / "workspaces"
         assert settings.workspaces_dir == expected
@@ -54,8 +54,8 @@ class TestSettings:
     def test_workspaces_dir_custom_work_dir(self):
         """自定义工作目录"""
         settings = Settings(
-            github_token="token",
             github_repo="a/b",
+            github_repos=["a/b"],
             work_dir=Path("/custom/path"),
         )
         assert settings.workspaces_dir == Path("/custom/path/workspaces")
@@ -63,8 +63,8 @@ class TestSettings:
     def test_data_dir(self):
         """数据目录"""
         settings = Settings(
-            github_token="token",
             github_repo="a/b",
+            github_repos=["a/b"],
         )
         expected = Path.home() / ".swallowloop"
         assert settings.data_dir == expected
@@ -72,8 +72,8 @@ class TestSettings:
     def test_logs_dir(self):
         """日志目录"""
         settings = Settings(
-            github_token="token",
             github_repo="a/b",
+            github_repos=["a/b"],
         )
         expected = Path.home() / ".swallowloop" / "logs"
         assert settings.logs_dir == expected
@@ -81,31 +81,27 @@ class TestSettings:
     def test_logs_dir_custom_log_dir(self):
         """自定义日志目录"""
         settings = Settings(
-            github_token="token",
             github_repo="a/b",
+            github_repos=["a/b"],
             log_dir=Path("/var/log/swallow"),
         )
         assert settings.logs_dir == Path("/var/log/swallow")
 
     @patch.dict(os.environ, {
-        "GITHUB_TOKEN": "env-token",
-        "GITHUB_REPO": "env/repo",
+        "REPOS": "env/repo1, env/repo2, env/repo3",
         "MAX_WORKERS": "3",
-        "AGENT_TYPE": "iflow",
+        "AGENT_TYPE": "deerflow",
     })
     def test_from_env(self):
         """从环境变量加载配置"""
         settings = Settings.from_env()
 
-        assert settings.github_token == "env-token"
-        assert settings.github_repo == "env/repo"
+        assert settings.github_repos == ["env/repo1", "env/repo2", "env/repo3"]
         assert settings.max_workers == 3
-        assert settings.agent_type == "iflow"
+        assert settings.agent_type == "deerflow"
 
     @patch.dict(os.environ, {
-        "GITHUB_TOKEN": "token",
-        "GITHUB_REPO": "owner/repo",
-        "GITHUB_REPOS": "owner/repo1, owner/repo2, owner/repo3",
+        "REPOS": "owner/repo1, owner/repo2, owner/repo3",
     })
     def test_from_env_multi_repos(self):
         """多仓库配置"""
@@ -114,9 +110,16 @@ class TestSettings:
         assert settings.github_repos == ["owner/repo1", "owner/repo2", "owner/repo3"]
 
     @patch.dict(os.environ, {
-        "GITHUB_TOKEN": "token",
-        "GITHUB_REPO": "owner/repo",
-        "GITHUB_REPOS": "",
+        "REPOS": "",
+    })
+    def test_from_env_no_repos(self):
+        """无仓库配置"""
+        settings = Settings.from_env()
+
+        assert settings.github_repos == []
+
+    @patch.dict(os.environ, {
+        "REPOS": "owner/repo",
     })
     def test_from_env_single_repo_fallback(self):
         """单仓库回退"""
@@ -127,16 +130,15 @@ class TestSettings:
     def test_get_llm_config_default(self):
         """获取默认 LLM 配置"""
         settings = Settings(
-            github_token="token",
             github_repo="a/b",
+            github_repos=["a/b"],
         )
-        # llm_config 为 None 时，返回默认配置
+        # llm_config 为 None 时，返回默认配置（OpenAI）
         llm = settings.get_llm_config()
-        assert llm.provider.value == "iflow"
+        assert llm.provider.value == "openai"
 
     @patch.dict(os.environ, {
-        "GITHUB_TOKEN": "token",
-        "GITHUB_REPO": "owner/repo",
+        "REPOS": "owner/repo",
         "LLM_PROVIDER": "openai",
         "LLM_API_KEY": "sk-test",
         "LLM_BASE_URL": "https://api.openai.com/v1",

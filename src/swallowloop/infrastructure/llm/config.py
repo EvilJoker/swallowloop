@@ -7,7 +7,6 @@ from typing import Any
 
 class LLMProvider(Enum):
     """支持的 LLM 提供商"""
-    IDEFAULT = "iflow"  # 使用本地 iFlow 默认配置
     OPENAI = "openai"
     MINIMAX = "minimax"
     CUSTOM = "custom"
@@ -23,7 +22,7 @@ class LLMConfig:
     """
     
     # 提供商
-    provider: LLMProvider = LLMProvider.IDEFAULT
+    provider: LLMProvider = LLMProvider.OPENAI
     
     # 基础配置
     model_name: str = ""
@@ -51,19 +50,15 @@ class LLMConfig:
     @property
     def is_default(self) -> bool:
         """是否使用默认配置（不需要额外认证）"""
-        return self.provider == LLMProvider.IDEFAULT
-    
-    def to_iflow_auth_info(self) -> dict[str, Any] | None:
+        return False
+
+    def to_llm_auth_info(self) -> dict[str, Any]:
         """
-        转换为 iFlow SDK 需要的认证信息格式
-        
+        获取 LLM 认证信息
+
         Returns:
-            如果是默认配置，返回 None（使用本地 iFlow 配置）
-            否则返回认证信息字典
+            认证信息字典
         """
-        if self.is_default:
-            return None
-        
         info = {}
         if self.api_key:
             info["apiKey"] = self.api_key
@@ -71,16 +66,8 @@ class LLMConfig:
             info["baseUrl"] = self.base_url
         if self.model_name:
             info["modelName"] = self.model_name
-        
-        return info if info else None
-    
-    @property
-    def iflow_auth_method_id(self) -> str | None:
-        """获取 iFlow 认证方式 ID"""
-        if self.is_default:
-            return None
-        # iFlow 支持的认证方式：openai-compatible
-        return "openai-compatible"
+
+        return info
     
     @classmethod
     def from_env(cls, prefix: str = "LLM") -> "LLMConfig":
@@ -97,7 +84,7 @@ class LLMConfig:
         import os
         
         # 读取提供商
-        provider_str = os.getenv(f"{prefix}_PROVIDER", "iflow").lower()
+        provider_str = os.getenv(f"{prefix}_PROVIDER", "openai").lower()
         try:
             provider = LLMProvider(provider_str)
         except ValueError:
@@ -147,8 +134,8 @@ class LLMConfig:
     
     @classmethod
     def default(cls) -> "LLMConfig":
-        """创建默认配置（使用本地 iFlow）"""
-        return cls(provider=LLMProvider.IDEFAULT)
+        """创建默认配置（使用 OpenAI）"""
+        return cls(provider=LLMProvider.OPENAI)
     
     def __repr__(self) -> str:
         """安全的字符串表示，隐藏敏感信息"""

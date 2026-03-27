@@ -5,8 +5,6 @@ MODULE_NAME = "infrastructure"
 # 持久化
 from .persistence import (
     InMemoryIssueRepository,
-    JsonIssueRepository,
-    JsonWorkspaceRepository,
 )
 
 # 执行器
@@ -34,8 +32,6 @@ __all__ = [
     "MODULE_NAME",
     # 持久化
     "InMemoryIssueRepository",
-    "JsonIssueRepository",
-    "JsonWorkspaceRepository",
     # 执行器
     "ExecutorWorkerPool",
     # Agent

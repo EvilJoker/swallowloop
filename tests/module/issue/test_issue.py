@@ -3,7 +3,40 @@
 import pytest
 from datetime import datetime
 
-from swallowloop.domain.model import Issue, IssueId, Stage, StageStatus, IssueStatus, TodoItem, TodoStatus
+from swallowloop.domain.model import Issue, IssueId, Stage, StageStatus, IssueStatus, TodoItem, TodoStatus, Workspace
+
+
+class TestIssueWorkspace:
+    """Workspace 测试"""
+
+    def test_workspace_creation(self):
+        """测试 Workspace 创建"""
+        workspace = Workspace(
+            id="test-issue",
+            ready=True,
+            workspace_path="/path/to/workspace",
+            repo_url="https://github.com/test/repo",
+            branch="test-issue",
+            metadata={"key": "value"},
+        )
+
+        assert workspace.id == "test-issue"
+        assert workspace.ready is True
+        assert workspace.workspace_path == "/path/to/workspace"
+        assert workspace.repo_url == "https://github.com/test/repo"
+        assert workspace.branch == "test-issue"
+        assert workspace.metadata == {"key": "value"}
+
+    def test_workspace_default_values(self):
+        """测试 Workspace 默认值"""
+        workspace = Workspace()
+
+        assert workspace.id == ""
+        assert workspace.ready is False
+        assert workspace.workspace_path == ""
+        assert workspace.repo_url == ""
+        assert workspace.branch == ""
+        assert workspace.metadata == {}
 
 
 class TestIssue:

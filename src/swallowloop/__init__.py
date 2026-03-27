@@ -30,8 +30,6 @@ from .application import IssueService, ExecutorService, StageLoop, IssueDTO, Wor
 # 基础设施层
 from .infrastructure import (
     InMemoryIssueRepository,
-    JsonIssueRepository,
-    JsonWorkspaceRepository,
     ExecutorWorkerPool,
     BaseAgent,
     MockAgent,
@@ -80,8 +78,6 @@ __all__ = [
     "WorkspaceDTO",
     # 基础设施层 - 持久化
     "InMemoryIssueRepository",
-    "JsonIssueRepository",
-    "JsonWorkspaceRepository",
     # 基础设施层 - 执行器
     "ExecutorWorkerPool",
     # 基础设施层 - Agent

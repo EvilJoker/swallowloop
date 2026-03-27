@@ -29,8 +29,7 @@ def unmask_secret(value: str, original: str) -> str:
 
 class SettingsResponse(BaseModel):
     """设置响应"""
-    github_repo: str
-    github_token: str  # 掩码后的 token
+    github_repos: list[str]  # 多仓库列表
     llm_api_key: str  # 掩码后的 key
     llm_base_url: str
     llm_model: str
@@ -45,8 +44,7 @@ class SettingsResponse(BaseModel):
 
 class SettingsUpdate(BaseModel):
     """设置更新请求"""
-    github_repo: Optional[str] = None
-    github_token: Optional[str] = None
+    github_repos: Optional[list[str]] = None
     llm_api_key: Optional[str] = None
     llm_base_url: Optional[str] = None
     llm_model: Optional[str] = None
@@ -108,8 +106,8 @@ async def get_settings():
     env_vars = _load_env_file()
 
     # 获取环境变量（优先级更高），fallback 到 .env 文件
-    github_repo = os.getenv("GITHUB_REPO", env_vars.get("GITHUB_REPO", ""))
-    github_token = os.getenv("GITHUB_TOKEN", env_vars.get("GITHUB_TOKEN", ""))
+    repos_str = os.getenv("REPOS", env_vars.get("REPOS", ""))
+    github_repos = [r.strip() for r in repos_str.split(",") if r.strip()] if repos_str else []
     llm_api_key = os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY", "") or env_vars.get("OPENAI_API_KEY", "")
     llm_base_url = os.getenv("LLM_BASE_URL") or os.getenv("OPENAI_API_BASE_URL", "") or env_vars.get("OPENAI_API_BASE_URL", "")
     llm_model = os.getenv("LLM_MODEL", env_vars.get("LLM_MODEL", ""))
@@ -121,8 +119,7 @@ async def get_settings():
 
     # 检查哪些被环境变量覆盖
     env_overrides = {
-        "github_repo": bool(os.getenv("GITHUB_REPO")),
-        "github_token": bool(os.getenv("GITHUB_TOKEN")),
+        "github_repos": bool(os.getenv("REPOS")),
         "llm_api_key": bool(os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY")),
         "llm_base_url": bool(os.getenv("LLM_BASE_URL") or os.getenv("OPENAI_API_BASE_URL")),
         "llm_model": bool(os.getenv("LLM_MODEL")),
@@ -134,8 +131,7 @@ async def get_settings():
     }
 
     return SettingsResponse(
-        github_repo=github_repo,
-        github_token=mask_secret(github_token),
+        github_repos=github_repos,
         llm_api_key=mask_secret(llm_api_key),
         llm_base_url=llm_base_url,
         llm_model=llm_model,
@@ -158,7 +154,6 @@ async def update_settings(settings: SettingsUpdate):
     current = _load_env_file()
 
     # 读取原始 token/key（用于比较）
-    original_token = os.getenv("GITHUB_TOKEN") or current.get("GITHUB_TOKEN", "")
     original_api_key = os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY") or current.get("OPENAI_API_KEY", "")
 
     # 更新设置（只更新提供的字段）
@@ -166,10 +161,8 @@ async def update_settings(settings: SettingsUpdate):
 
     for key, value in update_dict.items():
         if value is not None:
-            # token/key 如果被掩码，保持原值
-            if key == "github_token":
-                value = unmask_secret(value, original_token)
-                current["GITHUB_TOKEN"] = value
+            if key == "github_repos":
+                current["REPOS"] = ",".join(value)
             elif key == "llm_api_key":
                 value = unmask_secret(value, original_api_key)
                 # 兼容旧变量名

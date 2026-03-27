@@ -23,7 +23,7 @@ SwallowLoop 是一个智能维护 Agent 系统，为程序员个人/小团队提
 - [uv](https://docs.astral.sh/uv/) 包管理器
 - Node.js 18+ (前端)
 - GitHub Personal Access Token (需要 `repo` 权限)
-- IFlow CLI SDK 或 OpenAI API Key
+- OpenAI API Key 或兼容的 LLM API
 
 ### 2. 安装
 
@@ -52,8 +52,7 @@ cp .env.template .env
 
 | 变量 | 说明 |
 |-----|------|
-| `GITHUB_TOKEN` | GitHub Personal Access Token |
-| `GITHUB_REPO` | 目标仓库 (owner/repo 格式) |
+| `REPOS` | 目标仓库 (owner/repo 格式，支持多仓库逗号分隔) |
 
 ### 4. 运行
 
@@ -88,6 +87,28 @@ cp .env.template .env
 **日志文件：**
 - 后端日志：`logs/backend.log`
 - 前端日志：`logs/frontend.log`
+
+### 5. DeerFlow 部署（可选）
+
+使用 DeerFlow Agent 时需要部署 DeerFlow：
+
+```bash
+# 克隆 DeerFlow 仓库
+git clone https://github.com/YourDeerFlow/deer-flow.git
+cd deer-flow
+
+# 启动 DeerFlow Docker 容器
+make docker-start
+
+# DeerFlow 默认端口：2026
+```
+
+**配置 SwallowLoop 使用 DeerFlow：**
+
+```bash
+# 编辑 .env 文件
+AGENT_TYPE=deerflow
+```
 
 ## 工作流程
 
@@ -183,13 +204,12 @@ npx playwright test
 
 | 变量 | 说明 | 默认值 |
 |-----|------|--------|
-| `GITHUB_TOKEN` | GitHub Token | - |
-| `GITHUB_REPO` | 目标仓库 | - |
-| `LLM_PROVIDER` | LLM 提供商 (iflow/openai/minimax/custom) | `iflow` |
+| `REPOS` | 目标仓库 (owner/repo 格式，多仓库逗号分隔) | - |
+| `LLM_PROVIDER` | LLM 提供商 (openai/minimax/custom) | `openai` |
 | `LLM_API_KEY` | LLM API Key | - |
 | `LLM_BASE_URL` | LLM API 端点 URL | - |
 | `LLM_MODEL_NAME` | LLM 模型名称 | - |
-| `AGENT_TYPE` | Agent 类型 (iflow/aider) | `iflow` |
+| `AGENT_TYPE` | Agent 类型 (mock/deerflow) | `mock` |
 | `AGENT_TIMEOUT` | Agent 超时(秒) | `1200` (20分钟) |
 | `MAX_WORKERS` | 最大并发 Worker | `5` |
 | `POLL_INTERVAL` | 轮询间隔(秒) | `60` |
@@ -219,7 +239,7 @@ src/swallowloop/
 │       ├── issue_service.py   # Issue 生命周期管理
 │       └── executor_service.py # Worker 进程管理
 ├── infrastructure/            # 基础设施层
-│   ├── agent/               # Agent 实现 (IFlow)
+│   ├── agent/               # Agent 实现 (Mock/DeerFlow)
 │   ├── persistence/          # JSON 文件持久化
 │   ├── source_control/      # GitHub API 封装
 │   └── self_update.py       # 自更新机制

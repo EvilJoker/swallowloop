@@ -202,8 +202,7 @@ export function createExecutionLogSocket(issueId: string): WebSocket {
 
 // Settings API
 export interface Settings {
-  github_repo: string;
-  github_token: string;
+  github_repos: string[];
   llm_api_key: string;
   llm_base_url: string;
   llm_model: string;
@@ -216,8 +215,7 @@ export interface Settings {
 }
 
 export interface SettingsUpdate {
-  github_repo?: string;
-  github_token?: string;
+  github_repos?: string[];
   llm_api_key?: string;
   llm_base_url?: string;
   llm_model?: string;

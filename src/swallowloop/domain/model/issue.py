@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Optional
 
 from .stage import Stage, StageStatus, IssueStatus, TodoStatus, ExecutionState
+from .workspace import Workspace
 
 
 @dataclass
@@ -60,6 +61,12 @@ class Issue:
     discarded_at: Optional[datetime] = None
     version: int = 0  # 乐观锁版本号
     stages: dict = field(default_factory=dict)
+
+    # Workspace 别名 - 使用 domain.model.workspace.Workspace
+    workspace: Optional[Workspace] = None
+    repo_url: str = ""  # 代码仓库地址（默认从 Settings 获取）
+    cleaned: bool = False  # 是否已清理
+    cleaned_at: Optional[datetime] = None  # 上次清理时间
 
     def __post_init__(self):
         if not self.stages:

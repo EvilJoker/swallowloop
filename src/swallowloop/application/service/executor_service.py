@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 from ...domain.model import Issue, Stage, StageStatus
 from ...domain.statemachine import StageStateMachine, LoggerHook
-from ...infrastructure.agent import BaseAgent, MockAgent
+from ...infrastructure.agent import BaseAgent, MockAgent, DeerFlowAgent
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +43,10 @@ class ExecutorService:
         if agent_type == "mock":
             logger.info("使用 MockAgent，延迟 5 秒")
             return MockAgent(delay_seconds=5.0)
+        elif agent_type == "deerflow":
+            logger.info("使用 DeerFlowAgent")
+            return DeerFlowAgent()
         else:
-            # 未来支持真实 Agent
             logger.warning(f"Agent 类型 '{agent_type}' 暂不支持，使用 MockAgent")
             return MockAgent(delay_seconds=5.0)
 
@@ -121,6 +123,8 @@ class ExecutorService:
             "stage": stage.value,
             "document": stage_state.document,
             "context_path": str(context_path),
+            "thread_id": issue.workspace.id if issue.workspace else None,
+            "workspace_path": issue.workspace.workspace_path if issue.workspace else None,
         }
 
         task_description = f"执行阶段 {stage.value}：{issue.title}"

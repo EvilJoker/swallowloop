@@ -16,8 +16,7 @@ class Settings:
     """SwallowLoop 配置"""
     
     # GitHub 配置
-    github_token: str
-    github_repo: str  # 单个仓库 owner/repo 格式（兼容旧配置）
+    github_repo: str = ""  # 单个仓库 owner/repo 格式
     github_repos: list[str] = field(default_factory=list)  # 多仓库列表
     
     # Agent 配置
@@ -47,7 +46,7 @@ class Settings:
     issue_project: str = "default"  # Issue 项目名
 
     # Agent 配置
-    agent_type: str = "mock"  # Agent 类型: mock, iflow
+    agent_type: str = "mock"  # Agent 类型: mock, deerflow
 
     # 自更新配置
     enable_self_update: bool = True  # 是否启用自更新
@@ -60,40 +59,29 @@ class Settings:
     def from_env(cls, dotenv_path: str | Path | None = None) -> "Settings":
         """从环境变量加载配置"""
         load_dotenv(dotenv_path)
-        
-        github_token = os.getenv("GITHUB_TOKEN")
-        if not github_token:
-            raise ValueError(
-                "GITHUB_TOKEN 环境变量未设置\n"
-                "请创建 .env 文件或设置环境变量"
-            )
-        
-        github_repo = os.getenv("GITHUB_REPO")
-        if not github_repo:
-            raise ValueError("GITHUB_REPO 环境变量未设置 (格式: owner/repo)")
-        
+
         # 支持多仓库配置（逗号分隔）
-        github_repos_str = os.getenv("GITHUB_REPOS", "")
-        if github_repos_str:
+        repos_str = os.getenv("REPOS", "")
+        if repos_str:
             # 解析逗号分隔的仓库列表
-            github_repos = [r.strip() for r in github_repos_str.split(",") if r.strip()]
+            github_repos = [r.strip() for r in repos_str.split(",") if r.strip()]
         else:
-            # 兼容旧配置：单仓库
-            github_repos = [github_repo] if github_repo else []
-        
+            github_repos = []
+
+        github_repo = github_repos[0] if github_repos else ""
+
         work_dir = os.getenv("WORK_DIR")
         if work_dir:
             work_dir = Path(work_dir)
-        
+
         log_dir = os.getenv("LOG_DIR")
         if log_dir:
             log_dir = Path(log_dir)
-        
+
         # 加载 LLM 配置
         llm_config = cls._load_llm_config()
-        
+
         return cls(
-            github_token=github_token,
             github_repo=github_repo,
             github_repos=github_repos,
             agent_timeout=int(os.getenv("AGENT_TIMEOUT", "1200")),

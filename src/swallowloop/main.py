@@ -1,6 +1,7 @@
 """SwallowLoop 入口 - 支持多线程启动"""
 
 import logging
+import os
 import threading
 from pathlib import Path
 
@@ -18,6 +19,8 @@ def create_services():
     """创建共享服务实例"""
     from .infrastructure.instance_registry import register_instance
     from .interfaces.web.api.websockets import manager
+    from .infrastructure.agent import MockAgent, DeerFlowAgent
+    from .infrastructure.config import Settings
 
     # Repository
     repository: IssueRepository = InMemoryIssueRepository()
@@ -26,15 +29,32 @@ def create_services():
     # WebSocket Manager
     register_instance("ws_manager", manager)
 
+    # Settings
+    try:
+        settings = Settings.from_env()
+    except ValueError:
+        # 独立运行时使用默认配置
+        settings = None
+
+    register_instance("settings", settings)
+
+    # Agent
+    agent_type = os.getenv("AGENT_TYPE", "mock")
+    if agent_type == "deerflow":
+        agent = DeerFlowAgent()
+    else:
+        agent = MockAgent(delay_seconds=5.0)
+    register_instance("agent", agent)
+
     # Executor (注入 ws_manager 用于广播)
-    executor = ExecutorService(repository=repository, agent_type="mock", ws_manager=manager)
+    executor = ExecutorService(repository=repository, agent=agent, agent_type=agent_type, ws_manager=manager)
     register_instance("executor", executor)
 
     # WorkerPool (max_workers=3)
     worker_pool = ExecutorWorkerPool(executor=executor, max_workers=3)
     register_instance("worker_pool", worker_pool)
 
-    return repository, executor, worker_pool
+    return repository, executor, worker_pool, agent, settings
 
 
 def main(port: int = 9500):
@@ -49,7 +69,7 @@ def main(port: int = 9500):
     logger.info("=" * 50)
 
     # 1. 创建共享服务
-    repository, executor, worker_pool = create_services()
+    repository, executor, worker_pool, agent, settings = create_services()
 
     # 2. 创建 StageLoop
     stage_loop = StageLoop(

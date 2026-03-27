@@ -26,17 +26,31 @@ def init_services():
     repository = get_instance("repository")
     executor = get_instance("executor")
     ws_manager = get_instance("ws_manager")
+    agent = get_instance("agent")
+    settings = get_instance("settings")
 
     if repository is not None and executor is not None:
         # 使用共享实例
         _executor_service = executor
-        _issue_service = IssueService(repository=repository, executor=_executor_service, ws_manager=ws_manager)
+        _issue_service = IssueService(
+            repository=repository,
+            executor=_executor_service,
+            agent=agent,
+            settings=settings,
+            ws_manager=ws_manager
+        )
     else:
         # 注册表没有实例，创建新的（仅用于独立运行）
+        from ....infrastructure.agent import MockAgent, DeerFlowAgent
+
         repository = InMemoryIssueRepository()
         agent_type = os.getenv("AGENT_TYPE", "mock")
-        _executor_service = ExecutorService(repository=repository, agent_type=agent_type)
-        _issue_service = IssueService(repository=repository, executor=_executor_service)
+        if agent_type == "deerflow":
+            agent = DeerFlowAgent()
+        else:
+            agent = MockAgent(delay_seconds=5.0)
+        _executor_service = ExecutorService(repository=repository, agent=agent, agent_type=agent_type)
+        _issue_service = IssueService(repository=repository, executor=_executor_service, agent=agent)
 
 
 class IssueCreate(BaseModel):

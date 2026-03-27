@@ -2,14 +2,18 @@
 
 import asyncio
 import logging
+import subprocess
 import uuid
 from datetime import datetime
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .executor_service import ExecutorService
+    from ...infrastructure.agent import BaseAgent
+    from ...infrastructure.config import Settings
 
-from ...domain.model import Issue, IssueId, Stage, IssueStatus
+from ...domain.model import Issue, IssueId, Stage, IssueStatus, Workspace
 from ...domain.repository import IssueRepository
 from ...domain.statemachine import StageStateMachine, LoggerHook
 
@@ -19,9 +23,11 @@ logger = logging.getLogger(__name__)
 class IssueService:
     """Issue 应用服务"""
 
-    def __init__(self, repository: IssueRepository, executor: "ExecutorService", ws_manager=None):
+    def __init__(self, repository: IssueRepository, executor: "ExecutorService", agent: "BaseAgent | None" = None, settings: "Settings | None" = None, ws_manager=None):
         self._repo = repository
         self._executor = executor
+        self._agent = agent
+        self._settings = settings
         self._hooks = [LoggerHook()]
         self._ws_manager = ws_manager
 
@@ -128,8 +134,11 @@ class IssueService:
     async def trigger_ai(self, issue_id: str, stage: Stage) -> dict:
         """手动触发 AI 执行
 
-        注意：executor.execute_stage() 内部已经处理了状态转换
-        (NEW → RUNNING → PENDING)，所以这里只需要触发即可
+        流程：
+        1. 调用 agent.prepare() 获取工作空间信息
+        2. 设置 issue.workspace
+        3. 如果未就绪，下载代码、切换分支
+        4. executor.execute_stage() 处理状态转换和执行
         """
         issue = self._repo.get(IssueId(issue_id))
         if not issue:
@@ -140,9 +149,66 @@ class IssueService:
             stage_state = issue.get_stage_state(stage)
             return {"status": "error", "message": f"当前状态 {stage_state.status.value} 不能触发 AI"}
 
-        # executor.execute_stage() 内部处理状态转换：NEW → RUNNING → PENDING
+        # 1. 调用 prepare 获取工作空间信息
+        if self._agent:
+            context = {
+                "repo_url": issue.repo_url or (self._settings.github_repo if self._settings else ""),
+                "branch": str(issue.id),
+                "stage": stage.value,
+            }
+            workspace_info = await self._agent.prepare(str(issue.id), context)
+
+            # 2. 设置 issue.workspace
+            issue.workspace = Workspace(
+                id=workspace_info.id,
+                ready=workspace_info.ready,
+                workspace_path=workspace_info.workspace_path,
+                repo_url=workspace_info.repo_url,
+                branch=workspace_info.branch,
+                metadata=workspace_info.metadata,
+            )
+
+            # 3. 如果未就绪，SwallowLoop 准备工作空间
+            if not issue.workspace.ready:
+                await self._prepare_workspace(issue.workspace)
+                issue.workspace.ready = True
+
+            self._repo.save(issue)
+
+        # 4. executor 处理状态转换和执行
         result = await self._executor.execute_stage(issue, stage)
         return result
+
+    async def _prepare_workspace(self, workspace: Workspace) -> None:
+        """准备工作空间（下载代码、切换分支）"""
+        if not workspace.workspace_path or not workspace.repo_url:
+            logger.warning("workspace_path 或 repo_url 为空，跳过准备")
+            return
+
+        workspace_path = Path(workspace.workspace_path)
+        workspace_path.mkdir(parents=True, exist_ok=True)
+
+        try:
+            # Clone 仓库（如果目录为空）
+            if not any(workspace_path.iterdir()):
+                subprocess.run(
+                    ["git", "clone", workspace.repo_url, str(workspace_path)],
+                    check=True,
+                    capture_output=True
+                )
+                logger.info(f"Git clone 完成: {workspace.repo_url}")
+
+            # 切换分支
+            subprocess.run(
+                ["git", "-C", str(workspace_path), "checkout", "-B", workspace.branch],
+                check=True,
+                capture_output=True
+            )
+            logger.info(f"Git 分支切换完成: {workspace.branch}")
+
+        except subprocess.CalledProcessError as e:
+            logger.error(f"准备工作空间失败: {e.stderr.decode() if e.stderr else str(e)}")
+            raise
 
     def update_issue(self, issue_id: str, **kwargs) -> Issue | None:
         """更新 Issue"""
