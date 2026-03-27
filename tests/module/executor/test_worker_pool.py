@@ -5,7 +5,7 @@ import time
 from datetime import datetime
 
 from swallowloop.domain.model import Issue, IssueId, Stage, StageStatus, IssueStatus
-from swallowloop.infrastructure.executor.worker_pool import ExecutorWorkerPool
+from swallowloop.application.service.worker_pool import ExecutorWorkerPool
 from tests.helpers import MockRepository, MockExecutor
 
 

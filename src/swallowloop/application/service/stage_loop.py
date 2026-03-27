@@ -1,4 +1,5 @@
 """StageLoop - 后台主循环，定期扫描并触发 NEW 状态的阶段"""
+import asyncio
 import logging
 import time
 from typing import TYPE_CHECKING
@@ -6,7 +7,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ...domain.model import Stage, StageStatus
     from ...domain.repository import IssueRepository
-    from ...infrastructure.executor.worker_pool import ExecutorWorkerPool
+    from .worker_pool import ExecutorWorkerPool
     from .executor_service import ExecutorService
 
 logger = logging.getLogger(__name__)
@@ -26,25 +27,35 @@ class StageLoop:
         self._worker_pool = worker_pool
         self._executor = executor
         self._interval = interval
+        self._loop: asyncio.AbstractEventLoop | None = None
 
     def start(self) -> None:
         """启动主循环（阻塞）"""
         logger.info(f"StageLoop 启动，间隔 {self._interval} 秒")
-        while True:
-            try:
-                self.maintain()
-            except Exception as e:
-                logger.error(f"maintain 执行异常: {e}")
-            time.sleep(self._interval)
 
-    def maintain(self) -> None:
-        """扫描并触发可执行 AI 的阶段（NEW/REJECTED/ERROR）"""
+        # 创建事件循环，在主线程运行
+        self._loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self._loop)
+
+        try:
+            while True:
+                try:
+                    # 在已有事件循环中运行异步 maintain
+                    self._loop.run_until_complete(self._maintain_async())
+                except Exception as e:
+                    logger.error(f"maintain 执行异常: {e}")
+                time.sleep(self._interval)
+        except KeyboardInterrupt:
+            logger.info("接收到停止信号")
+        finally:
+            if self._loop:
+                self._loop.close()
+
+    async def _maintain_async(self) -> None:
+        """异步扫描并触发可执行 AI 的阶段（NEW/REJECTED/ERROR）"""
         from ...domain.model import Stage, StageStatus
 
         # 获取所有可触发状态的 (issue, stage) 对
-        # NEW: 新建阶段
-        # REJECTED: 被打回，需要重试
-        # ERROR: 执行出错，需要重试
         triggerable_statuses = [StageStatus.NEW, StageStatus.REJECTED, StageStatus.ERROR]
         all_triggerable = []
         for status in triggerable_statuses:
@@ -61,8 +72,7 @@ class StageLoop:
             if can_trigger:
                 # 1. 先准备 workspace (async)
                 logger.info(f"准备 workspace: {issue.id}/{stage.value}")
-                import asyncio
-                if not asyncio.run(self._executor.prepare_workspace(issue, stage)):
+                if not await self._executor.prepare_workspace(issue, stage):
                     logger.error(f"workspace 准备失败，跳过: {issue.id}/{stage.value}")
                     continue
 

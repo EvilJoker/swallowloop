@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ...application.service.executor_service import ExecutorService
+    from .executor_service import ExecutorService
     from ...domain.model import Stage
     from ...domain.repository import IssueRepository
 

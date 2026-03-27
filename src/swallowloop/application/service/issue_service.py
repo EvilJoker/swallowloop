@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .executor_service import ExecutorService
+    from .executor import IExecutor
     from ...infrastructure.agent import BaseAgent
     from ...infrastructure.config import Settings
 
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class IssueService:
     """Issue 应用服务"""
 
-    def __init__(self, repository: IssueRepository, executor: "ExecutorService", agent: "BaseAgent | None" = None, settings: "Settings | None" = None, ws_manager=None):
+    def __init__(self, repository: IssueRepository, executor: "IExecutor", agent: "BaseAgent | None" = None, settings: "Settings | None" = None, ws_manager=None):
         self._repo = repository
         self._executor = executor
         self._agent = agent

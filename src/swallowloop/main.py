@@ -8,7 +8,7 @@ from pathlib import Path
 from .application.service.stage_loop import StageLoop
 from .application.service.executor_service import ExecutorService
 from .domain.repository import IssueRepository
-from .infrastructure.executor.worker_pool import ExecutorWorkerPool
+from .application.service.worker_pool import ExecutorWorkerPool
 from .infrastructure.persistence import InMemoryIssueRepository
 from .interfaces.web.issue_api import run_server
 

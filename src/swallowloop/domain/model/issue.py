@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 from .stage import Stage, StageStatus, IssueStatus, TodoStatus, ExecutionState
 from .workspace import Workspace
@@ -34,7 +34,7 @@ class StageState:
     comments: list = field(default_factory=list)
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
-    todo_list: Optional[list[TodoItem]] = None
+    todo_list: Optional[List[TodoItem]] = None
     progress: Optional[int] = None
     execution_state: Optional[ExecutionState] = None
 

@@ -7,9 +7,6 @@ from .persistence import (
     InMemoryIssueRepository,
 )
 
-# 执行器
-from .executor import ExecutorWorkerPool
-
 # Agent
 from .agent import BaseAgent, MockAgent, AgentResult
 
@@ -32,8 +29,6 @@ __all__ = [
     "MODULE_NAME",
     # 持久化
     "InMemoryIssueRepository",
-    # 执行器
-    "ExecutorWorkerPool",
     # Agent
     "BaseAgent",
     "MockAgent",

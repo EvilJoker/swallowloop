@@ -60,6 +60,27 @@ src/swallowloop/
     └── web/            # Web API
 ```
 
+### 接口规范
+
+**修改代码前必须加载 `architecture-design` 技能**，确保遵守：
+- 依赖方向规范（只能从外层指向内层）
+- 接口约束（调用方只依赖抽象接口）
+- 禁止事项（asyncio.run 在同步函数内等）
+
+**运行契约检查**：
+```bash
+python .claude/skills/architecture-design/scripts/check_contracts.py
+```
+
+**架构设计技能**：使用 `architecture-design` skill 获取接口规范、依赖方向、契约检查和自检机制。详细说明见 `.claude/skills/architecture-design/SKILL.md`。
+
+**修改检查清单**：
+- [ ] 改动的代码在哪个模块？
+- [ ] 这个模块的接口是谁？调用方是谁？
+- [ ] 会不会破坏依赖方向？
+- [ ] 需不需要同步修改调用方？
+- [ ] 测试能发现这个问题吗？
+
 ### 模块命名规则
 
 **所有模块必须在 `__init__.py` 中定义 `MODULE_NAME` 常量**：

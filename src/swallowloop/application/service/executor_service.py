@@ -12,7 +12,8 @@ if TYPE_CHECKING:
 
 from ...domain.model import Issue, Stage, StageStatus
 from ...domain.statemachine import StageStateMachine, LoggerHook
-from ...infrastructure.agent import BaseAgent, MockAgent, DeerFlowAgent
+from ...infrastructure.agent import BaseAgent, create_agent
+from .executor import IExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ logger = logging.getLogger(__name__)
 INSTRUCTIONS_DIR = Path.home() / ".swallowloop" / "instructions"
 
 
-class ExecutorService:
+class ExecutorService(IExecutor):
     """AI 执行服务 - Issue 流水线阶段执行"""
 
     def __init__(self, repository: "IssueRepository", agent: BaseAgent | None = None, agent_type: str = "mock", ws_manager=None):
@@ -39,16 +40,8 @@ class ExecutorService:
                 logger.warning(f"WebSocket 广播失败: {e}")
 
     def _create_agent(self, agent_type: str = "mock") -> BaseAgent:
-        """根据配置创建 Agent"""
-        if agent_type == "mock":
-            logger.info("使用 MockAgent，延迟 5 秒")
-            return MockAgent(delay_seconds=5.0)
-        elif agent_type == "deerflow":
-            logger.info("使用 DeerFlowAgent")
-            return DeerFlowAgent()
-        else:
-            logger.warning(f"Agent 类型 '{agent_type}' 暂不支持，使用 MockAgent")
-            return MockAgent(delay_seconds=5.0)
+        """根据配置创建 Agent（工厂函数）"""
+        return create_agent(agent_type)
 
     def _get_machine(self, issue: Issue) -> StageStateMachine:
         """获取状态机实例"""

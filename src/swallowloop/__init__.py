@@ -25,12 +25,11 @@ from .domain import (
 )
 
 # 应用层
-from .application import IssueService, ExecutorService, StageLoop, IssueDTO, WorkspaceDTO
+from .application import IssueService, ExecutorService, StageLoop, ExecutorWorkerPool, IssueDTO, WorkspaceDTO
 
 # 基础设施层
 from .infrastructure import (
     InMemoryIssueRepository,
-    ExecutorWorkerPool,
     BaseAgent,
     MockAgent,
     AgentResult,
@@ -74,12 +73,11 @@ __all__ = [
     "IssueService",
     "ExecutorService",
     "StageLoop",
+    "ExecutorWorkerPool",
     "IssueDTO",
     "WorkspaceDTO",
     # 基础设施层 - 持久化
     "InMemoryIssueRepository",
-    # 基础设施层 - 执行器
-    "ExecutorWorkerPool",
     # 基础设施层 - Agent
     "BaseAgent",
     "MockAgent",
