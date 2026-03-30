@@ -36,7 +36,7 @@ class TestCleanService:
 
         mock_repository.list_all.return_value = [issue]
 
-        service = CleanService(repository=mock_repository, base_url="http://localhost:2026")
+        service = CleanService(repository=mock_repository, base_url="http://localhost:2024")
 
         should_clean = service._should_cleanup(issue)
         assert should_clean is True
@@ -56,7 +56,7 @@ class TestCleanService:
 
         mock_repository.list_all.return_value = [issue]
 
-        service = CleanService(repository=mock_repository, base_url="http://localhost:2026")
+        service = CleanService(repository=mock_repository, base_url="http://localhost:2024")
 
         should_clean = service._should_cleanup(issue)
         assert should_clean is False
@@ -78,7 +78,7 @@ class TestCleanService:
 
         mock_repository.list_all.return_value = [issue]
 
-        service = CleanService(repository=mock_repository, base_url="http://localhost:2026")
+        service = CleanService(repository=mock_repository, base_url="http://localhost:2024")
 
         should_clean = service._should_cleanup(issue)
         assert should_clean is False
@@ -100,7 +100,7 @@ class TestCleanService:
 
         mock_repository.list_all.return_value = [issue]
 
-        service = CleanService(repository=mock_repository, base_url="http://localhost:2026")
+        service = CleanService(repository=mock_repository, base_url="http://localhost:2024")
 
         should_clean = service._should_cleanup(issue)
         assert should_clean is False
@@ -122,7 +122,7 @@ class TestCleanService:
 
         mock_repository.list_all.return_value = [issue]
 
-        service = CleanService(repository=mock_repository, base_url="http://localhost:2026")
+        service = CleanService(repository=mock_repository, base_url="http://localhost:2024")
 
         should_clean = service._should_cleanup(issue)
         assert should_clean is False  # 因为 cleaned=True
@@ -160,7 +160,7 @@ class TestCleanService:
 
         mock_repository.list_all.return_value = [issue]
 
-        service = CleanService(repository=mock_repository, base_url="http://localhost:2026")
+        service = CleanService(repository=mock_repository, base_url="http://localhost:2024")
 
         should_clean = service._should_cleanup(issue)
         assert should_clean is True
@@ -190,7 +190,7 @@ class TestCleanService:
         mock_response = MagicMock()
         mock_response.status_code = 200
 
-        service = CleanService(repository=mock_repository, base_url="http://localhost:2026")
+        service = CleanService(repository=mock_repository, base_url="http://localhost:2024")
 
         with patch.object(service._client, 'delete', new_callable=AsyncMock) as mock_delete:
             with patch('shutil.rmtree') as mock_rmtree:
@@ -199,7 +199,7 @@ class TestCleanService:
                 await service._cleanup_issue(issue)
 
                 # 验证调用了 DELETE API
-                mock_delete.assert_called_once_with("http://localhost:2026/api/langgraph/threads/test-api-call")
+                mock_delete.assert_called_once_with("http://localhost:2024/threads/test-api-call")
 
                 # 验证标记为已清理
                 assert issue.cleaned is True
@@ -224,7 +224,7 @@ class TestCleanService:
 
         mock_repository.list_all.return_value = [issue]
 
-        service = CleanService(repository=mock_repository, base_url="http://localhost:2026")
+        service = CleanService(repository=mock_repository, base_url="http://localhost:2024")
 
         with patch.object(service._client, 'delete', new_callable=AsyncMock) as mock_delete:
             await service._cleanup_issue(issue)

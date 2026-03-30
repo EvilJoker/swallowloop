@@ -92,7 +92,7 @@ class CleanService:
 
         # 1. 调用 DeerFlow API 清理 Thread
         try:
-            response = await self._client.delete(f"{self._base_url}/api/langgraph/threads/{thread_id}")
+            response = await self._client.delete(f"{self._base_url}/threads/{thread_id}")
             if response.status_code in [200, 204]:
                 logger.info(f"DeerFlow Thread 清理成功: {thread_id}")
             else:

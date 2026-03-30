@@ -1,5 +1,6 @@
 """SwallowLoop 入口 - 支持多线程启动"""
 
+import asyncio
 import logging
 import os
 import threading
@@ -7,12 +8,18 @@ from pathlib import Path
 
 from .application.service.stage_loop import StageLoop
 from .application.service.executor_service import ExecutorService
+from .application.service.clean_service import CleanService
 from .domain.repository import IssueRepository
 from .application.service.worker_pool import ExecutorWorkerPool
 from .infrastructure.persistence import InMemoryIssueRepository
 from .interfaces.web.issue_api import run_server
 
 logger = logging.getLogger(__name__)
+
+
+def _run_clean_service(clean_service: "CleanService") -> None:
+    """在独立线程中运行 CleanService"""
+    asyncio.run(clean_service.start())
 
 
 def create_services():
@@ -40,11 +47,20 @@ def create_services():
 
     # Agent
     agent_type = os.getenv("AGENT_TYPE", "mock")
+    deerflow_base_url = os.getenv("DEERFLOW_BASE_URL", "http://localhost:2024")
     if agent_type == "deerflow":
-        agent = DeerFlowAgent()
+        agent = DeerFlowAgent(base_url=deerflow_base_url)
     else:
         agent = MockAgent(delay_seconds=5.0)
     register_instance("agent", agent)
+
+    # CleanService (仅 DeerFlow 模式需要)
+    if agent_type == "deerflow":
+        clean_service = CleanService(repository=repository, base_url=deerflow_base_url, interval_hours=1)
+        register_instance("clean_service", clean_service)
+    else:
+        clean_service = None
+    register_instance("clean_service", clean_service)
 
     # Executor (注入 ws_manager 用于广播)
     executor = ExecutorService(repository=repository, agent=agent, agent_type=agent_type, ws_manager=manager)
@@ -54,7 +70,7 @@ def create_services():
     worker_pool = ExecutorWorkerPool(executor=executor, max_workers=3)
     register_instance("worker_pool", worker_pool)
 
-    return repository, executor, worker_pool, agent, settings
+    return repository, executor, worker_pool, agent, settings, clean_service
 
 
 def main(port: int = 9500):
@@ -69,7 +85,7 @@ def main(port: int = 9500):
     logger.info("=" * 50)
 
     # 1. 创建共享服务
-    repository, executor, worker_pool, agent, settings = create_services()
+    repository, executor, worker_pool, agent, settings, clean_service = create_services()
 
     # 2. 创建 StageLoop
     stage_loop = StageLoop(
@@ -78,6 +94,16 @@ def main(port: int = 9500):
         executor=executor,
         interval=5,  # 5 秒一次
     )
+
+    # 2.5 启动 CleanService（仅 DeerFlow 模式）
+    if clean_service:
+        clean_thread = threading.Thread(
+            target=lambda: _run_clean_service(clean_service),
+            daemon=True,
+            name="CleanService"
+        )
+        clean_thread.start()
+        logger.info("CleanService 已启动（后台运行）")
 
     # 3. 在后台线程启动 Web 服务器
     web_thread = threading.Thread(

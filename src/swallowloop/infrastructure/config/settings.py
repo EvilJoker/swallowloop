@@ -47,6 +47,7 @@ class Settings:
 
     # Agent 配置
     agent_type: str = "mock"  # Agent 类型: mock, deerflow
+    deerflow_base_url: str = "http://localhost:2024"  # DeerFlow LangGraph API 地址
 
     # 自更新配置
     enable_self_update: bool = True  # 是否启用自更新
@@ -100,6 +101,7 @@ class Settings:
             llm_config=llm_config,
             issue_project=os.getenv("ISSUE_PROJECT", "default"),
             agent_type=os.getenv("AGENT_TYPE", "mock"),
+            deerflow_base_url=os.getenv("DEERFLOW_BASE_URL", "http://localhost:2024"),
         )
     
     @staticmethod
