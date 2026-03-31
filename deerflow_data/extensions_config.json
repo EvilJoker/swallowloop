@@ -36,6 +36,21 @@
       ],
       "env": {},
       "description": "PostgreSQL database access"
+    },
+    "minimax": {
+      "enabled": true,
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "minimax-mcp"
+      ],
+      "env": {
+        "MINIMAX_API_KEY": "$MINIMAX_API_KEY",
+        "MINIMAX_API_HOST": "https://api.minimaxi.com",
+        "MINIMAX_MCP_BASE_PATH": "/tmp/minimax-mcp-output",
+        "MINIMAX_API_RESOURCE_MODE": "local"
+      },
+      "description": "MiniMax MCP server for TTS, video, image and music generation"
     }
   },
   "skills": {}
