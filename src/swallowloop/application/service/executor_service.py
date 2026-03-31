@@ -1,6 +1,7 @@
 """Executor Service - AI 执行编排"""
 
 import asyncio
+import json
 import logging
 import os
 from datetime import datetime
@@ -81,47 +82,122 @@ class ExecutorService(IExecutor):
 
         return context_path
 
+    def _generate_stage_file(self, issue: Issue, stage: Stage, stage_state, prev_result: dict | None = None) -> tuple[str, str]:
+        """
+        生成 Stage 文件
+
+        Returns:
+            (stage_file_path, result_file_path)
+        """
+        workspace_path = Path(issue.workspace.workspace_path) if issue.workspace else None
+        if not workspace_path:
+            raise ValueError("Issue workspace not initialized")
+
+        # Stage 文件路径: {stage_id}-{name}.md
+        stage_file = workspace_path / f"{stage.value}.md"
+        result_file = workspace_path / f"{stage.value}-result.json"
+
+        # 读取指令文件
+        instruction_file = INSTRUCTIONS_DIR / f"{stage.value}.md"
+        instruction = ""
+        if instruction_file.exists():
+            instruction = instruction_file.read_text()
+
+        # 构建上下文
+        context_content = f"""# Stage {stage.value}
+
+## 任务描述
+{stage_state.document or instruction or "无"}
+
+## 上下文
+- Issue: {issue.title}
+- Issue ID: {issue.id}
+- 仓库: {issue.repo_url or "N/A"}
+"""
+
+        # 如果有上一个 Stage 的结果，添加为输入
+        if prev_result:
+            context_content += f"""
+## 上一个 Stage 结果
+```json
+{json.dumps(prev_result, ensure_ascii=False, indent=2)}
+```
+"""
+
+        context_content += f"""
+## 期望输出
+完成 {stage.value} 任务后，将结果写入 {result_file.name}
+结果使用 JSON 格式：
+{{
+  "status": "success" | "failed",
+  "output": "执行摘要",
+  "files": ["生成的文件列表"],
+  "error": "错误信息（如果有）"
+}}
+"""
+
+        stage_file.write_text(context_content, encoding="utf-8")
+        logger.debug(f"生成 stage 文件: {stage_file}")
+
+        return str(stage_file), str(result_file)
+
     async def prepare_workspace(self, issue: Issue, stage: Stage) -> bool:
         """准备工作空间（在 submit 之前调用）
 
-        1. 调用 agent.prepare() 创建 workspace
-        2. 创建 stages/{stage}/ 目录
-        3. 保存 issue 到仓库（让 worker 能看到 workspace）
+        1. 调用 agent.prepare() 创建 Thread
+        2. 保存 thread_id 和 thread_path 到 issue
+        3. 生成 stage 文件
+        4. 保存 issue 到仓库
 
         Returns:
             True if success, False otherwise
         """
-        project = "default"
         stage_state = issue.get_stage_state(stage)
 
-        # 1. 调用 agent.prepare() 准备工作空间
-        if self._agent:
-            context = {
-                "repo_url": issue.repo_url or "",
-                "branch": str(issue.id),
-                "stage": stage.value,
-            }
-            try:
-                workspace_info = await self._agent.prepare(str(issue.id), context)
-                issue.workspace = workspace_info
-            except Exception as e:
-                logger.error(f"agent.prepare() 失败: {e}")
+        # 1. 如果已有 thread_id，复用；否则创建新的
+        if issue.thread_id:
+            logger.info(f"Issue {issue.id} 已有 thread_id={issue.thread_id}，复用")
+            workspace_path = Path(issue.thread_path) if issue.thread_path else None
+            if not workspace_path:
+                workspace_path = (
+                    Path.home() / ".deer-flow" / ".deer-flow" / "threads" / issue.thread_id / "user-data" / "workspace"
+                ).resolve()
+                issue.thread_path = str(workspace_path)
+        else:
+            # 调用 agent.prepare() 创建 Thread
+            if self._agent:
+                context = {
+                    "repo_url": issue.repo_url or "",
+                    "branch": str(issue.id),
+                    "stage": stage.value,
+                }
+                try:
+                    workspace_info = await self._agent.prepare(str(issue.id), context)
+                    issue.workspace = workspace_info
+                    issue.thread_id = workspace_info.id
+                    issue.thread_path = workspace_info.workspace_path
+                    logger.info(f"DeerFlow Thread 创建成功: thread_id={issue.thread_id}")
+                except Exception as e:
+                    logger.error(f"agent.prepare() 失败: {e}")
+                    return False
+            else:
+                logger.error("Agent 未配置")
                 return False
 
-        # 2. 创建 stages/{stage}/ 目录
+        # 2. 生成 stage 文件
         try:
-            context_path = self.prepare_stage_context(project, str(issue.id), stage, stage_state.document)
-            if not context_path.parent.exists():
-                logger.error(f"工作空间目录创建失败: {context_path.parent}")
-                return False
+            workspace_path = Path(issue.thread_path)
+            workspace_path.mkdir(parents=True, exist_ok=True)
+            stage_file, result_file = self._generate_stage_file(issue, stage, stage_state)
+            logger.info(f"Stage 文件已生成: {stage_file}")
         except Exception as e:
-            logger.error(f"prepare_stage_context() 失败: {e}")
+            logger.error(f"生成 stage 文件失败: {e}")
             return False
 
-        # 3. 保存 issue（workspace 已设置）
+        # 3. 保存 issue
         self._repo.save(issue)
 
-        logger.info(f"工作空间准备完成: {issue.id}/{stage.value}")
+        logger.info(f"工作空间准备完成: {issue.id}/{stage.value}, thread_id={issue.thread_id}")
         return True
 
     async def execute_stage(self, issue: Issue, stage: Stage) -> dict:
@@ -148,36 +224,52 @@ class ExecutorService(IExecutor):
         # 2. 广播状态更新
         await self._broadcast("issue_updated", {"issue": self._issue_to_dict(issue)})
 
-        # 3. 调用 Agent 执行
-        # context_path 从已创建的 workspace 获取
-        workspace_path = Path(issue.workspace.workspace_path) if issue.workspace else None
-        context_path = workspace_path / stage.value / "context.md" if workspace_path else None
+        # 3. 构建文件路径
+        workspace_path = Path(issue.thread_path) if issue.thread_path else None
+        if not workspace_path:
+            logger.error("Issue 没有 thread_path")
+            machine.error(stage)
+            return {"success": False, "output": "", "error": "thread_path not found"}
+
+        stage_file = workspace_path / f"{stage.value}.md"
+        result_file = workspace_path / f"{stage.value}-result.json"
+
+        # 4. 构建任务指令
+        task_message = f"""请读取并执行任务文件 {stage_file}，完成后将结果写入 {result_file}。"""
 
         context = {
-            "issue_id": str(issue.id),
-            "title": issue.title,
-            "description": issue.description,
-            "stage": stage.value,
-            "document": stage_state.document,
-            "context_path": str(context_path) if context_path else None,
-            "thread_id": issue.workspace.id if issue.workspace else None,
-            "workspace_path": issue.workspace.workspace_path if issue.workspace else None,
+            "thread_id": issue.thread_id,
+            "stage_file": str(stage_file),
+            "result_file": str(result_file),
         }
 
-        task_description = f"执行阶段 {stage.value}：{issue.title}"
+        logger.info(f"开始执行 DeerFlow 任务: thread_id={issue.thread_id}, stage={stage.value}")
+        logger.debug(f"Task message: {task_message}")
 
-        logger.info(f"开始执行 Agent 任务: {task_description}")
-        result = await self._agent.execute(task_description, context)
+        # 5. 调用 Agent 执行
+        result = await self._agent.execute(task_message, context)
 
-        # 根据执行结果转换状态：RUNNING → PENDING 或 ERROR
+        # 6. 根据执行结果转换状态：RUNNING → PENDING 或 ERROR
         if result.success:
-            # 将 Agent 输出写入 document
-            stage_state.document = result.output or ""
+            # 读取 result.json 获取结构化输出
+            try:
+                if result_file.exists():
+                    with open(result_file, "r", encoding="utf-8") as f:
+                        result_data = json.load(f)
+                        stage_state.document = result_data.get("output", result.output or "")
+                    # 删除 result.json 表示已消费
+                    result_file.unlink(missing_ok=True)
+                else:
+                    stage_state.document = result.output or ""
+            except Exception as e:
+                logger.warning(f"读取 result.json 失败: {e}")
+                stage_state.document = result.output or ""
+
             machine.execute(stage)  # RUNNING → PENDING
-            logger.info(f"Agent 执行成功，阶段 {stage.value} 等待人工审批")
+            logger.info(f"DeerFlow 执行成功，阶段 {stage.value} 等待人工审批")
         else:
             machine.error(stage)  # RUNNING → ERROR
-            logger.error(f"Agent 执行失败，阶段 {stage.value} 转为 ERROR: {result.error}")
+            logger.error(f"DeerFlow 执行失败，阶段 {stage.value} 转为 ERROR: {result.error}")
 
         # 广播状态更新
         await self._broadcast("issue_updated", {"issue": self._issue_to_dict(issue)})

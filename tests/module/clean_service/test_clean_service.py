@@ -178,11 +178,8 @@ class TestCleanService:
             archived_at=datetime.now(),
             cleaned=False,
             cleaned_at=None,
-            workspace=Workspace(
-                id="test-api-call",
-                ready=True,
-                workspace_path="/home/user/.deer-flow/threads/test-api-call/user-data/workspace",
-            ),
+            thread_id="test-api-call",
+            thread_path="/home/user/.deer-flow/.deer-flow/threads/test-api-call/user-data/workspace",
         )
 
         mock_repository.list_all.return_value = [issue]

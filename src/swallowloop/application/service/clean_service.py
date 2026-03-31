@@ -84,11 +84,11 @@ class CleanService:
 
     async def _cleanup_issue(self, issue: "Issue") -> None:
         """清理单个 Issue 的资源"""
-        if not issue.workspace or not issue.workspace.id:
-            logger.info(f"Issue {issue.id} 无 workspace，跳过")
+        if not issue.thread_id:
+            logger.info(f"Issue {issue.id} 无 thread_id，跳过")
             return
 
-        thread_id = issue.workspace.id
+        thread_id = issue.thread_id
 
         # 1. 调用 DeerFlow API 清理 Thread
         try:
@@ -101,16 +101,17 @@ class CleanService:
             logger.warning(f"DeerFlow Thread 清理异常: {e}")
 
         # 2. 删除本地目录
-        workspace_path = Path(issue.workspace.workspace_path)
-        if workspace_path.exists():
-            try:
-                # 只删除 thread 相关的目录
-                thread_dir = workspace_path.parent.parent  # .deer-flow/threads/{thread_id}
-                if thread_dir.exists():
-                    shutil.rmtree(thread_dir)
-                    logger.info(f"本地目录清理成功: {thread_dir}")
-            except Exception as e:
-                logger.warning(f"本地目录清理失败: {e}")
+        if issue.thread_path:
+            thread_path = Path(issue.thread_path)
+            if thread_path.exists():
+                try:
+                    # 删除整个 thread 目录
+                    thread_dir = thread_path.parent.parent  # {thread_id}/user-data -> {thread_id}
+                    if thread_dir.exists():
+                        shutil.rmtree(thread_dir)
+                        logger.info(f"本地目录清理成功: {thread_dir}")
+                except Exception as e:
+                    logger.warning(f"本地目录清理失败: {e}")
 
         # 3. 标记已清理
         issue.cleaned = True

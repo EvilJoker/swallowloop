@@ -1,7 +1,10 @@
 """DeerFlowAgent 模块测试"""
 
+import json
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+import tempfile
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch, mock_open
 
 from swallowloop.infrastructure.agent import DeerFlowAgent, Workspace
 
@@ -30,25 +33,26 @@ class TestDeerFlowAgent:
         agent = DeerFlowAgent(base_url="http://localhost:2024")
         mock_client = self._create_mock_client(
             response_status=200,
-            response_json={"thread_id": "issue-123"}
+            response_json={"thread_id": "new-thread-123"}
         )
 
         with patch.object(agent, '_create_client', return_value=mock_client):
-            workspace_info = await agent.prepare(
-                issue_id="issue-123",
-                context={
-                    "repo_url": "https://github.com/test/repo",
-                    "branch": "issue-123",
-                    "stage": "brainstorm"
-                }
-            )
+            with patch.object(Path, 'mkdir'):
+                workspace_info = await agent.prepare(
+                    issue_id="issue-123",
+                    context={
+                        "repo_url": "https://github.com/test/repo",
+                        "branch": "issue-123",
+                        "stage": "brainstorm"
+                    }
+                )
 
-            # 验证返回的 WorkspaceInfo
-            assert workspace_info.id == "issue-123"
-            assert workspace_info.ready is True
-            assert workspace_info.repo_url == "https://github.com/test/repo"
-            assert workspace_info.branch == "issue-123"
-            assert ".deer-flow/threads/issue-123" in workspace_info.workspace_path
+                # 验证返回的 WorkspaceInfo
+                assert workspace_info.id == "new-thread-123"
+                assert workspace_info.ready is True
+                assert workspace_info.repo_url == "https://github.com/test/repo"
+                assert workspace_info.branch == "issue-123"
+                assert ".deer-flow/.deer-flow/threads/new-thread-123" in workspace_info.workspace_path
 
     @pytest.mark.asyncio
     async def test_deerflow_agent_prepare_uses_existing_thread_id(self):
@@ -60,17 +64,18 @@ class TestDeerFlowAgent:
         )
 
         with patch.object(agent, '_create_client', return_value=mock_client):
-            workspace_info = await agent.prepare(
-                issue_id="issue-123",
-                context={"repo_url": "", "branch": "", "stage": ""}
-            )
+            with patch.object(Path, 'mkdir'):
+                workspace_info = await agent.prepare(
+                    issue_id="issue-123",
+                    context={"repo_url": "", "branch": "", "stage": ""}
+                )
 
-            # 使用返回的 thread_id
-            assert workspace_info.id == "different-thread-id"
+                # 使用返回的 thread_id
+                assert workspace_info.id == "different-thread-id"
 
     @pytest.mark.asyncio
     async def test_deerflow_agent_execute_success(self):
-        """测试 DeerFlowAgent.execute 成功执行并提取响应"""
+        """测试 DeerFlowAgent.execute 成功执行并轮询 result.json"""
         agent = DeerFlowAgent(base_url="http://localhost:2024")
 
         # Mock run 提交响应
@@ -78,49 +83,33 @@ class TestDeerFlowAgent:
         mock_run_response.status_code = 200
         mock_run_response.json.return_value = {"run_id": "run-123", "status": "pending"}
 
-        # Mock thread 状态响应（包含消息）
-        mock_success_response = MagicMock()
-        mock_success_response.status_code = 200
-        mock_success_response.json.return_value = {
-            "status": "success",
-            "values": {
-                "messages": [
-                    {"type": "human", "content": "test task"},
-                    {"type": "ai", "content": "AI response content"}
-                ]
-            }
-        }
-
         mock_client = MagicMock()
         mock_client.post = AsyncMock(return_value=mock_run_response)
-        # 模拟轮询：一直返回 success 直到循环退出
-        mock_client.get = AsyncMock(return_value=mock_success_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        # 直接 patch _wait_for_run 方法来简化测试
-        async def mock_wait_for_run(client, thread_id, run_id):
-            return {
-                "values": {
-                    "messages": [
-                        {"type": "human", "content": "test task"},
-                        {"type": "ai", "content": "AI response content"}
-                    ]
-                }
-            }
+        # Mock result.json 存在
+        result_data = {
+            "status": "success",
+            "output": "Task completed successfully",
+            "files": ["output.txt"],
+            "error": ""
+        }
 
         with patch.object(agent, '_create_client', return_value=mock_client):
-            with patch.object(agent, '_wait_for_run', mock_wait_for_run):
-                result = await agent.execute(
-                    task="分析这个代码",
-                    context={
-                        "thread_id": "issue-123",
-                        "workspace_path": "/path/to/workspace"
-                    }
-                )
+            with patch('os.path.exists', return_value=True):
+                with patch('builtins.open', mock_open(read_data=json.dumps(result_data))):
+                    result = await agent.execute(
+                        task="请读取并执行任务",
+                        context={
+                            "thread_id": "issue-123",
+                            "stage_file": "/path/to/stage.md",
+                            "result_file": "/path/to/result.json"
+                        }
+                    )
 
-                assert result.success is True
-                assert "AI response content" in result.output
+                    assert result.success is True
+                    assert "Task completed successfully" in result.output
 
     @pytest.mark.asyncio
     async def test_deerflow_agent_execute_missing_thread_id(self):
@@ -136,27 +125,17 @@ class TestDeerFlowAgent:
         assert "thread_id required" in result.error
 
     @pytest.mark.asyncio
-    async def test_deerflow_agent_execute_error_response(self):
-        """测试 DeerFlowAgent.execute 错误响应"""
+    async def test_deerflow_agent_execute_missing_stage_files(self):
+        """测试 DeerFlowAgent.execute 缺少 stage_file 或 result_file"""
         agent = DeerFlowAgent(base_url="http://localhost:2024")
 
-        mock_response = MagicMock()
-        mock_response.status_code = 500
-        mock_response.text = "Internal Server Error"
+        result = await agent.execute(
+            task="分析这个代码",
+            context={"thread_id": "issue-123"}  # 没有 stage_file 和 result_file
+        )
 
-        mock_client = MagicMock()
-        mock_client.post = AsyncMock(return_value=mock_response)
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=None)
-
-        with patch.object(agent, '_create_client', return_value=mock_client):
-            result = await agent.execute(
-                task="分析这个代码",
-                context={"thread_id": "issue-123"}
-            )
-
-            assert result.success is False
-            assert "500" in result.error
+        assert result.success is False
+        assert "stage_file 和 result_file 必须提供" in result.error
 
     @pytest.mark.asyncio
     async def test_deerflow_agent_cleanup(self):
@@ -186,49 +165,14 @@ class TestDeerFlowAgent:
         )
 
         with patch.object(agent, '_create_client', return_value=mock_client):
-            workspace_info = await agent.prepare(
-                issue_id="test-thread",
-                context={"repo_url": "", "branch": "", "stage": ""}
-            )
-
-            # 验证路径格式
-            assert workspace_info.workspace_path.endswith("test-thread/user-data/workspace")
-
-    @pytest.mark.asyncio
-    async def test_deerflow_agent_extracts_tool_message_content(self):
-        """测试 DeerFlowAgent 从 type=tool 消息中提取内容"""
-        agent = DeerFlowAgent(base_url="http://localhost:2024")
-
-        # 直接 patch _wait_for_run 方法来简化测试
-        async def mock_wait_for_run(client, thread_id, run_id):
-            return {
-                "values": {
-                    "messages": [
-                        {"type": "human", "content": "task"},
-                        {"type": "tool", "content": "This is tool response content"}
-                    ]
-                }
-            }
-
-        # Mock run 提交响应
-        mock_run_response = MagicMock()
-        mock_run_response.status_code = 200
-        mock_run_response.json.return_value = {"run_id": "run-123", "status": "pending"}
-
-        mock_client = MagicMock()
-        mock_client.post = AsyncMock(return_value=mock_run_response)
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=None)
-
-        with patch.object(agent, '_create_client', return_value=mock_client):
-            with patch.object(agent, '_wait_for_run', mock_wait_for_run):
-                result = await agent.execute(
-                    task="test",
-                    context={"thread_id": "issue-123"}
+            with patch.object(Path, 'mkdir'):
+                workspace_info = await agent.prepare(
+                    issue_id="test-thread",
+                    context={"repo_url": "", "branch": "", "stage": ""}
                 )
 
-                assert result.success is True
-                assert "tool response content" in result.output
+                # 验证路径格式: ~/.deer-flow/.deer-flow/threads/{thread_id}/user-data/workspace
+                assert workspace_info.workspace_path.endswith("test-thread/user-data/workspace")
 
 
 class TestWorkspace:

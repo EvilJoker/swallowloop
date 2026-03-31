@@ -3,6 +3,7 @@
 MODULE_NAME = "infrastructure.agent"
 
 import logging
+import os
 
 from .base import BaseAgent, AgentResult
 from .mock_agent import MockAgent
@@ -18,8 +19,9 @@ def create_agent(agent_type: str = "mock") -> BaseAgent:
         logger.info("使用 MockAgent，延迟 5 秒")
         return MockAgent(delay_seconds=5.0)
     elif agent_type == "deerflow":
-        logger.info("使用 DeerFlowAgent")
-        return DeerFlowAgent()
+        base_url = os.getenv("DEERFLOW_BASE_URL", "http://localhost:2024")
+        logger.info(f"使用 DeerFlowAgent，base_url={base_url}")
+        return DeerFlowAgent(base_url=base_url)
     else:
         logger.warning(f"Agent 类型 '{agent_type}' 暂不支持，使用 MockAgent")
         return MockAgent(delay_seconds=5.0)

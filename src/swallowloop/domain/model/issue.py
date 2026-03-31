@@ -68,6 +68,10 @@ class Issue:
     cleaned: bool = False  # 是否已清理
     cleaned_at: Optional[datetime] = None  # 上次清理时间
 
+    # DeerFlow Thread 信息
+    thread_id: str = ""  # DeerFlow 返回的 UUID，保留历史
+    thread_path: str = ""  # workspace 路径，保留历史
+
     def __post_init__(self):
         if not self.stages:
             self.stages = self._create_default_stages()
