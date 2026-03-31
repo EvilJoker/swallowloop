@@ -55,8 +55,11 @@ export function IssueCard({ issue, onClick, onDelete, className }: IssueCardProp
 
   return (
     <div className={cn('relative group', className)}>
-      <button
+      <div
+        role="button"
+        tabIndex={0}
         onClick={onClick}
+        onKeyDown={(e) => e.key === 'Enter' && onClick?.()}
         className={cn(
           'w-full p-3 bg-white rounded-xl border border-slate-200 border-l-4 shadow-sm text-left',
           'hover:shadow-md hover:border-slate-300 hover:-translate-y-0.5 transition-all cursor-pointer',
@@ -100,7 +103,7 @@ export function IssueCard({ issue, onClick, onDelete, className }: IssueCardProp
             {config.label}
           </span>
         </div>
-      </button>
+      </div>
     </div>
   );
 }

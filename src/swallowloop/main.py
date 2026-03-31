@@ -18,8 +18,14 @@ logger = logging.getLogger(__name__)
 
 
 def _run_clean_service(clean_service: "CleanService") -> None:
-    """在独立线程中运行 CleanService"""
-    asyncio.run(clean_service.start())
+    """在独立线程中运行 CleanService（使用 run_forever 避免 asyncio.run 阻塞）"""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.create_task(clean_service.start())
+    try:
+        loop.run_forever()
+    finally:
+        loop.close()
 
 
 def create_services():
