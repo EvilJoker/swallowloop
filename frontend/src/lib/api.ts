@@ -200,60 +200,26 @@ export function createExecutionLogSocket(issueId: string): WebSocket {
   return new WebSocket(`${protocol}//${host}/ws/execution/${issueId}`);
 }
 
-// Settings API
-export interface Settings {
-  github_repos: string[];
-  llm_api_key: string;
-  llm_base_url: string;
-  llm_model: string;
-  agent_type: string;
-  poll_interval: number;
-  issue_label: string;
-  base_branch: string;
-  max_workers: number;
-  env_overrides: Record<string, boolean>;
+// DeerFlow Status API
+export interface DeerFlowStatus {
+  status: 'online' | 'offline';
+  version: string | null;
+  model_name: string | null;
+  model_display_name: string | null;
+  minimax_used: number;
+  minimax_quota: number;
+  minimax_next_refresh: string | null;
+  base_url: string;
+  data_dir: string;
+  active_threads: number;
 }
 
-export interface SettingsUpdate {
-  github_repos?: string[];
-  llm_api_key?: string;
-  llm_base_url?: string;
-  llm_model?: string;
-  agent_type?: string;
-  poll_interval?: number;
-  issue_label?: string;
-  base_branch?: string;
-  max_workers?: number;
-}
-
-export const settingsApi = {
+export const deerflowApi = {
   /**
-   * 获取当前设置
+   * 获取 DeerFlow 状态
    */
-  async get(): Promise<Settings> {
-    const response = await fetch(`${API_BASE}/settings`);
-    return handleResponse<Settings>(response);
-  },
-
-  /**
-   * 更新设置
-   */
-  async update(settings: SettingsUpdate): Promise<{ status: string; message: string }> {
-    const response = await fetch(`${API_BASE}/settings`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(settings),
-    });
-    return handleResponse<{ status: string; message: string }>(response);
-  },
-
-  /**
-   * 重启后端
-   */
-  async restart(): Promise<{ status: string; message: string }> {
-    const response = await fetch(`${API_BASE}/admin/restart`, {
-      method: 'POST',
-    });
-    return handleResponse<{ status: string; message: string }>(response);
+  async getStatus(): Promise<DeerFlowStatus> {
+    const response = await fetch(`${API_BASE}/deerflow/status`);
+    return handleResponse<DeerFlowStatus>(response);
   },
 };

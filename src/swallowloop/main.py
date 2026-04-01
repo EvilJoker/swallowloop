@@ -7,6 +7,7 @@ import threading
 from pathlib import Path
 
 from .application.service.stage_loop import StageLoop
+from .infrastructure.llm import init_llm
 from .application.service.executor_service import ExecutorService
 from .application.service.clean_service import CleanService
 from .domain.repository import IssueRepository
@@ -33,7 +34,7 @@ def create_services():
     from .infrastructure.instance_registry import register_instance
     from .interfaces.web.api.websockets import manager
     from .infrastructure.agent import MockAgent, DeerFlowAgent
-    from .infrastructure.config import Settings
+    from .infrastructure.config import Config
 
     # Repository
     repository: IssueRepository = InMemoryIssueRepository()
@@ -42,14 +43,22 @@ def create_services():
     # WebSocket Manager
     register_instance("ws_manager", manager)
 
-    # Settings
+    # Config
     try:
-        settings = Settings.from_env()
+        config = Config.load()
     except ValueError:
         # 独立运行时使用默认配置
-        settings = None
+        config = None
 
-    register_instance("settings", settings)
+    register_instance("config", config)
+
+    # LLM（初始化 MiniMax Provider）
+    try:
+        llm = init_llm()
+        register_instance("llm", llm)
+    except Exception as e:
+        logger.warning(f"LLM 初始化失败: {e}")
+        register_instance("llm", None)
 
     # Agent
     agent_type = os.getenv("AGENT_TYPE", "mock")
@@ -76,7 +85,7 @@ def create_services():
     worker_pool = ExecutorWorkerPool(executor=executor, max_workers=3)
     register_instance("worker_pool", worker_pool)
 
-    return repository, executor, worker_pool, agent, settings, clean_service
+    return repository, executor, worker_pool, agent, config, clean_service
 
 
 def main(port: int = 9500):
@@ -91,7 +100,7 @@ def main(port: int = 9500):
     logger.info("=" * 50)
 
     # 1. 创建共享服务
-    repository, executor, worker_pool, agent, settings, clean_service = create_services()
+    repository, executor, worker_pool, agent, config, clean_service = create_services()
 
     # 2. 创建 StageLoop
     stage_loop = StageLoop(

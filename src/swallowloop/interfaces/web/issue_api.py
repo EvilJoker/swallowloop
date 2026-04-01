@@ -8,7 +8,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from .api.issues import router as issues_router, init_services
-from .api.settings import router as settings_router
+from .api.deerflow import router as deerflow_router
 from .api.websockets import manager
 
 app = FastAPI(title="SwallowLoop Issue API", version="1.0.0")
@@ -24,7 +24,7 @@ app.add_middleware(
 
 # 注册路由
 app.include_router(issues_router, prefix="/api", tags=["issues"])
-app.include_router(settings_router, prefix="/api", tags=["settings"])
+app.include_router(deerflow_router, prefix="/api", tags=["deerflow"])
 
 
 @app.get("/health")

@@ -52,7 +52,7 @@ class TestDeerFlowAgent:
                 assert workspace_info.ready is True
                 assert workspace_info.repo_url == "https://github.com/test/repo"
                 assert workspace_info.branch == "issue-123"
-                assert ".deer-flow/.deer-flow/threads/new-thread-123" in workspace_info.workspace_path
+                assert ".deer-flow/threads/new-thread-123" in workspace_info.workspace_path
 
     @pytest.mark.asyncio
     async def test_deerflow_agent_prepare_uses_existing_thread_id(self):

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .executor import IExecutor
     from ...infrastructure.agent import BaseAgent
-    from ...infrastructure.config import Settings
+    from ...infrastructure.config import Config
 
 from ...domain.model import Issue, IssueId, Stage, IssueStatus, Workspace
 from ...domain.repository import IssueRepository
@@ -20,11 +20,11 @@ logger = logging.getLogger(__name__)
 class IssueService:
     """Issue 应用服务"""
 
-    def __init__(self, repository: IssueRepository, executor: "IExecutor", agent: "BaseAgent | None" = None, settings: "Settings | None" = None, ws_manager=None):
+    def __init__(self, repository: IssueRepository, executor: "IExecutor", agent: "BaseAgent | None" = None, config: "Config | None" = None, ws_manager=None):
         self._repo = repository
         self._executor = executor
         self._agent = agent
-        self._settings = settings
+        self._config = config
         self._hooks = [LoggerHook()]
         self._ws_manager = ws_manager
 

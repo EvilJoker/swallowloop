@@ -160,7 +160,7 @@ class ExecutorService(IExecutor):
             workspace_path = Path(issue.thread_path) if issue.thread_path else None
             if not workspace_path:
                 workspace_path = (
-                    Path.home() / ".deer-flow" / ".deer-flow" / "threads" / issue.thread_id / "user-data" / "workspace"
+                    Path.home() / ".deer-flow" / "threads" / issue.thread_id / "user-data" / "workspace"
                 ).resolve()
                 issue.thread_path = str(workspace_path)
         else:

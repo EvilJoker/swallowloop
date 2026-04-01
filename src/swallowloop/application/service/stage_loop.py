@@ -9,8 +9,12 @@ if TYPE_CHECKING:
     from ...domain.repository import IssueRepository
     from .worker_pool import ExecutorWorkerPool
     from .executor_service import ExecutorService
+    from ...infrastructure.llm import LLMProviderBase
 
 logger = logging.getLogger(__name__)
+
+# LLM 用量查询间隔（秒）
+LLM_USAGE_INTERVAL_SECONDS = 30
 
 
 class StageLoop:
@@ -21,13 +25,16 @@ class StageLoop:
         repository: "IssueRepository",
         worker_pool: "ExecutorWorkerPool",
         executor: "ExecutorService",
+        llm: "LLMProviderBase | None" = None,
         interval: int = 5,
     ):
         self._repo = repository
         self._worker_pool = worker_pool
         self._executor = executor
+        self._llm = llm
         self._interval = interval
         self._loop: asyncio.AbstractEventLoop | None = None
+        self._last_llm_usage_check: float = 0  # 上次查询时间戳
 
     def start(self) -> None:
         """启动主循环（阻塞）"""
@@ -54,6 +61,22 @@ class StageLoop:
     async def _maintain_async(self) -> None:
         """异步扫描并触发可执行 AI 的阶段（NEW/REJECTED/ERROR）"""
         from ...domain.model import Stage, StageStatus
+        from ...infrastructure.llm import get_llm_usage
+
+        # LLM 用量查询（每30秒一次）
+        current_time = time.monotonic()
+        if self._llm and (current_time - self._last_llm_usage_check) >= LLM_USAGE_INTERVAL_SECONDS:
+            try:
+                usage = await get_llm_usage()
+                if usage:
+                    logger.debug(
+                        f"LLM 用量: used={usage.used}, quota={usage.quota}, "
+                        f"next_refresh={usage.next_refresh}"
+                    )
+            except Exception as e:
+                logger.warning(f"LLM 用量查询失败: {e}")
+            finally:
+                self._last_llm_usage_check = current_time
 
         # 获取所有可触发状态的 (issue, stage) 对
         triggerable_statuses = [StageStatus.NEW, StageStatus.REJECTED, StageStatus.ERROR]

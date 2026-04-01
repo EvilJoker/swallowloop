@@ -1,0 +1,25 @@
+# SwallowLoop 业务配置示例
+# 复制为 ~/.swallowloop/config.yaml 使用
+# 支持 ${VAR_NAME} 语法引用环境变量或 .env 中的值
+
+# 仓库配置
+repos: owner/repo1,owner/repo2
+
+# Agent 配置
+agent_type: mock  # mock | deerflow
+deerflow_base_url: http://localhost:2026
+
+# Worker 配置
+max_workers: 5
+
+# 轮询配置
+poll_interval: 60  # 秒
+issue_label: swallow
+base_branch: main
+
+# LLM 配置
+llm_provider: minimax  # minimax | openai
+# 使用 ${} 引用 .env 或环境变量中的敏感信息
+llm_api_key: ${OPENAI_API_KEY}
+llm_base_url: https://api.minimaxi.com/v1
+llm_model_name: m2.7

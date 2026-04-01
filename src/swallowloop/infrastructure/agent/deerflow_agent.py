@@ -86,9 +86,9 @@ class DeerFlowAgent(BaseAgent):
             raise Exception(f"创建 DeerFlow Thread 失败: {last_error}")
 
         # 计算工作空间路径
-        # 实际路径: ~/.deer-flow/.deer-flow/threads/{thread_id}/user-data/workspace/
+        # 实际路径: ~/.deer-flow/threads/{thread_id}/user-data/workspace/
         workspace_path = (
-            Path.home() / ".deer-flow" / ".deer-flow" / "threads" / thread_id / "user-data" / "workspace"
+            Path.home() / ".deer-flow" / "threads" / thread_id / "user-data" / "workspace"
         ).resolve()
 
         # 确保目录存在

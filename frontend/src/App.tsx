@@ -5,8 +5,8 @@ import { MainContent } from '@/components/layout/MainContent';
 import { KanbanBoard } from '@/components/kanban/KanbanBoard';
 import { IssueDetail } from '@/components/issue/IssueDetail';
 import { Overview } from '@/pages/Overview';
-import { Settings } from '@/pages/Settings';
 import { Archive } from '@/pages/Archive';
+import { DeerFlow } from '@/pages/DeerFlow';
 import type { Issue } from '@/types';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -14,7 +14,7 @@ import { issueApi } from '@/lib/api';
 import { useIssueStore } from '@/store/issueStore';
 import { initIssueWebSocket } from '@/lib/wsClient';
 
-type Page = 'home' | 'overview' | 'archive' | 'settings';
+type Page = 'home' | 'overview' | 'archive' | 'deerflow';
 
 interface Tab {
   id: string;
@@ -209,8 +209,8 @@ function App() {
         return <Overview />;
       case 'archive':
         return <Archive />;
-      case 'settings':
-        return <Settings />;
+      case 'deerflow':
+        return <DeerFlow />;
       default:
         return <Overview />;
     }

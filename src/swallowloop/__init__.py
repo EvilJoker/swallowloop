@@ -33,9 +33,9 @@ from .infrastructure import (
     BaseAgent,
     MockAgent,
     AgentResult,
-    Settings,
+    Config,
     LLMConfig,
-    LLMProvider,
+    LLMProviderEnum,
     setup_logging,
     get_logger,
     SelfUpdater,
@@ -83,9 +83,9 @@ __all__ = [
     "MockAgent",
     "AgentResult",
     # 基础设施层 - 配置
-    "Settings",
+    "Config",
     "LLMConfig",
-    "LLMProvider",
+    "LLMProviderEnum",
     # 基础设施层 - 日志
     "setup_logging",
     "get_logger",

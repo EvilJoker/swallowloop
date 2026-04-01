@@ -27,7 +27,7 @@ def init_services():
     executor = get_instance("executor")
     ws_manager = get_instance("ws_manager")
     agent = get_instance("agent")
-    settings = get_instance("settings")
+    config = get_instance("config")
 
     if repository is not None and executor is not None:
         # 使用共享实例
@@ -36,7 +36,7 @@ def init_services():
             repository=repository,
             executor=_executor_service,
             agent=agent,
-            settings=settings,
+            config=config,
             ws_manager=ws_manager
         )
     else:

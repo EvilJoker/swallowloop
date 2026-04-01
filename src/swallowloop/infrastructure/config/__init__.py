@@ -2,6 +2,6 @@
 
 MODULE_NAME = "infrastructure.config"
 
-from .settings import Settings
+from .Config import Config
 
-__all__ = ["MODULE_NAME", "Settings"]
+__all__ = ["MODULE_NAME", "Config"]

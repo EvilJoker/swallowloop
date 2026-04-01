@@ -11,10 +11,10 @@ from .persistence import (
 from .agent import BaseAgent, MockAgent, AgentResult
 
 # 配置
-from .config import Settings
+from .config import Config
 
 # LLM
-from .llm import LLMConfig, LLMProvider
+from .llm import LLMConfig, LLMProviderEnum
 
 # 日志
 from .logger import setup_logging, get_logger
@@ -34,10 +34,10 @@ __all__ = [
     "MockAgent",
     "AgentResult",
     # 配置
-    "Settings",
+    "Config",
     # LLM
     "LLMConfig",
-    "LLMProvider",
+    "LLMProviderEnum",
     # 日志
     "setup_logging",
     "get_logger",
