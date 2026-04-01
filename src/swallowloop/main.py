@@ -61,8 +61,8 @@ def create_services():
         register_instance("llm", None)
 
     # Agent
-    agent_type = os.getenv("AGENT_TYPE", "mock")
-    deerflow_base_url = os.getenv("DEERFLOW_BASE_URL", "http://localhost:2024")
+    agent_type = config.get("AGENT_TYPE", "mock") if config else os.getenv("AGENT_TYPE", "mock")
+    deerflow_base_url = config.get("DEERFLOW_BASE_URL", "http://localhost:2026") if config else os.getenv("DEERFLOW_BASE_URL", "http://localhost:2026")
     if agent_type == "deerflow":
         agent = DeerFlowAgent(base_url=deerflow_base_url)
     else:
@@ -71,7 +71,7 @@ def create_services():
 
     # CleanService (仅 DeerFlow 模式需要)
     if agent_type == "deerflow":
-        clean_service = CleanService(repository=repository, base_url=deerflow_base_url, interval_hours=1)
+        clean_service = CleanService(repository=repository, agent=agent, interval_hours=1)
         register_instance("clean_service", clean_service)
     else:
         clean_service = None
@@ -107,6 +107,7 @@ def main(port: int = 9500):
         repository=repository,
         worker_pool=worker_pool,
         executor=executor,
+        agent=agent,
         interval=5,  # 5 秒一次
     )
 

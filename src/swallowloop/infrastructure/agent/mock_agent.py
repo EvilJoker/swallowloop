@@ -2,10 +2,11 @@
 
 import asyncio
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from .base import BaseAgent, AgentResult
+from .base import AgentResult, AgentStatus, BaseAgent
 from ...domain.model.workspace import Workspace
 
 logger = logging.getLogger(__name__)
@@ -24,6 +25,26 @@ class MockAgent(BaseAgent):
             delay_seconds: 模拟执行延迟（秒），默认 5 秒
         """
         self._delay_seconds = delay_seconds
+        self._status = AgentStatus(
+            status="online",
+            version="mock-1.0.0",
+            model_name="mock-model",
+            model_display_name="Mock Model",
+            llm_used=0,
+            llm_quota=1500,
+            llm_next_refresh=None,
+            base_url="mock://localhost",
+            active_threads=0,
+            last_update=datetime.now(),
+        )
+
+    def get_status(self) -> AgentStatus:
+        """获取缓存状态（MockAgent 总是返回 online）"""
+        return self._status
+
+    async def fetch_status(self) -> AgentStatus:
+        """刷新状态（MockAgent 直接返回缓存）"""
+        return self._status
 
     async def initialize(self) -> None:
         """Mock Agent 不需要初始化"""
@@ -83,3 +104,13 @@ class MockAgent(BaseAgent):
 
         logger.info(f"MockAgent 任务完成，耗时 {self._delay_seconds} 秒")
         return result
+
+    async def cleanup(self, thread_id: str, workspace_path: str | None = None) -> None:
+        """
+        MockAgent 清理：无需清理操作
+
+        Args:
+            thread_id: Thread ID（MockAgent 不使用）
+            workspace_path: 工作空间路径（MockAgent 不使用）
+        """
+        logger.info(f"MockAgent cleanup: {thread_id} (无操作)")

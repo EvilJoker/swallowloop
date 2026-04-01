@@ -5,13 +5,16 @@ import json
 import logging
 import os
 import time
+from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import httpx
 
-from .base import AgentResult, BaseAgent
+from .base import AgentResult, AgentStatus, BaseAgent
 from ...domain.model.workspace import Workspace
+from ...infrastructure.deerflow import DeerFlowClient
+from ...infrastructure.llm import get_llm_instance
 
 logger = logging.getLogger(__name__)
 
@@ -23,12 +26,25 @@ MAX_EXECUTE_TIMEOUT_SECONDS = 1800  # 最大执行时间 30 分钟
 class DeerFlowAgent(BaseAgent):
     """DeerFlow Agent - 通过 HTTP API 与 DeerFlow 通信"""
 
-    def __init__(self, base_url: str = "http://localhost:2024"):
+    def __init__(self, base_url: str = "http://localhost:2026"):
         """
         Args:
-            base_url: DeerFlow LangGraph API 地址（默认 http://localhost:2024）
+            base_url: DeerFlow LangGraph API 地址（默认 http://localhost:2026）
         """
         self._base_url = base_url
+        self._cleanup_client = DeerFlowClient(base_url=base_url)
+        self._status = AgentStatus(
+            status="offline",
+            version=None,
+            model_name=None,
+            model_display_name=None,
+            llm_used=0,
+            llm_quota=1500,
+            llm_next_refresh=None,
+            base_url=base_url,
+            active_threads=0,
+            last_update=None,
+        )
 
     def _create_client(self) -> httpx.AsyncClient:
         """创建 HTTP 客户端（每次调用创建新实例，避免 event loop 问题）"""
@@ -43,6 +59,70 @@ class DeerFlowAgent(BaseAgent):
                 logger.info(f"DeerFlow 连接检查完成: {response.status_code}")
         except Exception as e:
             logger.warning(f"DeerFlow 连接检查失败: {e}")
+
+    def get_status(self) -> AgentStatus:
+        """获取缓存状态（同步，毫秒级）"""
+        return self._status
+
+    async def fetch_status(self) -> AgentStatus:
+        """刷新状态（异步，调用 DeerFlow API + LLM API）"""
+        # 检查 DeerFlow 服务状态
+        is_online, version = await self._check_deerflow_health()
+        model_name, model_display_name = await self._get_deerflow_model()
+
+        # 获取 LLM 用量
+        llm_used = 0
+        llm_quota = 1500
+        llm_next_refresh: Optional[str] = None
+        llm = get_llm_instance()
+        if llm:
+            usage = await llm.fetch_usage()
+            if usage:
+                llm_used = usage.used
+                llm_quota = usage.quota
+                llm_next_refresh = usage.next_refresh.isoformat() if usage.next_refresh else None
+
+        # 更新缓存
+        self._status = AgentStatus(
+            status="online" if is_online else "offline",
+            version=version,
+            model_name=model_name,
+            model_display_name=model_display_name,
+            llm_used=llm_used,
+            llm_quota=llm_quota,
+            llm_next_refresh=llm_next_refresh,
+            base_url=self._base_url,
+            active_threads=self._status.active_threads,  # TODO: 从 DeerFlow 获取真实数量
+            last_update=datetime.now(),
+        )
+        return self._status
+
+    async def _check_deerflow_health(self) -> tuple[bool, Optional[str]]:
+        """检查 DeerFlow 服务状态"""
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(f"{self._base_url}/api/langgraph/info")
+                if response.status_code == 200:
+                    data = response.json()
+                    return True, data.get("version")
+                return False, None
+        except Exception:
+            return False, None
+
+    async def _get_deerflow_model(self) -> tuple[Optional[str], Optional[str]]:
+        """获取 DeerFlow 当前使用的模型"""
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(f"{self._base_url}/api/models")
+                if response.status_code == 200:
+                    data = response.json()
+                    models = data.get("models", [])
+                    if models:
+                        model = models[0]
+                        return model.get("model"), model.get("display_name")
+                return None, None
+        except Exception:
+            return None, None
 
     async def prepare(self, issue_id: str, context: dict[str, Any]) -> Workspace:
         """
@@ -222,20 +302,28 @@ class DeerFlowAgent(BaseAgent):
             logger.error(f"DeerFlow 执行失败: {e}")
             return AgentResult(success=False, output="", error=str(e))
 
-    async def cleanup(self, thread_id: str) -> None:
+    async def cleanup(self, thread_id: str, workspace_path: str | None = None) -> None:
         """
-        清理 Thread
+        清理 Thread 及其本地资源
 
         Args:
             thread_id: Thread ID
+            workspace_path: 工作空间路径（可选，用于清理本地目录）
         """
-        client = self._create_client()
-        try:
-            async with client:
-                response = await client.delete(f"{self._base_url}/threads/{thread_id}")
-                if response.status_code in [200, 204, 404]:
-                    logger.info(f"DeerFlow Thread 清理成功: {thread_id}")
-                else:
-                    logger.warning(f"DeerFlow Thread 清理失败: {response.status_code}")
-        except Exception as e:
-            logger.warning(f"DeerFlow Thread 清理失败: {e}")
+        # 1. 调用 DeerFlow API 清理 Thread
+        success = await self._cleanup_client.delete_thread(thread_id)
+        if success:
+            logger.info(f"DeerFlow Thread 清理成功: {thread_id}")
+        else:
+            logger.warning(f"DeerFlow Thread 清理失败: {thread_id}")
+
+        # 2. 清理本地目录
+        if workspace_path:
+            thread_dir = Path(workspace_path).parent.parent  # workspace/user-data -> thread
+            if thread_dir.exists():
+                try:
+                    import shutil
+                    shutil.rmtree(thread_dir)
+                    logger.info(f"本地目录清理成功: {thread_dir}")
+                except Exception as e:
+                    logger.warning(f"本地目录清理失败: {e}")

@@ -2,14 +2,11 @@
 
 import asyncio
 import logging
-import shutil
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import TYPE_CHECKING
 
-import httpx
-
 from ...domain.model import IssueStatus
+from ...infrastructure.agent import BaseAgent
 
 if TYPE_CHECKING:
     from ...domain.repository import IssueRepository
@@ -21,17 +18,21 @@ logger = logging.getLogger(__name__)
 class CleanService:
     """定期清理已结束 Issue 的 DeerFlow 资源"""
 
-    def __init__(self, repository: "IssueRepository", base_url: str = "http://localhost:2026", interval_hours: int = 1):
+    def __init__(
+        self,
+        repository: "IssueRepository",
+        agent: BaseAgent,
+        interval_hours: int = 1,
+    ):
         """
         Args:
             repository: Issue 仓库
-            base_url: DeerFlow 服务地址
+            agent: Agent 实例（用于调用 cleanup）
             interval_hours: 清理间隔（小时）
         """
         self._repo = repository
-        self._base_url = base_url
+        self._agent = agent
         self._interval = timedelta(hours=interval_hours)
-        self._client = httpx.AsyncClient()
         self._running = False
 
     async def start(self) -> None:
@@ -48,7 +49,6 @@ class CleanService:
     async def stop(self) -> None:
         """停止清理任务"""
         self._running = False
-        await self._client.aclose()
         logger.info("CleanService 已停止")
 
     async def _cleanup(self) -> None:
@@ -90,30 +90,10 @@ class CleanService:
 
         thread_id = issue.thread_id
 
-        # 1. 调用 DeerFlow API 清理 Thread
-        try:
-            response = await self._client.delete(f"{self._base_url}/threads/{thread_id}")
-            if response.status_code in [200, 204]:
-                logger.info(f"DeerFlow Thread 清理成功: {thread_id}")
-            else:
-                logger.warning(f"DeerFlow Thread 清理失败: {response.status_code}")
-        except Exception as e:
-            logger.warning(f"DeerFlow Thread 清理异常: {e}")
+        # 调用 Agent cleanup 接口
+        await self._agent.cleanup(thread_id, issue.thread_path)
 
-        # 2. 删除本地目录
-        if issue.thread_path:
-            thread_path = Path(issue.thread_path)
-            if thread_path.exists():
-                try:
-                    # 删除整个 thread 目录
-                    thread_dir = thread_path.parent.parent  # {thread_id}/user-data -> {thread_id}
-                    if thread_dir.exists():
-                        shutil.rmtree(thread_dir)
-                        logger.info(f"本地目录清理成功: {thread_dir}")
-                except Exception as e:
-                    logger.warning(f"本地目录清理失败: {e}")
-
-        # 3. 标记已清理
+        # 标记已清理
         issue.cleaned = True
         issue.cleaned_at = datetime.now()
         self._repo.save(issue)

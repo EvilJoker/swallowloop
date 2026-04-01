@@ -19,8 +19,15 @@ class TestCleanService:
         repo.save = MagicMock()
         return repo
 
+    @pytest.fixture
+    def mock_agent(self):
+        """创建模拟 Agent"""
+        agent = MagicMock()
+        agent.cleanup = AsyncMock()
+        return agent
+
     @pytest.mark.asyncio
-    async def test_should_cleanup_archived_issue(self, mock_repository):
+    async def test_should_cleanup_archived_issue(self, mock_repository, mock_agent):
         """测试应清理已归档的 Issue"""
         issue = Issue(
             id=IssueId("test-clean"),
@@ -36,13 +43,13 @@ class TestCleanService:
 
         mock_repository.list_all.return_value = [issue]
 
-        service = CleanService(repository=mock_repository, base_url="http://localhost:2024")
+        service = CleanService(repository=mock_repository, agent=mock_agent)
 
         should_clean = service._should_cleanup(issue)
         assert should_clean is True
 
     @pytest.mark.asyncio
-    async def test_should_not_cleanup_active_issue(self, mock_repository):
+    async def test_should_not_cleanup_active_issue(self, mock_repository, mock_agent):
         """测试不应清理活跃的 Issue"""
         issue = Issue(
             id=IssueId("test-active"),
@@ -56,13 +63,13 @@ class TestCleanService:
 
         mock_repository.list_all.return_value = [issue]
 
-        service = CleanService(repository=mock_repository, base_url="http://localhost:2024")
+        service = CleanService(repository=mock_repository, agent=mock_agent)
 
         should_clean = service._should_cleanup(issue)
         assert should_clean is False
 
     @pytest.mark.asyncio
-    async def test_should_not_cleanup_already_cleaned_issue(self, mock_repository):
+    async def test_should_not_cleanup_already_cleaned_issue(self, mock_repository, mock_agent):
         """测试不应清理已清理过的 Issue"""
         issue = Issue(
             id=IssueId("test-cleaned"),
@@ -78,13 +85,13 @@ class TestCleanService:
 
         mock_repository.list_all.return_value = [issue]
 
-        service = CleanService(repository=mock_repository, base_url="http://localhost:2024")
+        service = CleanService(repository=mock_repository, agent=mock_agent)
 
         should_clean = service._should_cleanup(issue)
         assert should_clean is False
 
     @pytest.mark.asyncio
-    async def test_should_not_cleanup_within_interval(self, mock_repository):
+    async def test_should_not_cleanup_within_interval(self, mock_repository, mock_agent):
         """测试清理间隔内不应再次清理"""
         issue = Issue(
             id=IssueId("test-interval"),
@@ -100,13 +107,13 @@ class TestCleanService:
 
         mock_repository.list_all.return_value = [issue]
 
-        service = CleanService(repository=mock_repository, base_url="http://localhost:2024")
+        service = CleanService(repository=mock_repository, agent=mock_agent)
 
         should_clean = service._should_cleanup(issue)
         assert should_clean is False
 
     @pytest.mark.asyncio
-    async def test_should_cleanup_after_interval(self, mock_repository):
+    async def test_should_cleanup_after_interval(self, mock_repository, mock_agent):
         """测试超过清理间隔后应清理"""
         issue = Issue(
             id=IssueId("test-past-interval"),
@@ -122,7 +129,7 @@ class TestCleanService:
 
         mock_repository.list_all.return_value = [issue]
 
-        service = CleanService(repository=mock_repository, base_url="http://localhost:2024")
+        service = CleanService(repository=mock_repository, agent=mock_agent)
 
         should_clean = service._should_cleanup(issue)
         assert should_clean is False  # 因为 cleaned=True
@@ -144,7 +151,7 @@ class TestCleanService:
         assert should_clean2 is True
 
     @pytest.mark.asyncio
-    async def test_cleanup_discarded_issue(self, mock_repository):
+    async def test_cleanup_discarded_issue(self, mock_repository, mock_agent):
         """测试应清理已废弃的 Issue"""
         issue = Issue(
             id=IssueId("test-discarded"),
@@ -160,14 +167,14 @@ class TestCleanService:
 
         mock_repository.list_all.return_value = [issue]
 
-        service = CleanService(repository=mock_repository, base_url="http://localhost:2024")
+        service = CleanService(repository=mock_repository, agent=mock_agent)
 
         should_clean = service._should_cleanup(issue)
         assert should_clean is True
 
     @pytest.mark.asyncio
-    async def test_cleanup_calls_deerflow_api(self, mock_repository):
-        """测试清理调用 DeerFlow API"""
+    async def test_cleanup_calls_deerflow_api(self, mock_repository, mock_agent):
+        """测试清理调用 Agent.cleanup"""
         issue = Issue(
             id=IssueId("test-api-call"),
             title="测试",
@@ -184,27 +191,23 @@ class TestCleanService:
 
         mock_repository.list_all.return_value = [issue]
 
-        mock_response = MagicMock()
-        mock_response.status_code = 200
+        service = CleanService(repository=mock_repository, agent=mock_agent)
 
-        service = CleanService(repository=mock_repository, base_url="http://localhost:2024")
+        await service._cleanup_issue(issue)
 
-        with patch.object(service._client, 'delete', new_callable=AsyncMock) as mock_delete:
-            with patch('shutil.rmtree') as mock_rmtree:
-                mock_delete.return_value = mock_response
+        # 验证调用了 Agent.cleanup
+        mock_agent.cleanup.assert_called_once_with(
+            "test-api-call",
+            "/home/user/.deer-flow/.deer-flow/threads/test-api-call/user-data/workspace"
+        )
 
-                await service._cleanup_issue(issue)
-
-                # 验证调用了 DELETE API
-                mock_delete.assert_called_once_with("http://localhost:2024/threads/test-api-call")
-
-                # 验证标记为已清理
-                assert issue.cleaned is True
-                assert issue.cleaned_at is not None
-                mock_repository.save.assert_called_once_with(issue)
+        # 验证标记为已清理
+        assert issue.cleaned is True
+        assert issue.cleaned_at is not None
+        mock_repository.save.assert_called_once_with(issue)
 
     @pytest.mark.asyncio
-    async def test_cleanup_without_workspace_skips(self, mock_repository):
+    async def test_cleanup_without_workspace_skips(self, mock_repository, mock_agent):
         """测试无 workspace 的 Issue 跳过清理"""
         issue = Issue(
             id=IssueId("test-no-workspace"),
@@ -221,10 +224,9 @@ class TestCleanService:
 
         mock_repository.list_all.return_value = [issue]
 
-        service = CleanService(repository=mock_repository, base_url="http://localhost:2024")
+        service = CleanService(repository=mock_repository, agent=mock_agent)
 
-        with patch.object(service._client, 'delete', new_callable=AsyncMock) as mock_delete:
-            await service._cleanup_issue(issue)
+        await service._cleanup_issue(issue)
 
-            # 不应调用 DELETE API
-            mock_delete.assert_not_called()
+        # 不应调用 Agent.cleanup
+        mock_agent.cleanup.assert_not_called()
