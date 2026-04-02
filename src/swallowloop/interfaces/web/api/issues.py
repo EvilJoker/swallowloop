@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from typing import Optional
 
 from ....application.service import IssueService, ExecutorService
-from ....domain.model import Stage, IssueStatus
+from ....domain.model import Stage, IssueStatus, IssueRunningStatus
 from ....infrastructure.persistence import InMemoryIssueRepository
 
 router = APIRouter()
@@ -44,9 +44,10 @@ def init_services():
         from ....infrastructure.agent import MockAgent, DeerFlowAgent
 
         repository = InMemoryIssueRepository()
-        agent_type = os.getenv("AGENT_TYPE", "mock")
+        agent_type = config.get("AGENT_TYPE", "mock") if config else "mock"
+        deerflow_base_url = config.get("DEERFLOW_BASE_URL", "http://localhost:2026") if config else "http://localhost:2026"
         if agent_type == "deerflow":
-            agent = DeerFlowAgent()
+            agent = DeerFlowAgent(base_url=deerflow_base_url)
         else:
             agent = MockAgent(delay_seconds=5.0)
         _executor_service = ExecutorService(repository=repository, agent=agent, agent_type=agent_type)
@@ -62,6 +63,7 @@ class IssueUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     status: Optional[str] = None
+    runningStatus: Optional[str] = None
 
 
 class StageApprove(BaseModel):
@@ -76,6 +78,14 @@ class TriggerRequest(BaseModel):
     stage: str
 
 
+class RepositoryResponse(BaseModel):
+    """代码仓库响应"""
+    name: str
+    url: str
+    branch: str
+    description: str
+
+
 @router.get("/issues")
 async def list_issues():
     """获取所有 Issue"""
@@ -83,6 +93,17 @@ async def list_issues():
         init_services()
     issues = _issue_service.list_issues()
     return {"issues": [_issue_to_dict(i) for i in issues]}
+
+
+@router.get("/repository", response_model=RepositoryResponse)
+async def get_repository():
+    """获取代码仓库配置"""
+    from ....infrastructure.instance_registry import get_instance
+    config = get_instance("config")
+    if config:
+        repo_config = config.get_repository()
+        return RepositoryResponse(**repo_config)
+    return RepositoryResponse(name="", url="", branch="main", description="")
 
 
 @router.get("/issues/{issue_id}")
@@ -181,19 +202,75 @@ def _issue_to_dict(issue) -> dict:
         "createdAt": issue.created_at.isoformat(),
         "archivedAt": issue.archived_at.isoformat() if issue.archived_at else None,
         "discardedAt": issue.discarded_at.isoformat() if issue.discarded_at else None,
+        "runningStatus": issue.running_status.value,
         "workspace": {
             "id": issue.workspace.id if issue.workspace else None,
             "ready": issue.workspace.ready if issue.workspace else False,
             "workspace_path": issue.workspace.workspace_path if issue.workspace else "",
             "repo_url": issue.workspace.repo_url if issue.workspace else "",
             "branch": issue.workspace.branch if issue.workspace else "",
+            "thread_id": issue.thread_id or "",
         } if issue.workspace else None,
         "repo_url": issue.repo_url,
         "stages": {
             stage.value: _stage_to_dict(stage.value, state)
             for stage, state in issue.stages.items()
         },
+        "pipeline": _build_pipeline_info(issue),
     }
+
+
+def _build_pipeline_info(issue) -> dict:
+    """构建 Pipeline 展示信息"""
+    stages_info = []
+    for stage in Stage:
+        state = issue.stages.get(stage)
+        if state:
+            # 从 todo_list 构建任务列表
+            tasks = []
+            if state.todo_list:
+                for todo in state.todo_list:
+                    tasks.append({
+                        "name": todo.content,
+                        "status": todo.status.value,
+                    })
+            stages_info.append({
+                "name": stage.value,
+                "label": _get_stage_label(stage),
+                "status": state.status.value,
+                "startedAt": state.started_at.isoformat() if state.started_at else None,
+                "completedAt": state.completed_at.isoformat() if state.completed_at else None,
+                "tasks": tasks,  # 始终返回列表，即使为空
+            })
+
+    # 计算当前阶段索引
+    current_index = 0
+    for i, stage in enumerate(Stage):
+        if stage == issue.current_stage:
+            current_index = i
+            break
+
+    return {
+        "name": f"Issue-{issue.id.value}",
+        "stages": stages_info,
+        "currentStageIndex": current_index,
+        "isDone": issue.running_status == IssueRunningStatus.DONE,
+    }
+
+
+def _get_stage_label(stage) -> str:
+    """获取阶段中文标签"""
+    labels = {
+        Stage.ENVIRONMENT: "环境准备",
+        Stage.BRAINSTORM: "头脑风暴",
+        Stage.PLAN_FORMED: "方案制定",
+        Stage.DETAILED_DESIGN: "详细设计",
+        Stage.TASK_SPLIT: "任务拆分",
+        Stage.EXECUTION: "执行",
+        Stage.UPDATE_DOCS: "更新文档",
+        Stage.SUBMIT: "提交",
+    }
+    return labels.get(stage, stage.value)
 
 
 def _stage_to_dict(stage_name: str, state) -> dict:

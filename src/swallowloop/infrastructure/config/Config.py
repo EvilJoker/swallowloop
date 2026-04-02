@@ -307,3 +307,12 @@ github:
     def logs_dir(self) -> Path:
         """日志目录"""
         return self.get_log_dir()
+
+    def get_repository(self) -> dict:
+        """获取代码仓库配置"""
+        return {
+            "name": self.get("REPOSITORY_NAME", ""),
+            "url": self.get("REPOSITORY_URL", ""),
+            "branch": self.get("REPOSITORY_BRANCH", "main"),
+            "description": self.get("REPOSITORY_DESCRIPTION", ""),
+        }

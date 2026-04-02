@@ -55,7 +55,7 @@ class TestDeerFlowAgentIntegration:
     def mock_deerflow_agent(self):
         """创建 Mock DeerFlowAgent"""
         agent = MagicMock(spec=DeerFlowAgent)
-        agent.prepare = AsyncMock(return_value=Workspace(
+        agent.prepare = MagicMock(return_value=Workspace(
             id="test-thread-123",
             ready=True,
             workspace_path="/tmp/test-workspace",
@@ -72,7 +72,7 @@ class TestDeerFlowAgentIntegration:
 
     @pytest.fixture
     def mock_deerflow_client(self):
-        """Mock httpx client for DeerFlow API"""
+        """Mock httpx client for DeerFlow API（同步）"""
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
@@ -81,9 +81,9 @@ class TestDeerFlowAgentIntegration:
         }
 
         mock_client = MagicMock()
-        mock_client.post = AsyncMock(return_value=mock_response)
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=None)
+        mock_client.post.return_value = mock_response
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=None)
         return mock_client
 
     @pytest.mark.asyncio
@@ -114,7 +114,7 @@ class TestDeerFlowAgentIntegration:
         )
         assert issue is not None
         assert issue.title == "Test Issue"
-        assert issue.current_stage == Stage.BRAINSTORM
+        assert issue.current_stage == Stage.ENVIRONMENT
 
         # 3. 触发 AI（使用 MockAgent 不实际调用 DeerFlow）
         result = await issue_service.trigger_ai(str(issue.id), Stage.BRAINSTORM)
@@ -133,7 +133,7 @@ class TestDeerFlowAgentIntegration:
         agent = DeerFlowAgent(base_url="http://localhost:2026")
 
         with patch.object(agent, '_create_client', return_value=mock_deerflow_client):
-            workspace = await agent.prepare(
+            workspace = agent.prepare(
                 issue_id="issue-456",
                 context={
                     "repo_url": "https://github.com/test/repo",
@@ -160,7 +160,7 @@ class TestMockAgentIntegration:
         """测试 MockAgent.prepare() 创建本地 workspace"""
         agent = MockAgent(delay_seconds=0.1)
 
-        workspace = await agent.prepare(
+        workspace = agent.prepare(
             issue_id="issue-789",
             context={
                 "repo_url": "https://github.com/test/repo",

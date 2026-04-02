@@ -20,6 +20,7 @@ export const mockIssue1: Issue = {
   currentStage: 'brainstorm',
   createdAt: new Date('2026-03-18'),
   stages: {
+    environment: createEmptyStageState('environment'),
     brainstorm: {
       ...createEmptyStageState('brainstorm'),
       status: 'running',
@@ -66,6 +67,93 @@ export const mockIssue1: Issue = {
     updateDocs: createEmptyStageState('updateDocs'),
     submit: createEmptyStageState('submit'),
   },
+  runningStatus: 'in_progress',
+  pipeline: {
+    name: 'Issue-issue-1',
+    stages: [
+      {
+        name: 'environment',
+        label: '环境准备',
+        status: 'approved',
+        tasks: [
+          { name: '创建工作空间', status: 'success' },
+          { name: 'Clone 代码库', status: 'success' },
+          { name: '切换分支', status: 'success' },
+          { name: '准备环境', status: 'success' },
+        ],
+      },
+      {
+        name: 'brainstorm',
+        label: '头脑风暴',
+        status: 'running',
+        tasks: [
+          { name: '分析用户登录需求', status: 'success' },
+          { name: '设计认证流程', status: 'running' },
+          { name: '评估安全方案', status: 'pending' },
+        ],
+      },
+      {
+        name: 'planFormed',
+        label: '方案制定',
+        status: 'new',
+        tasks: [
+          { name: '方案一分析', status: 'pending' },
+          { name: '方案二分析', status: 'pending' },
+        ],
+      },
+      {
+        name: 'detailedDesign',
+        label: '详细设计',
+        status: 'new',
+        tasks: [
+          { name: '数据库表设计', status: 'pending' },
+          { name: 'API 接口设计', status: 'pending' },
+          { name: '前端组件设计', status: 'pending' },
+        ],
+      },
+      {
+        name: 'taskSplit',
+        label: '任务拆分',
+        status: 'new',
+        tasks: [
+          { name: '后端任务拆分', status: 'pending' },
+          { name: '前端任务拆分', status: 'pending' },
+          { name: '测试任务拆分', status: 'pending' },
+        ],
+      },
+      {
+        name: 'execution',
+        label: '执行',
+        status: 'new',
+        tasks: [
+          { name: '实现后端功能', status: 'pending' },
+          { name: '实现前端功能', status: 'pending' },
+          { name: '编写单元测试', status: 'pending' },
+        ],
+      },
+      {
+        name: 'updateDocs',
+        label: '更新文档',
+        status: 'new',
+        tasks: [
+          { name: '更新 API 文档', status: 'pending' },
+          { name: '更新 README', status: 'pending' },
+        ],
+      },
+      {
+        name: 'submit',
+        label: '提交',
+        status: 'new',
+        tasks: [
+          { name: '提交 PR', status: 'pending' },
+          { name: '代码审查', status: 'pending' },
+          { name: '合并代码', status: 'pending' },
+        ],
+      },
+    ],
+    currentStageIndex: 1,
+    isDone: false,
+  },
 };
 
 // Mock Issue 2: 执行阶段，显示进度50%
@@ -77,6 +165,7 @@ export const mockIssue2: Issue = {
   currentStage: 'execution',
   createdAt: new Date('2026-03-15'),
   stages: {
+    environment: createEmptyStageState('environment'),
     brainstorm: {
       ...createEmptyStageState('brainstorm'),
       status: 'approved',
@@ -144,6 +233,7 @@ export const mockIssue3: Issue = {
   currentStage: 'detailedDesign',
   createdAt: new Date('2026-03-10'),
   stages: {
+    environment: createEmptyStageState('environment'),
     brainstorm: {
       ...createEmptyStageState('brainstorm'),
       status: 'approved',
@@ -190,6 +280,7 @@ export const mockIssue4: Issue = {
   createdAt: new Date('2026-03-01'),
   archivedAt: new Date('2026-03-16'),
   stages: {
+    environment: createEmptyStageState('environment'),
     brainstorm: {
       ...createEmptyStageState('brainstorm'),
       status: 'approved',
@@ -265,6 +356,7 @@ export const mockIssue5: Issue = {
   currentStage: 'brainstorm',
   createdAt: new Date('2026-03-19'),
   stages: {
+    environment: createEmptyStageState('environment'),
     brainstorm: {
       ...createEmptyStageState('brainstorm'),
       status: 'error',
@@ -298,6 +390,7 @@ export const mockIssue6: Issue = {
   currentStage: 'planFormed',
   createdAt: new Date('2026-03-17'),
   stages: {
+    environment: createEmptyStageState('environment'),
     brainstorm: {
       ...createEmptyStageState('brainstorm'),
       status: 'approved',
@@ -329,6 +422,7 @@ export const mockIssue7: Issue = {
   currentStage: 'detailedDesign',
   createdAt: new Date('2026-03-12'),
   stages: {
+    environment: createEmptyStageState('environment'),
     brainstorm: {
       ...createEmptyStageState('brainstorm'),
       status: 'approved',
@@ -366,6 +460,7 @@ export const mockIssue8: Issue = {
   currentStage: 'taskSplit',
   createdAt: new Date('2026-03-14'),
   stages: {
+    environment: createEmptyStageState('environment'),
     brainstorm: {
       ...createEmptyStageState('brainstorm'),
       status: 'approved',
@@ -409,6 +504,7 @@ export const mockIssue9: Issue = {
   currentStage: 'execution',
   createdAt: new Date('2026-03-08'),
   stages: {
+    environment: createEmptyStageState('environment'),
     brainstorm: {
       ...createEmptyStageState('brainstorm'),
       status: 'approved',
@@ -467,6 +563,7 @@ export const mockIssue10: Issue = {
   currentStage: 'updateDocs',
   createdAt: new Date('2026-03-05'),
   stages: {
+    environment: createEmptyStageState('environment'),
     brainstorm: {
       ...createEmptyStageState('brainstorm'),
       status: 'approved',
@@ -522,6 +619,7 @@ export const mockIssue11: Issue = {
   currentStage: 'submit',
   createdAt: new Date('2026-03-01'),
   stages: {
+    environment: createEmptyStageState('environment'),
     brainstorm: {
       ...createEmptyStageState('brainstorm'),
       status: 'approved',

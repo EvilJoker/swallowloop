@@ -11,10 +11,11 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ...domain.repository import IssueRepository
 
-from ...domain.model import Issue, Stage, StageStatus
-from ...domain.statemachine import StageStateMachine, LoggerHook
+from ...domain.model import Issue, Stage, StageStatus, TodoStatus
+from ...domain.pipeline import IssuePipeline, PipelineContext
 from ...infrastructure.agent import BaseAgent, create_agent
 from .executor import IExecutor
+from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,7 @@ class ExecutorService(IExecutor):
         self._repo = repository
         self._running_tasks: dict[str, asyncio.Task] = {}
         self._agent = agent or self._create_agent(agent_type)
-        self._hooks = [LoggerHook()]
+        self._hooks = []
         self._ws_manager = ws_manager
 
     async def _broadcast(self, msg_type: str, data: dict):
@@ -43,10 +44,6 @@ class ExecutorService(IExecutor):
     def _create_agent(self, agent_type: str = "mock") -> BaseAgent:
         """根据配置创建 Agent（工厂函数）"""
         return create_agent(agent_type)
-
-    def _get_machine(self, issue: Issue) -> StageStateMachine:
-        """获取状态机实例"""
-        return StageStateMachine(issue, self._repo, self._hooks)
 
     def get_workspace_dir(self, project: str, issue_id: str) -> Path:
         """获取工作空间目录"""
@@ -172,7 +169,7 @@ class ExecutorService(IExecutor):
                     "stage": stage.value,
                 }
                 try:
-                    workspace_info = await self._agent.prepare(str(issue.id), context)
+                    workspace_info = self._agent.prepare(str(issue.id), context)
                     issue.workspace = workspace_info
                     issue.thread_id = workspace_info.id
                     issue.thread_path = workspace_info.workspace_path
@@ -204,21 +201,26 @@ class ExecutorService(IExecutor):
         """异步执行阶段（假设 workspace 已通过 prepare_workspace 创建）
 
         状态转换:
-        - NEW → RUNNING (start)
-        - REJECTED/ERROR → RUNNING (retry)
-        - RUNNING → PENDING (execute)
+        - NEW → RUNNING
+        - REJECTED/ERROR → RUNNING
+        - RUNNING → PENDING 或 ERROR
         """
+        # ENVIRONMENT 阶段使用 Pipeline 执行
+        if stage == Stage.ENVIRONMENT:
+            return await self._execute_environment_stage(issue, stage)
+
         project = "default"
-        machine = self._get_machine(issue)
         stage_state = issue.get_stage_state(stage)
         current_status = stage_state.status
 
         # 1. 状态转换 NEW/REJECTED/ERROR → RUNNING
         if current_status == StageStatus.NEW:
-            machine.start(stage)  # NEW → RUNNING
+            stage_state.status = StageStatus.RUNNING
+            stage_state.started_at = datetime.now()
             logger.info(f"阶段 {stage.value} 从 NEW 转为 RUNNING")
         elif current_status in [StageStatus.REJECTED, StageStatus.ERROR]:
-            machine.retry(stage)  # REJECTED/ERROR → RUNNING
+            stage_state.status = StageStatus.RUNNING
+            stage_state.started_at = datetime.now()
             logger.info(f"阶段 {stage.value} 从 {current_status.value} 转为 RUNNING")
 
         # 2. 广播状态更新
@@ -228,7 +230,7 @@ class ExecutorService(IExecutor):
         workspace_path = Path(issue.thread_path) if issue.thread_path else None
         if not workspace_path:
             logger.error("Issue 没有 thread_path")
-            machine.error(stage)
+            stage_state.status = StageStatus.ERROR
             return {"success": False, "output": "", "error": "thread_path not found"}
 
         stage_file = workspace_path / f"{stage.value}.md"
@@ -265,10 +267,10 @@ class ExecutorService(IExecutor):
                 logger.warning(f"读取 result.json 失败: {e}")
                 stage_state.document = result.output or ""
 
-            machine.execute(stage)  # RUNNING → PENDING
+            stage_state.status = StageStatus.PENDING
             logger.info(f"DeerFlow 执行成功，阶段 {stage.value} 等待人工审批")
         else:
-            machine.error(stage)  # RUNNING → ERROR
+            stage_state.status = StageStatus.ERROR
             logger.error(f"DeerFlow 执行失败，阶段 {stage.value} 转为 ERROR: {result.error}")
 
         # 广播状态更新
@@ -280,6 +282,82 @@ class ExecutorService(IExecutor):
             "error": result.error,
         }
 
+    async def _execute_environment_stage(self, issue: Issue, stage: Stage) -> dict:
+        """执行环境准备阶段 - 使用 Pipeline"""
+        stage_state = issue.get_stage_state(stage)
+        current_status = stage_state.status
+
+        # 状态转换 NEW/REJECTED/ERROR → RUNNING
+        if current_status == StageStatus.NEW:
+            stage_state.status = StageStatus.RUNNING
+            stage_state.started_at = datetime.now()
+        elif current_status in [StageStatus.REJECTED, StageStatus.ERROR]:
+            stage_state.status = StageStatus.RUNNING
+            stage_state.started_at = datetime.now()
+
+        await self._broadcast("issue_updated", {"issue": self._issue_to_dict(issue)})
+
+        # 从 repo_url 提取仓库名
+        repo_name = "repo"
+        if issue.repo_url:
+            parsed = urlparse(issue.repo_url)
+            path_parts = parsed.path.strip("/").split("/")
+            if len(path_parts) >= 2:
+                repo_name = path_parts[-1].replace(".git", "")
+
+        # 构建 context
+        context = PipelineContext(
+            issue_id=str(issue.id),
+            workspace_path=issue.thread_path or "",
+            repo_url=issue.repo_url or "",
+            repo_name=repo_name,
+            branch=str(issue.id),
+            thread_id=issue.thread_id or "",
+        ).to_dict()
+
+        # 获取 pipeline stage
+        pipeline = IssuePipeline()
+        stage_obj = pipeline.stages[0]  # environment 是第一个 stage
+
+        # 按顺序执行每个任务，实时更新状态
+        all_success = True
+        for i, task in enumerate(stage_obj.tasks):
+            # 更新任务状态为执行中
+            if stage_state.todo_list and i < len(stage_state.todo_list):
+                stage_state.todo_list[i].status = TodoStatus.IN_PROGRESS
+            self._repo.save(issue)
+            await self._broadcast("issue_updated", {"issue": self._issue_to_dict(issue)})
+
+            # 执行任务
+            context, task_result = task.execute(context)
+
+            # 更新任务状态为完成/失败
+            if stage_state.todo_list and i < len(stage_state.todo_list):
+                if task_result.success:
+                    stage_state.todo_list[i].status = TodoStatus.COMPLETED
+                else:
+                    stage_state.todo_list[i].status = TodoStatus.FAILED
+                    all_success = False
+
+            # 保存并广播
+            self._repo.save(issue)
+            await self._broadcast("issue_updated", {"issue": self._issue_to_dict(issue)})
+
+            # 如果任务失败，停止执行
+            if not task_result.success:
+                break
+
+        # 更新阶段状态
+        if all_success:
+            stage_state.status = StageStatus.PENDING
+        else:
+            stage_state.status = StageStatus.ERROR
+
+        self._repo.save(issue)
+        await self._broadcast("issue_updated", {"issue": self._issue_to_dict(issue)})
+
+        return {"success": all_success, "message": f"环境准备阶段{'完成' if all_success else '失败'}"}
+
     def _issue_to_dict(self, issue: Issue) -> dict:
         """将 Issue 序列化为字典"""
         return {
@@ -288,9 +366,19 @@ class ExecutorService(IExecutor):
             "description": issue.description,
             "status": issue.status.value,
             "currentStage": issue.current_stage.value,
+            "runningStatus": issue.running_status.value,
             "createdAt": issue.created_at.isoformat(),
             "archivedAt": issue.archived_at.isoformat() if issue.archived_at else None,
             "discardedAt": issue.discarded_at.isoformat() if issue.discarded_at else None,
+            "workspace": {
+                "id": issue.workspace.id if issue.workspace else None,
+                "ready": issue.workspace.ready if issue.workspace else False,
+                "workspace_path": issue.workspace.workspace_path if issue.workspace else "",
+                "repo_url": issue.workspace.repo_url if issue.workspace else "",
+                "branch": issue.workspace.branch if issue.workspace else "",
+                "thread_id": issue.thread_id or "",
+            } if issue.workspace else None,
+            "repo_url": issue.repo_url,
             "stages": {
                 stage.value: {
                     "stage": stage.value,
@@ -308,10 +396,66 @@ class ExecutorService(IExecutor):
                     ],
                     "startedAt": state.started_at.isoformat() if state.started_at else None,
                     "completedAt": state.completed_at.isoformat() if state.completed_at else None,
+                    "todoList": [
+                        {"id": t.id, "content": t.content, "status": t.status.value}
+                        for t in state.todo_list
+                    ] if state.todo_list else [],
                 }
                 for stage, state in issue.stages.items()
             },
+            "pipeline": self._build_pipeline_info(issue),
         }
+
+    def _build_pipeline_info(self, issue: Issue) -> dict:
+        """构建 Pipeline 展示信息"""
+        from ...domain.model import Stage as DomainStage
+
+        stages_info = []
+        for stage in DomainStage:
+            state = issue.stages.get(stage)
+            if state:
+                tasks = []
+                if state.todo_list:
+                    for todo in state.todo_list:
+                        tasks.append({
+                            "name": todo.content,
+                            "status": todo.status.value,
+                        })
+                stages_info.append({
+                    "name": stage.value,
+                    "label": self._get_stage_label(stage),
+                    "status": state.status.value,
+                    "startedAt": state.started_at.isoformat() if state.started_at else None,
+                    "completedAt": state.completed_at.isoformat() if state.completed_at else None,
+                    "tasks": tasks,
+                })
+
+        current_index = 0
+        for i, stage in enumerate(DomainStage):
+            if stage == issue.current_stage:
+                current_index = i
+                break
+
+        return {
+            "name": f"Issue-{issue.id}",
+            "stages": stages_info,
+            "currentStageIndex": current_index,
+            "isDone": issue.status.value in ["archived", "done"],
+        }
+
+    def _get_stage_label(self, stage) -> str:
+        """获取阶段中文标签"""
+        labels = {
+            "environment": "环境准备",
+            "brainstorm": "头脑风暴",
+            "planFormed": "方案制定",
+            "detailedDesign": "详细设计",
+            "taskSplit": "任务拆分",
+            "execution": "执行",
+            "updateDocs": "更新文档",
+            "submit": "提交",
+        }
+        return labels.get(stage.value, stage.value)
 
     def execute_stage_async(self, issue: Issue, stage: Stage) -> None:
         """异步执行阶段（非阻塞）"""

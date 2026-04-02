@@ -35,9 +35,9 @@ class BaseAgent(ABC):
     """Agent 基类"""
 
     @abstractmethod
-    async def prepare(self, issue_id: str, context: dict[str, Any]) -> Workspace:
+    def prepare(self, issue_id: str, context: dict[str, Any]) -> Workspace:
         """
-        准备工作空间，返回工作空间信息
+        准备工作空间，返回工作空间信息（同步）
 
         Args:
             issue_id: Issue ID

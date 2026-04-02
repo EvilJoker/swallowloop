@@ -1,5 +1,6 @@
 // 阶段类型
 export type Stage =
+  | 'environment'
   | 'brainstorm'
   | 'planFormed'
   | 'detailedDesign'
@@ -13,6 +14,32 @@ export type StageStatus = 'new' | 'pending' | 'approved' | 'rejected' | 'running
 
 // Issue 状态
 export type IssueStatus = 'active' | 'archived' | 'discarded';
+
+// Issue 泳道状态（人工管理）
+export type IssueRunningStatus = 'new' | 'in_progress' | 'done';
+
+// Pipeline 相关类型
+export interface PipelineTaskInfo {
+  name: string;
+  status: 'pending' | 'running' | 'success' | 'failed';
+  message?: string;
+}
+
+export interface PipelineStageInfo {
+  name: string;
+  label: string;
+  status: StageStatus;
+  tasks: PipelineTaskInfo[];
+  startedAt?: string;
+  completedAt?: string;
+}
+
+export interface PipelineInfo {
+  name: string;
+  stages: PipelineStageInfo[];
+  currentStageIndex: number;
+  isDone: boolean;
+}
 
 // 执行状态
 export type ExecutionState = 'pending' | 'running' | 'paused' | 'success' | 'failed';
@@ -55,6 +82,16 @@ export interface StageState {
   completedAt?: Date;    // 阶段完成时间
 }
 
+// Workspace 信息
+export interface Workspace {
+  id: string | null;
+  ready: boolean;
+  workspace_path: string;
+  repo_url: string;
+  branch: string;
+  thread_id: string;
+}
+
 // Issue
 export interface Issue {
   id: string;
@@ -66,13 +103,17 @@ export interface Issue {
   archivedAt?: Date;
   discardedAt?: Date;
   deleteAt?: Date;
+  runningStatus?: IssueRunningStatus;
+  workspace?: Workspace | null;
+  pipeline?: PipelineInfo | null;
   stages: Record<Stage, StageState>;
 }
 
 // 阶段显示配置
 export const STAGES: { key: Stage; label: string }[] = [
+  { key: 'environment', label: '环境准备' },
   { key: 'brainstorm', label: '头脑风暴' },
-  { key: 'planFormed', label: '方案成型' },
+  { key: 'planFormed', label: '方案制定' },
   { key: 'detailedDesign', label: '详细设计' },
   { key: 'taskSplit', label: '任务拆分' },
   { key: 'execution', label: '执行' },

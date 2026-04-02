@@ -1,6 +1,7 @@
-import { useState } from 'react';
-import { X, Plus } from 'lucide-react';
-import { issueApi } from '@/lib/api';
+import { useState, useEffect } from 'react';
+import { X, Plus, GitBranch, Database } from 'lucide-react';
+import { issueApi, repositoryApi } from '@/lib/api';
+import type { Repository } from '@/lib/api';
 
 interface NewIssueDialogProps {
   onClose: () => void;
@@ -10,8 +11,14 @@ interface NewIssueDialogProps {
 export function NewIssueDialog({ onClose, onCreated }: NewIssueDialogProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [repository, setRepository] = useState<Repository | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // 加载仓库配置
+  useEffect(() => {
+    repositoryApi.getRepository().then(setRepository).catch(console.error);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,6 +98,33 @@ export function NewIssueDialog({ onClose, onCreated }: NewIssueDialogProps) {
                 className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
               />
             </div>
+
+            {/* 代码仓库信息 */}
+            {repository && repository.name && (
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                <div className="flex items-center gap-2 text-sm text-slate-600 mb-2">
+                  <Database className="w-4 h-4" />
+                  <span className="font-medium">代码仓库</span>
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-xs">
+                    <GitBranch className="w-3 h-3 text-slate-400" />
+                    <span className="text-slate-500">仓库：</span>
+                    <span className="text-slate-700 font-medium">{repository.name}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs">
+                    <GitBranch className="w-3 h-3 text-slate-400" />
+                    <span className="text-slate-500">分支：</span>
+                    <span className="text-slate-700">{repository.branch}</span>
+                  </div>
+                  {repository.description && (
+                    <div className="text-xs text-slate-500 mt-1">
+                      {repository.description}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {error && (
               <div className="p-3 bg-red-50 border border-red-100 rounded-lg text-sm text-red-600">

@@ -46,16 +46,15 @@ class DeerFlowAgent(BaseAgent):
             last_update=None,
         )
 
-    def _create_client(self) -> httpx.AsyncClient:
-        """创建 HTTP 客户端（每次调用创建新实例，避免 event loop 问题）"""
-        return httpx.AsyncClient(timeout=300.0)
+    def _create_client(self) -> httpx.Client:
+        """创建 HTTP 客户端（同步，每次调用创建新实例）"""
+        return httpx.Client(timeout=300.0)
 
     async def initialize(self) -> None:
         """检查 DeerFlow 连接"""
         try:
-            client = self._create_client()
-            async with client:
-                response = await client.get(f"{self._base_url}/threads")
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(f"{self._base_url}/api/threads")
                 logger.info(f"DeerFlow 连接检查完成: {response.status_code}")
         except Exception as e:
             logger.warning(f"DeerFlow 连接检查失败: {e}")
@@ -124,9 +123,9 @@ class DeerFlowAgent(BaseAgent):
         except Exception:
             return None, None
 
-    async def prepare(self, issue_id: str, context: dict[str, Any]) -> Workspace:
+    def prepare(self, issue_id: str, context: dict[str, Any]) -> Workspace:
         """
-        创建 DeerFlow Thread，返回工作空间信息
+        创建 DeerFlow Thread，返回工作空间信息（同步）
 
         Args:
             issue_id: Issue ID
@@ -145,9 +144,9 @@ class DeerFlowAgent(BaseAgent):
         # 重试 2 次创建 Thread
         for attempt in range(2):
             try:
-                async with client:
-                    response = await client.post(
-                        f"{self._base_url}/threads",
+                with client:
+                    response = client.post(
+                        f"{self._base_url}/api/threads",
                         json={"metadata": {"issue_id": issue_id}}
                     )
                     if response.status_code in [200, 201]:
@@ -241,13 +240,11 @@ class DeerFlowAgent(BaseAgent):
         if not stage_file or not result_file:
             return AgentResult(success=False, output="", error="stage_file 和 result_file 必须提供")
 
-        client = self._create_client()
-
         try:
-            async with client:
+            async with httpx.AsyncClient(timeout=300.0) as client:
                 # 发送消息到 Thread
                 response = await client.post(
-                    f"{self._base_url}/threads/{thread_id}/runs",
+                    f"{self._base_url}/api/threads/{thread_id}/runs",
                     json={
                         "assistant_id": "lead_agent",
                         "input": {

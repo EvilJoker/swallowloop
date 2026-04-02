@@ -5,6 +5,7 @@ from enum import Enum
 
 class Stage(Enum):
     """Issue 流水线阶段"""
+    ENVIRONMENT = "environment"
     BRAINSTORM = "brainstorm"
     PLAN_FORMED = "planFormed"
     DETAILED_DESIGN = "detailedDesign"
@@ -29,6 +30,13 @@ class IssueStatus(Enum):
     ACTIVE = "active"        # 活跃
     ARCHIVED = "archived"    # 已归档
     DISCARDED = "discarded"  # 已废弃
+
+
+class IssueRunningStatus(Enum):
+    """Issue 泳道状态（人工管理）"""
+    NEW = "new"                # 新建
+    IN_PROGRESS = "in_progress"  # 进行中
+    DONE = "done"              # 已完成
 
 
 class TodoStatus(Enum):

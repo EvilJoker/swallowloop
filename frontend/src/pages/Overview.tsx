@@ -144,17 +144,15 @@ export function Overview() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const loadIssues = async () => {
-      try {
-        const data = await issueApi.getAll();
+    try {
+      issueApi.getAll().then((data) => {
         setIssues(data);
-      } catch (err) {
-        console.error('Failed to load issues:', err);
-      } finally {
         setLoading(false);
-      }
-    };
-    loadIssues();
+      });
+    } catch (err) {
+      console.error('Failed to load data:', err);
+      setLoading(false);
+    }
   }, []);
 
   const activeIssues = issues.filter((i) => i.status === 'active');

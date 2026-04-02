@@ -49,14 +49,14 @@ class TestIssue:
             title="测试",
             description="测试描述",
             status=IssueStatus.ACTIVE,
-            current_stage=Stage.BRAINSTORM,
+            current_stage=Stage.ENVIRONMENT,
             created_at=datetime.now(),
         )
 
         assert issue.title == "测试"
         assert issue.description == "测试描述"
         assert issue.status == IssueStatus.ACTIVE
-        assert issue.current_stage == Stage.BRAINSTORM
+        assert issue.current_stage == Stage.ENVIRONMENT
         assert issue.is_active is True
 
     def test_initial_stages_status(self):

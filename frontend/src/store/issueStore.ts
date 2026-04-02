@@ -35,7 +35,7 @@ export const useIssueStore = create<IssueStore>((set) => ({
     set((state) => {
       // 防止重复添加（WebSocket 消息和 API 响应可能重复）
       if (state.issues.some((i) => i.id === issue.id)) {
-        return state;
+        return { issues: [...state.issues] };  // 返回新数组引用确保触发更新
       }
       return { issues: [...state.issues, issue] };
     }),

@@ -50,11 +50,11 @@ class MockAgent(BaseAgent):
         """Mock Agent 不需要初始化"""
         logger.info("MockAgent 初始化完成")
 
-    async def prepare(self, issue_id: str, context: dict[str, Any]) -> Workspace:
+    def prepare(self, issue_id: str, context: dict[str, Any]) -> Workspace:
         """
-        MockAgent 准备：在本地创建工作空间
+        MockAgent 准备：在本地创建工作空间（同步）
 
-        与 ExecutorService.get_workspace_dir() 保持一致，使用 stages/ 目录结构。
+        工作空间路径: ~/.swallowloop/default/{issue_id}/
 
         Args:
             issue_id: Issue ID
@@ -63,7 +63,7 @@ class MockAgent(BaseAgent):
         Returns:
             Workspace: 工作空间信息
         """
-        workspace_path = Path.home() / ".swallowloop" / "default" / str(issue_id) / "stages"
+        workspace_path = Path.home() / ".swallowloop" / "default" / str(issue_id)
         workspace_path.mkdir(parents=True, exist_ok=True)
 
         logger.info(f"MockAgent 准备工作空间: {workspace_path}")

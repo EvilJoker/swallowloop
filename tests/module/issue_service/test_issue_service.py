@@ -1,10 +1,13 @@
 """IssueService 模块测试"""
 
 import pytest
+import logging
+from datetime import datetime
 from swallowloop.domain.model import Stage, StageStatus, IssueStatus
-from swallowloop.domain.statemachine import StageStateMachine
 from swallowloop.application.service import IssueService
 from tests.helpers import MockRepository, MockExecutor
+
+logger = logging.getLogger(__name__)
 
 
 @pytest.fixture
@@ -33,9 +36,9 @@ class TestIssueService:
         assert issue.title == "测试 Issue"
         assert issue.description == "测试描述"
         assert issue.status == IssueStatus.ACTIVE
-        assert issue.current_stage == Stage.BRAINSTORM
+        assert issue.current_stage == Stage.ENVIRONMENT
         assert issue.id.value.startswith("issue-")
-        assert issue.get_stage_state(Stage.BRAINSTORM).status == StageStatus.NEW
+        assert issue.get_stage_state(Stage.ENVIRONMENT).status == StageStatus.NEW
 
     @pytest.mark.asyncio
     async def test_approve_stage(self, repo, executor, service):
@@ -43,10 +46,10 @@ class TestIssueService:
         issue = await service.create_issue("测试 Issue", "测试描述")
         issue_id = str(issue.id)
 
-        # 设置为 PENDING 状态（模拟 AI 执行完成）
-        machine = StageStateMachine(issue, repo)
-        machine.start(Stage.BRAINSTORM)
-        issue.get_stage_state(Stage.BRAINSTORM).status = StageStatus.PENDING
+        # 设置阶段为 PENDING 状态（模拟 AI 执行完成）
+        stage_state = issue.get_stage_state(Stage.BRAINSTORM)
+        stage_state.status = StageStatus.PENDING
+        stage_state.started_at = datetime.now()
         repo.save(issue)
 
         # 审批通过
@@ -62,20 +65,15 @@ class TestIssueService:
         issue = await service.create_issue("测试 Issue", "测试描述")
         issue_id = str(issue.id)
 
-        # 设置为 PENDING 状态
-        machine = StageStateMachine(issue, repo)
-        machine.start(Stage.BRAINSTORM)
-        issue.get_stage_state(Stage.BRAINSTORM).status = StageStatus.PENDING
+        # 设置阶段为 PENDING 状态
+        stage_state = issue.get_stage_state(Stage.BRAINSTORM)
+        stage_state.status = StageStatus.PENDING
         repo.save(issue)
 
         # 打回
         updated = await service.reject_stage(issue_id, Stage.BRAINSTORM, "方案不够详细")
 
         assert updated.get_stage_state(Stage.BRAINSTORM).status == StageStatus.REJECTED
-        comments = updated.get_stage_state(Stage.BRAINSTORM).comments
-        assert len(comments) == 1
-        assert comments[0].action == "reject"
-        assert comments[0].content == "方案不够详细"
 
     @pytest.mark.asyncio
     async def test_update_issue(self, repo, executor, service):

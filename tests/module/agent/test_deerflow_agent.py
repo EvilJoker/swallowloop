@@ -13,18 +13,18 @@ class TestDeerFlowAgent:
     """DeerFlowAgent 功能测试"""
 
     def _create_mock_client(self, response_status: int = 200, response_json: dict = None):
-        """创建 mock httpx.AsyncClient"""
+        """创建 mock httpx.Client（同步）"""
         mock_response = MagicMock()
         mock_response.status_code = response_status
         if response_json:
             mock_response.json.return_value = response_json
 
         mock_client = MagicMock()
-        mock_client.post = AsyncMock(return_value=mock_response)
-        mock_client.get = AsyncMock(return_value=mock_response)
-        mock_client.delete = AsyncMock(return_value=mock_response)
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=None)
+        mock_client.post.return_value = mock_response
+        mock_client.get.return_value = mock_response
+        mock_client.delete.return_value = mock_response
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=None)
         return mock_client
 
     @pytest.mark.asyncio
@@ -38,7 +38,7 @@ class TestDeerFlowAgent:
 
         with patch.object(agent, '_create_client', return_value=mock_client):
             with patch.object(Path, 'mkdir'):
-                workspace_info = await agent.prepare(
+                workspace_info = agent.prepare(
                     issue_id="issue-123",
                     context={
                         "repo_url": "https://github.com/test/repo",
@@ -65,7 +65,7 @@ class TestDeerFlowAgent:
 
         with patch.object(agent, '_create_client', return_value=mock_client):
             with patch.object(Path, 'mkdir'):
-                workspace_info = await agent.prepare(
+                workspace_info = agent.prepare(
                     issue_id="issue-123",
                     context={"repo_url": "", "branch": "", "stage": ""}
                 )
@@ -167,7 +167,7 @@ class TestDeerFlowAgent:
 
         with patch.object(agent, '_create_client', return_value=mock_client):
             with patch.object(Path, 'mkdir'):
-                workspace_info = await agent.prepare(
+                workspace_info = agent.prepare(
                     issue_id="test-thread",
                     context={"repo_url": "", "branch": "", "stage": ""}
                 )

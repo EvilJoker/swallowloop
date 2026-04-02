@@ -21,18 +21,11 @@ from .model import (
 # 仓库接口
 from .repository import IssueRepository, WorkspaceRepository
 
-# 状态机
-from .statemachine import (
-    StageStateMachine,
-    InvalidTransitionError,
-    ConcurrentModificationError,
-    Hook,
-    LoggerHook,
-    TransitionEvent,
-)
-
 # 领域事件
 from .event import DomainEvent
+
+# Pipeline Bundle
+from . import pipeline
 
 __all__ = [
     "MODULE_NAME",
@@ -52,13 +45,8 @@ __all__ = [
     # 仓库接口
     "IssueRepository",
     "WorkspaceRepository",
-    # 状态机
-    "StageStateMachine",
-    "InvalidTransitionError",
-    "ConcurrentModificationError",
-    "Hook",
-    "LoggerHook",
-    "TransitionEvent",
     # 事件
     "DomainEvent",
+    # Pipeline Bundle
+    "pipeline",
 ]

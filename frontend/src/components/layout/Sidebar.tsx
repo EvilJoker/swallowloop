@@ -1,22 +1,24 @@
 import { useState, useEffect } from 'react';
-import { Home, LayoutDashboard, Archive, Bot } from 'lucide-react';
+import { Home, LayoutDashboard, Archive, Bot, Database } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { deerflowApi, type DeerFlowStatus } from '@/lib/api';
 
 interface SidebarProps {
   currentPage: string;
-  onNavigate: (page: 'home' | 'overview' | 'archive' | 'deerflow') => void;
+  onNavigate: (page: 'home' | 'overview' | 'archive' | 'deerflow' | 'repository') => void;
   className?: string;
+  issueCount?: number;
 }
 
 const menuItems = [
-  { icon: Home, label: '首页', key: 'home' as const },
+  { icon: Home, label: '任务', key: 'home' as const },
   { icon: LayoutDashboard, label: '概览', key: 'overview' as const },
   { icon: Archive, label: '归档', key: 'archive' as const },
   { icon: Bot, label: 'DeerFlow', key: 'deerflow' as const, showStatus: true },
+  { icon: Database, label: '代码仓库', key: 'repository' as const },
 ];
 
-export function Sidebar({ currentPage, onNavigate, className }: SidebarProps) {
+export function Sidebar({ currentPage, onNavigate, className, issueCount = 0 }: SidebarProps) {
   const [deerflowStatus, setDeerflowStatus] = useState<DeerFlowStatus | null>(null);
 
   useEffect(() => {
@@ -60,7 +62,16 @@ export function Sidebar({ currentPage, onNavigate, className }: SidebarProps) {
             )}
           >
             <item.icon className="h-4 w-4" />
-            {item.label}
+            {item.key === 'home' ? (
+              <span>任务</span>
+            ) : (
+              <span>{item.label}</span>
+            )}
+            {item.key === 'home' && issueCount > 0 && (
+              <span className="ml-auto text-xs text-slate-600">
+                {issueCount}
+              </span>
+            )}
             {item.showStatus && (
               <span
                 className={cn(

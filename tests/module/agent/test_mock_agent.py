@@ -3,6 +3,7 @@
 import pytest
 import asyncio
 import time
+from datetime import datetime
 from pathlib import Path
 
 from swallowloop.infrastructure.agent import MockAgent
@@ -56,7 +57,7 @@ class TestMockAgent:
         agent = MockAgent(delay_seconds=0.01)
         await agent.initialize()
 
-        workspace_info = await agent.prepare(
+        workspace_info = agent.prepare(
             issue_id="test-issue-123",
             context={
                 "repo_url": "https://github.com/test/repo",
@@ -70,8 +71,7 @@ class TestMockAgent:
         assert workspace_info.id == "test-issue-123"
         assert workspace_info.repo_url == "https://github.com/test/repo"
         assert workspace_info.branch == "test-issue-123"
-        assert "stages" in workspace_info.workspace_path
-        assert workspace_info.workspace_path.endswith("test-issue-123/stages")
+        assert workspace_info.workspace_path.endswith("test-issue-123")
 
     @pytest.mark.asyncio
     async def test_mock_agent_prepare_workspace_created(self):
@@ -79,7 +79,7 @@ class TestMockAgent:
         agent = MockAgent(delay_seconds=0.01)
         await agent.initialize()
 
-        workspace_info = await agent.prepare(
+        workspace_info = agent.prepare(
             issue_id="test-issue-workspace",
             context={"repo_url": "", "branch": "", "stage": ""}
         )
@@ -88,3 +88,39 @@ class TestMockAgent:
         workspace_path = Path(workspace_info.workspace_path)
         assert workspace_path.exists()
         assert workspace_path.is_dir()
+
+
+class TestMockAgentStatus:
+    """MockAgent 状态方法测试"""
+
+    def test_get_status_returns_cached_status(self):
+        """测试 get_status 返回缓存状态"""
+        agent = MockAgent(delay_seconds=0.01)
+        status = agent.get_status()
+
+        assert status.status == "online"
+        assert status.version == "mock-1.0.0"
+        assert status.model_name == "mock-model"
+        assert status.model_display_name == "Mock Model"
+        assert status.llm_used == 0
+        assert status.llm_quota == 1500
+        assert status.llm_next_refresh is None
+        assert status.base_url == "mock://localhost"
+        assert status.active_threads == 0
+        assert status.last_update is not None
+
+    @pytest.mark.asyncio
+    async def test_fetch_status_returns_same_as_get_status(self):
+        """测试 fetch_status 返回与 get_status 相同的缓存状态"""
+        agent = MockAgent(delay_seconds=0.01)
+        await agent.initialize()
+
+        fetched_status = await agent.fetch_status()
+        cached_status = agent.get_status()
+
+        assert fetched_status.status == cached_status.status
+        assert fetched_status.version == cached_status.version
+        assert fetched_status.model_name == cached_status.model_name
+        assert fetched_status.llm_used == cached_status.llm_used
+        assert fetched_status.llm_quota == cached_status.llm_quota
+        assert fetched_status.base_url == cached_status.base_url

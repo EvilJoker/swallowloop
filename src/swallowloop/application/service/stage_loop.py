@@ -9,12 +9,12 @@ if TYPE_CHECKING:
     from ...domain.repository import IssueRepository
     from .worker_pool import ExecutorWorkerPool
     from .executor_service import ExecutorService
-    from ...infrastructure.llm import LLMProviderBase
+    from ...infrastructure.agent import BaseAgent
 
 logger = logging.getLogger(__name__)
 
-# LLM 用量查询间隔（秒）
-LLM_USAGE_INTERVAL_SECONDS = 30
+# Agent 状态刷新间隔（秒）
+AGENT_STATUS_INTERVAL_SECONDS = 30
 
 
 class StageLoop:
@@ -25,16 +25,16 @@ class StageLoop:
         repository: "IssueRepository",
         worker_pool: "ExecutorWorkerPool",
         executor: "ExecutorService",
-        llm: "LLMProviderBase | None" = None,
+        agent: "BaseAgent | None" = None,
         interval: int = 5,
     ):
         self._repo = repository
         self._worker_pool = worker_pool
         self._executor = executor
-        self._llm = llm
+        self._agent = agent
         self._interval = interval
         self._loop: asyncio.AbstractEventLoop | None = None
-        self._last_llm_usage_check: float = 0  # 上次查询时间戳
+        self._last_status_check: float = 0  # 上次状态刷新时间戳
 
     def start(self) -> None:
         """启动主循环（阻塞）"""
@@ -61,22 +61,20 @@ class StageLoop:
     async def _maintain_async(self) -> None:
         """异步扫描并触发可执行 AI 的阶段（NEW/REJECTED/ERROR）"""
         from ...domain.model import Stage, StageStatus
-        from ...infrastructure.llm import get_llm_usage
 
-        # LLM 用量查询（每30秒一次）
+        # Agent 状态刷新（每30秒一次）
         current_time = time.monotonic()
-        if self._llm and (current_time - self._last_llm_usage_check) >= LLM_USAGE_INTERVAL_SECONDS:
+        if self._agent and (current_time - self._last_status_check) >= AGENT_STATUS_INTERVAL_SECONDS:
             try:
-                usage = await get_llm_usage()
-                if usage:
-                    logger.debug(
-                        f"LLM 用量: used={usage.used}, quota={usage.quota}, "
-                        f"next_refresh={usage.next_refresh}"
-                    )
+                status = await self._agent.fetch_status()
+                logger.debug(
+                    f"Agent 状态: status={status.status}, "
+                    f"llm_used={status.llm_used}/{status.llm_quota}"
+                )
             except Exception as e:
-                logger.warning(f"LLM 用量查询失败: {e}")
+                logger.warning(f"Agent 状态刷新失败: {e}")
             finally:
-                self._last_llm_usage_check = current_time
+                self._last_status_check = current_time
 
         # 获取所有可触发状态的 (issue, stage) 对
         triggerable_statuses = [StageStatus.NEW, StageStatus.REJECTED, StageStatus.ERROR]
@@ -113,11 +111,15 @@ class StageLoop:
         Returns:
             (can_trigger, reason) 元组
         """
-        from ...domain.model import IssueStatus
+        from ...domain.model import IssueStatus, IssueRunningStatus
 
         # Issue 必须是 ACTIVE
         if issue.status != IssueStatus.ACTIVE:
             return False, f"Issue状态={issue.status.value}，不是ACTIVE"
+
+        # 泳道状态必须是 IN_PROGRESS 才能触发（新建状态的 Issue 不自动触发）
+        if issue.running_status == IssueRunningStatus.NEW:
+            return False, f"Issue处于新建状态，需先移动到进行中"
 
         # 必须是当前阶段才能触发
         if issue.current_stage != stage:

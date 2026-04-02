@@ -1,16 +1,22 @@
 import { useState } from 'react';
 import { Plus, AlertTriangle } from 'lucide-react';
-import type { Issue, Stage } from '@/types';
-import { STAGES } from '@/types';
+import type { Issue, IssueRunningStatus } from '@/types';
 import { KanbanLane } from './KanbanLane';
 import { NewIssueDialog } from '@/components/issue/NewIssueDialog';
 import { issueApi } from '@/lib/api';
+
+// 泳道配置
+const LANES: { key: IssueRunningStatus; label: string }[] = [
+  { key: 'new', label: '新建' },
+  { key: 'in_progress', label: '进行中' },
+];
 
 interface KanbanBoardProps {
   issues: Issue[];
   onIssueClick?: (issue: Issue) => void;
   onIssueCreated?: (issue: Issue) => void;
   onIssueDeleted?: () => void;
+  onIssueRefresh?: () => void;
   className?: string;
 }
 
@@ -50,18 +56,18 @@ function DeleteConfirmDialog({
   );
 }
 
-export function KanbanBoard({ issues, onIssueClick, onIssueCreated, onIssueDeleted, className }: KanbanBoardProps) {
+export function KanbanBoard({ issues, onIssueClick, onIssueCreated, onIssueDeleted, onIssueRefresh, className }: KanbanBoardProps) {
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Issue | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // 按阶段分组
-  const issuesByStage = STAGES.reduce<Record<Stage, Issue[]>>((acc, stage) => {
-    acc[stage.key] = issues.filter(
-      (issue) => issue.status === 'active' && issue.currentStage === stage.key
+  // 按泳道状态分组
+  const issuesByLane = LANES.reduce<Record<IssueRunningStatus, Issue[]>>((acc, lane) => {
+    acc[lane.key] = issues.filter(
+      (issue) => issue.status === 'active' && issue.runningStatus === lane.key
     );
     return acc;
-  }, {} as Record<Stage, Issue[]>);
+  }, {} as Record<IssueRunningStatus, Issue[]>);
 
   const handleIssueCreated = (issue: Issue) => {
     onIssueCreated?.(issue);
@@ -70,6 +76,19 @@ export function KanbanBoard({ issues, onIssueClick, onIssueCreated, onIssueDelet
 
   const handleDelete = (issue: Issue) => {
     setDeleteTarget(issue);
+  };
+
+  const handleIssueMove = async (issueId: string, toLane: IssueRunningStatus) => {
+    // 只允许从新建移动到进行中
+    const issue = issues.find(i => i.id === issueId);
+    if (!issue || issue.runningStatus === toLane) return;
+    if (issue.runningStatus === 'in_progress') return; // 进行中不能移动
+
+    try {
+      await issueApi.updateRunningStatus(issueId, toLane);
+      onIssueRefresh?.();
+    } catch (err) {
+    }
   };
 
   const confirmDelete = async () => {
@@ -81,7 +100,6 @@ export function KanbanBoard({ issues, onIssueClick, onIssueCreated, onIssueDelet
       // 通知父组件刷新数据
       onIssueDeleted?.();
     } catch (err) {
-      console.error('删除失败:', err);
     } finally {
       setIsDeleting(false);
     }
@@ -91,7 +109,7 @@ export function KanbanBoard({ issues, onIssueClick, onIssueCreated, onIssueDelet
     <div className={className}>
       {/* 工具栏 */}
       <div className="flex items-center justify-between px-4 py-3 bg-white border-b border-slate-200">
-        <h2 className="font-semibold text-slate-800">泳道图</h2>
+        <div />
         <button
           onClick={() => setShowNewDialog(true)}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 text-white hover:bg-blue-600 rounded-lg transition-colors text-sm font-medium"
@@ -101,17 +119,17 @@ export function KanbanBoard({ issues, onIssueClick, onIssueCreated, onIssueDelet
         </button>
       </div>
 
-      {/* 泳道图头部 - 固定7列 */}
+      {/* 看板头部 - 固定3列 */}
       <div className="flex bg-slate-100 border-b border-slate-200">
-        {STAGES.map((stage) => (
+        {LANES.map((lane) => (
           <div
-            key={stage.key}
-            className="w-[200px] min-w-[200px] px-3 py-2.5 border-r border-slate-200 last:border-r-0"
+            key={lane.key}
+            className="flex-1 min-w-[280px] px-4 py-2.5 border-r border-slate-200 last:border-r-0"
           >
             <div className="flex items-center justify-between">
-              <h3 className="font-medium text-slate-700 text-sm">{stage.label}</h3>
+              <h3 className="font-medium text-slate-700 text-sm">{lane.label}</h3>
               <span className="text-xs text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded-full">
-                {issuesByStage[stage.key].length}
+                {issuesByLane[lane.key].length}
               </span>
             </div>
           </div>
@@ -120,13 +138,15 @@ export function KanbanBoard({ issues, onIssueClick, onIssueCreated, onIssueDelet
 
       {/* 泳道内容 */}
       <div className="flex bg-slate-50 overflow-x-auto">
-        {STAGES.map((stage) => (
+        {LANES.map((lane) => (
           <KanbanLane
-            key={stage.key}
-            issues={issuesByStage[stage.key]}
+            key={lane.key}
+            laneKey={lane.key}
+            issues={issuesByLane[lane.key]}
             onIssueClick={onIssueClick}
             onIssueDelete={handleDelete}
-            className="border-r border-slate-100 last:border-r-0"
+            onIssueMove={handleIssueMove}
+            className="flex-1 min-w-[280px] border-r border-slate-100 last:border-r-0"
           />
         ))}
       </div>

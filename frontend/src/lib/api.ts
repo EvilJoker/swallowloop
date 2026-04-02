@@ -1,7 +1,7 @@
 /**
  * API 封装 - 调用后端 REST API
  */
-import type { Issue, Stage, IssueStatus } from '@/types';
+import type { Issue, Stage, IssueStatus, IssueRunningStatus } from '@/types';
 
 const API_BASE = '/api';
 
@@ -86,6 +86,18 @@ function parseIssueDates(issue: any): Issue {
     result.stages = {};
   }
 
+  // 处理 pipeline 字段
+  if (issue.pipeline && typeof issue.pipeline === 'object') {
+    result.pipeline = {
+      ...issue.pipeline,
+      stages: issue.pipeline.stages?.map((stage: any) => ({
+        ...stage,
+        startedAt: stage.startedAt ? new Date(stage.startedAt) : undefined,
+        completedAt: stage.completedAt ? new Date(stage.completedAt) : undefined,
+      })) || [],
+    };
+  }
+
   return result as Issue;
 }
 
@@ -145,11 +157,13 @@ export const issueApi = {
   },
 
   /**
-   * 触发 AI 执行
+   * 触发 AI 执行指定阶段
    */
-  async trigger(id: string): Promise<{ status: string; issue_id: string; result: any }> {
+  async trigger(id: string, stage: Stage): Promise<{ status: string; issue_id: string; result: any }> {
     const response = await fetch(`${API_BASE}/issues/${id}/trigger`, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stage }),
     });
     return handleResponse(response);
   },
@@ -191,6 +205,18 @@ export const issueApi = {
   async discard(id: string): Promise<Issue> {
     return this.update(id, { status: 'discarded' as IssueStatus });
   },
+
+  /**
+   * 更新 Issue 泳道状态
+   */
+  async updateRunningStatus(id: string, runningStatus: IssueRunningStatus): Promise<Issue> {
+    const response = await fetch(`${API_BASE}/issues/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ runningStatus }),
+    });
+    return handleResponse<Issue>(response);
+  },
 };
 
 // WebSocket 执行日志
@@ -206,9 +232,9 @@ export interface DeerFlowStatus {
   version: string | null;
   model_name: string | null;
   model_display_name: string | null;
-  minimax_used: number;
-  minimax_quota: number;
-  minimax_next_refresh: string | null;
+  llm_used: number;
+  llm_quota: number;
+  llm_next_refresh: string | null;
   base_url: string;
   data_dir: string;
   active_threads: number;
@@ -221,5 +247,23 @@ export const deerflowApi = {
   async getStatus(): Promise<DeerFlowStatus> {
     const response = await fetch(`${API_BASE}/deerflow/status`);
     return handleResponse<DeerFlowStatus>(response);
+  },
+};
+
+// Repository API
+export interface Repository {
+  name: string;
+  url: string;
+  branch: string;
+  description: string;
+}
+
+export const repositoryApi = {
+  /**
+   * 获取代码仓库配置
+   */
+  async getRepository(): Promise<Repository> {
+    const response = await fetch(`${API_BASE}/repository`);
+    return handleResponse<Repository>(response);
   },
 };

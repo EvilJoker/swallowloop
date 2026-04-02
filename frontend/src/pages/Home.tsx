@@ -14,6 +14,9 @@ export function Home() {
   const setLoading = useIssueStore((state) => state.setLoading);
   const setSelectedIssueId = useIssueStore((state) => state.setSelectedIssueId);
 
+  // 根据 selectedIssueId 查找完整的 issue 对象
+  const selectedIssue = issues.find((issue) => issue.id === selectedIssueId) ?? null;
+
   // 初始化 WebSocket 和加载数据
   useEffect(() => {
     // 初始化 WebSocket
@@ -27,8 +30,6 @@ export function Home() {
     });
   }, [setIssues, setLoading]);
 
-  const selectedIssue = issues.find((i) => i.id === selectedIssueId) || null;
-
   const handleIssueClick = (issue: Issue) => {
     setSelectedIssueId(issue.id);
   };
@@ -37,21 +38,10 @@ export function Home() {
     setSelectedIssueId(null);
   };
 
-  const handleApprove = () => {
-    if (!selectedIssue) return;
-    console.log('Issue approved:', selectedIssue.id);
-    setSelectedIssueId(null);
-  };
-
-  const handleReject = (reason: string) => {
-    if (!selectedIssue) return;
-    console.log('Issue rejected:', selectedIssue.id, reason);
-    setSelectedIssueId(null);
-  };
-
-  const handleTrigger = () => {
-    if (!selectedIssue) return;
-    console.log('Trigger AI update for:', selectedIssue.id);
+  const handleRefresh = () => {
+    issueApi.getAll().then((data) => {
+      setIssues(data);
+    });
   };
 
   const handleIssueCreated = (_issue: Issue) => {
@@ -92,9 +82,7 @@ export function Home() {
           <IssueDetail
             issue={selectedIssue}
             onClose={handleCloseDetail}
-            onApprove={handleApprove}
-            onReject={handleReject}
-            onTrigger={handleTrigger}
+            onRefresh={handleRefresh}
             className="flex-1"
           />
         </div>

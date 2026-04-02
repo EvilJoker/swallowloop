@@ -93,7 +93,7 @@ export function DeerFlow() {
     );
   }
 
-  const usagePercent = Math.min((status.minimax_used / status.minimax_quota) * 100, 100);
+  const usagePercent = Math.min((status.llm_used / status.llm_quota) * 100, 100);
 
   return (
     <div className="p-6 max-w-2xl">
@@ -147,9 +147,9 @@ export function DeerFlow() {
           </div>
 
           <div className="flex items-baseline gap-2 mb-3">
-            <span className="text-2xl font-bold text-slate-800">{formatNumber(status.minimax_used)}</span>
+            <span className="text-2xl font-bold text-slate-800">{formatNumber(status.llm_used)}</span>
             <span className="text-slate-400">/</span>
-            <span className="text-lg text-slate-500">{formatNumber(status.minimax_quota)}</span>
+            <span className="text-lg text-slate-500">{formatNumber(status.llm_quota)}</span>
           </div>
 
           {/* 进度条 */}
@@ -164,7 +164,7 @@ export function DeerFlow() {
 
           <div className="flex justify-between text-xs text-slate-400">
             <span>{usagePercent.toFixed(1)}%</span>
-            <span>下次刷新: {formatDateTime(status.minimax_next_refresh)}</span>
+            <span>下次刷新: {formatDateTime(status.llm_next_refresh)}</span>
           </div>
         </div>
 

@@ -7,6 +7,7 @@ import { IssueDetail } from '@/components/issue/IssueDetail';
 import { Overview } from '@/pages/Overview';
 import { Archive } from '@/pages/Archive';
 import { DeerFlow } from '@/pages/DeerFlow';
+import { Repository } from '@/pages/Repository';
 import type { Issue } from '@/types';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -14,7 +15,7 @@ import { issueApi } from '@/lib/api';
 import { useIssueStore } from '@/store/issueStore';
 import { initIssueWebSocket } from '@/lib/wsClient';
 
-type Page = 'home' | 'overview' | 'archive' | 'deerflow';
+type Page = 'home' | 'overview' | 'archive' | 'deerflow' | 'repository';
 
 interface Tab {
   id: string;
@@ -25,7 +26,7 @@ interface Tab {
 
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>('home');
-  const [tabs, setTabs] = useState<Tab[]>([{ id: 'kanban', type: 'kanban', title: '泳道图' }]);
+  const [tabs, setTabs] = useState<Tab[]>([{ id: 'kanban', type: 'kanban', title: '看板' }]);
   const [activeTabId, setActiveTabId] = useState('kanban');
 
   // 使用 Zustand store
@@ -51,6 +52,26 @@ function App() {
     const interval = setInterval(checkBackend, 15000);
     return () => clearInterval(interval);
   }, [setBackendConnected]);
+
+  // 刷新所有 Issues
+  const refreshIssues = async () => {
+    const data = await issueApi.getAll();
+    setIssues(data);
+  };
+
+  // 刷新单个 Issue
+  const refreshIssue = async (issueId: string) => {
+    try {
+      const updated = await issueApi.getById(issueId);
+      useIssueStore.getState().updateIssue(updated);
+      // 同时更新 tab 中的 issue
+      setTabs((prev) =>
+        prev.map((t) => (t.issue?.id === issueId ? { ...t, issue: updated } : t))
+      );
+    } catch (err) {
+      // ignore
+    }
+  };
 
   // 初始化 WebSocket 和加载数据
   useEffect(() => {
@@ -89,67 +110,23 @@ function App() {
     }
   };
 
-  // 刷新 Issue 数据
-  const refreshIssue = async (issueId: string) => {
-    try {
-      const updated = await issueApi.getById(issueId);
-      useIssueStore.getState().updateIssue(updated);
-      // 同时更新 tab 中的 issue
-      setTabs((prev) =>
-        prev.map((t) => (t.issue?.id === issueId ? { ...t, issue: updated } : t))
-      );
-    } catch (err) {
-      console.error('Failed to refresh issue:', err);
-    }
-  };
-
   // 新建 Issue 后的回调
-  const handleIssueCreated = (issue: Issue) => {
-    useIssueStore.getState().addIssue(issue);
+  const handleIssueCreated = async (_issue: Issue) => {
+    // 直接刷新列表确保 UI 更新（WebSocket 广播在某些情况下可能不可靠）
+    await refreshIssues();
   };
 
   // 渲染当前 Tab 内容
   const renderTabContent = () => {
     const activeTab = tabs.find((t) => t.id === activeTabId);
-    if (!activeTab) return <KanbanBoard issues={issues} onIssueClick={openIssueTab} onIssueCreated={handleIssueCreated} />;
+    if (!activeTab) return <KanbanBoard issues={issues} onIssueClick={openIssueTab} onIssueCreated={handleIssueCreated} onIssueRefresh={refreshIssues} />;
 
     switch (activeTab.type) {
       case 'kanban':
-        return <KanbanBoard issues={issues} onIssueClick={openIssueTab} onIssueCreated={handleIssueCreated} />;
+        return <KanbanBoard issues={issues} onIssueClick={openIssueTab} onIssueCreated={handleIssueCreated} onIssueRefresh={refreshIssues} />;
       case 'issue':
         return activeTab.issue ? (
-          <IssueDetail
-            issue={activeTab.issue}
-            onApprove={async () => {
-              if (!activeTab.issue) return;
-              try {
-                await issueApi.approveStage(activeTab.issue.id, activeTab.issue.currentStage);
-                await refreshIssue(activeTab.issue.id);
-                closeTab(activeTab.id);
-              } catch (err) {
-                console.error('Failed to approve:', err);
-              }
-            }}
-            onReject={async (reason) => {
-              if (!activeTab.issue) return;
-              try {
-                await issueApi.rejectStage(activeTab.issue.id, activeTab.issue.currentStage, reason);
-                await refreshIssue(activeTab.issue.id);
-                closeTab(activeTab.id);
-              } catch (err) {
-                console.error('Failed to reject:', err);
-              }
-            }}
-            onTrigger={async () => {
-              if (!activeTab.issue) return;
-              try {
-                await issueApi.trigger(activeTab.issue.id);
-                await refreshIssue(activeTab.issue.id);
-              } catch (err) {
-                console.error('Failed to trigger:', err);
-              }
-            }}
-          />
+          <IssueDetail issue={activeTab.issue} onRefresh={() => refreshIssue(activeTab.issue!.id)} />
         ) : null;
       default:
         return null;
@@ -211,16 +188,21 @@ function App() {
         return <Archive />;
       case 'deerflow':
         return <DeerFlow />;
+      case 'repository':
+        return <Repository />;
       default:
         return <Overview />;
     }
   };
 
+  // 计算活跃 Issue 数量
+  const activeIssueCount = issues.filter((i) => i.status === 'active').length;
+
   return (
     <div className="h-screen flex flex-col bg-slate-50">
       <Header />
       <div className="flex-1 flex overflow-hidden">
-        <Sidebar currentPage={currentPage} onNavigate={setCurrentPage} />
+        <Sidebar currentPage={currentPage} onNavigate={setCurrentPage} issueCount={activeIssueCount} />
         <MainContent className="flex-1 overflow-hidden">
           {renderPage()}
         </MainContent>

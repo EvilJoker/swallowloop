@@ -73,7 +73,7 @@ class TestAPIWithService:
         assert response.status_code == 201
         data = response.json()["issue"]
         assert data["title"] == "测试"
-        assert data["currentStage"] == "brainstorm"
+        assert data["currentStage"] == "environment"
 
     def test_get_issue(self, api_client):
         """获取单个 Issue"""
