@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from ....infrastructure.agent import AgentStatus
 from ....infrastructure.instance_registry import get_instance
+from ....infrastructure.constants import DEFAULT_DEERFLOW_BASE_URL
 
 router = APIRouter()
 
@@ -46,7 +47,7 @@ def _get_data_dir() -> str:
 def _get_deerflow_base_url() -> str:
     """获取 DeerFlow 基础 URL"""
     config = get_instance("config")
-    return config.get("DEERFLOW_BASE_URL", "http://localhost:2026") if config else "http://localhost:2026"
+    return config.get("DEERFLOW_BASE_URL", DEFAULT_DEERFLOW_BASE_URL) if config else DEFAULT_DEERFLOW_BASE_URL
 
 
 @router.get("/deerflow/status", response_model=DeerFlowStatusResponse)

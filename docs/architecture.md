@@ -1,5 +1,10 @@
 # SwallowLoop 架构文档
 
+> **文档索引**
+> - [代码规范](../CODING_STANDARDS.md) - 命名、Git、测试规范
+> - [术语表](../GLOSSARY.md) - 核心概念和状态机流转
+> - [数据模型](./data_models.md) - 详细数据结构定义
+
 ## 项目概述
 
 **SwallowLoop · 燕子回环**：围绕代码仓库的智能维护 Agent 系统。

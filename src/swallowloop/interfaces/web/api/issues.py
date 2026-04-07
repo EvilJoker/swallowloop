@@ -7,6 +7,7 @@ from typing import Optional
 from ....application.service import IssueService, ExecutorService
 from ....domain.model import Stage, IssueStatus, IssueRunningStatus
 from ....infrastructure.persistence import InMemoryIssueRepository
+from ....infrastructure.constants import DEFAULT_DEERFLOW_BASE_URL
 
 router = APIRouter()
 
@@ -45,7 +46,7 @@ def init_services():
 
         repository = InMemoryIssueRepository()
         agent_type = config.get("AGENT_TYPE", "mock") if config else "mock"
-        deerflow_base_url = config.get("DEERFLOW_BASE_URL", "http://localhost:2026") if config else "http://localhost:2026"
+        deerflow_base_url = config.get("DEERFLOW_BASE_URL", DEFAULT_DEERFLOW_BASE_URL) if config else DEFAULT_DEERFLOW_BASE_URL
         if agent_type == "deerflow":
             agent = DeerFlowAgent(base_url=deerflow_base_url)
         else:

@@ -27,7 +27,7 @@ class Config:
 GITHUB_TOKEN=your_github_token_here
 
 # 目标仓库 (owner/repo 格式，多个用逗号分隔)
-GITHUB_REPO=owner/repo
+REPOS=
 
 # ============ LLM API 配置 ============
 
@@ -50,9 +50,6 @@ MAX_WORKERS=5
 
 # 轮询间隔 (秒)
 POLL_INTERVAL=60
-
-# 监听的 Issue 标签
-ISSUE_LABEL=swallow
 
 # 基础分支
 BASE_BRANCH=main
@@ -84,10 +81,8 @@ agent:
   max_workers: ${MAX_WORKERS:5}
 
 # GitHub 配置
-github:
-  repos: ${GITHUB_REPO:}
-  issue_label: ${ISSUE_LABEL:swallow}
-  base_branch: ${BASE_BRANCH:main}
+repos: ${REPOS:}
+base_branch: ${BASE_BRANCH:main}
 """
 
     @classmethod
@@ -253,15 +248,12 @@ github:
 
     def get_deerflow_base_url(self) -> str:
         """获取 DeerFlow API 地址"""
-        return self.get("DEERFLOW_BASE_URL", "http://localhost:2026")
+        from ..constants import DEFAULT_DEERFLOW_BASE_URL
+        return self.get("DEERFLOW_BASE_URL", DEFAULT_DEERFLOW_BASE_URL)
 
     def get_poll_interval(self) -> int:
         """获取轮询间隔（秒）"""
         return int(self.get("POLL_INTERVAL", "60"))
-
-    def get_issue_label(self) -> str:
-        """获取监听标签"""
-        return self.get("ISSUE_LABEL", "swallow")
 
     def get_base_branch(self) -> str:
         """获取基础分支"""
@@ -273,7 +265,8 @@ github:
 
     def get_work_dir(self) -> Path:
         """获取工作目录"""
-        return Path(self.get("WORK_DIR", Path.home() / ".swallowloop"))
+        work_dir = self.get("WORK_DIR", str(Path.home() / ".swallowloop"))
+        return Path(work_dir).expanduser()
 
     def get_log_dir(self) -> Path:
         """获取日志目录"""
@@ -310,9 +303,22 @@ github:
 
     def get_repository(self) -> dict:
         """获取代码仓库配置"""
+        repos = self.get("REPOS", "")
+        if not repos:
+            return {"name": "", "url": "", "branch": "main", "description": ""}
+
+        # 取第一个仓库
+        repo_url = repos.split(",")[0].strip()
+
+        # 从 URL 提取仓库名
+        name = ""
+        if repo_url:
+            parts = repo_url.rstrip("/").split("/")
+            name = parts[-1] if parts else ""
+
         return {
-            "name": self.get("REPOSITORY_NAME", ""),
-            "url": self.get("REPOSITORY_URL", ""),
-            "branch": self.get("REPOSITORY_BRANCH", "main"),
-            "description": self.get("REPOSITORY_DESCRIPTION", ""),
+            "name": name,
+            "url": repo_url,
+            "branch": self.get("BASE_BRANCH", "main"),
+            "description": "",
         }

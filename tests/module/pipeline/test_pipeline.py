@@ -262,3 +262,43 @@ class TestPipelineIntegration:
         ctx, result = pipeline.execute({})
         assert ctx["done"] is True
         assert result.success is True
+
+
+class TestEnvironmentCloneRepoTask:
+    """EnvironmentCloneRepoTask 测试"""
+
+    def test_normalize_repo_url_shorthand(self):
+        """测试简写格式 owner/repo 转换"""
+        from swallowloop.domain.pipeline.tasks.environment_clone_repo_task import EnvironmentCloneRepoTask
+
+        task = EnvironmentCloneRepoTask()
+
+        # 设置环境变量
+        import os
+        os.environ["GITHUB_TOKEN"] = "test-token"
+
+        # 测试简写格式
+        url = task._normalize_repo_url("owner/repo")
+        assert url == "https://test-token@github.com/owner/repo.git"
+
+        # 清理
+        del os.environ["GITHUB_TOKEN"]
+
+    def test_normalize_repo_url_full_https(self):
+        """测试完整 HTTPS URL 不变"""
+        from swallowloop.domain.pipeline.tasks.environment_clone_repo_task import EnvironmentCloneRepoTask
+
+        task = EnvironmentCloneRepoTask()
+
+        url = task._normalize_repo_url("https://github.com/owner/repo.git")
+        assert url == "https://github.com/owner/repo.git"
+
+    def test_normalize_repo_url_git_ssh_format(self):
+        """测试 SSH 格式转换"""
+        from swallowloop.domain.pipeline.tasks.environment_clone_repo_task import EnvironmentCloneRepoTask
+
+        task = EnvironmentCloneRepoTask()
+
+        # git@github.com:owner/repo.git -> https://github.com/owner/repo.git
+        url = task._normalize_repo_url("git@github.com:owner/repo.git")
+        assert url == "https://github.com/owner/repo.git"

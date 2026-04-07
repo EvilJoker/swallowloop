@@ -8,6 +8,7 @@ from .base import AgentResult, AgentStatus, BaseAgent
 from .mock_agent import MockAgent
 from .deerflow_agent import DeerFlowAgent
 from ...domain.model.workspace import Workspace
+from ..constants import DEFAULT_DEERFLOW_BASE_URL
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,7 @@ def create_agent(agent_type: str = "mock") -> BaseAgent:
         logger.info("使用 MockAgent，延迟 5 秒")
         return MockAgent(delay_seconds=5.0)
     elif agent_type == "deerflow":
-        base_url = config.get("DEERFLOW_BASE_URL", "http://localhost:2026") if config else "http://localhost:2026"
+        base_url = config.get("DEERFLOW_BASE_URL", DEFAULT_DEERFLOW_BASE_URL) if config else DEFAULT_DEERFLOW_BASE_URL
         logger.info(f"使用 DeerFlowAgent，base_url={base_url}")
         return DeerFlowAgent(base_url=base_url)
     else:

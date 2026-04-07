@@ -178,7 +178,7 @@ class TestLLMProviderMinimax:
         }
 
         mock_client_instance = AsyncMock()
-        mock_client_instance.post = AsyncMock(return_value=mock_response)
+        mock_client_instance.get = AsyncMock(return_value=mock_response)
 
         mock_context = AsyncMock()
         mock_context.__aenter__.return_value = mock_client_instance
@@ -197,8 +197,8 @@ class TestLLMProviderMinimax:
         Config.load()
         instance = LLMProviderMinimax.set_instance()
 
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.post = AsyncMock(side_effect=Exception("Network error"))
+        with patch("swallowloop.infrastructure.llm.LLMProviderMinimax.httpx.AsyncClient") as mock_client:
+            mock_client.return_value.__aenter__.return_value.get = AsyncMock(side_effect=Exception("Network error"))
 
             usage = await instance.fetch_usage()
 

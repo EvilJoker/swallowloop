@@ -48,7 +48,44 @@ Interfaces ──────► Application ──────► Domain
 
 ## 3. 接口约束（通过代码实现）
 
-### 3.1 抽象接口必须用 ABC + @abstractmethod
+### 3.1 最小化接口原则（有需要才暴露，非必要就隐藏）
+
+**原则**：模块只暴露被需要的方法，隐藏内部实现。这样才能有效约束调用者使用的接口。
+
+| 技术 | 作用 |
+|------|------|
+| `__all__` | 显式声明公开 API，控制 `from module import *` 的导出 |
+| `_` 前缀 | 标记私有属性/方法，Python 惯例 |
+| get/set 方法 | 封装内部状态，而非直接暴露属性 |
+
+**示例**：
+```python
+# IssuePipeline 只暴露 5 个方法
+__all__ = [
+    "IssuePipeline",
+    "execute_environment",
+    "get_status",
+    "get_context",
+    "set_context_value",
+    "set_agent",
+]
+
+# 内部属性用 _ 前缀
+self._context = PipelineContext(...)
+self._stages = [...]
+self._agent = None
+
+# 通过方法访问内部状态
+def get_context(self) -> PipelineContext:
+    return self._context
+```
+
+**为什么有效**：
+- 约束 AI 的调用范围，防止随意访问内部状态
+- 强制思考"真正需要什么接口"，减少过度设计
+- 模块边界清晰，方便后续重构和测试
+
+### 3.2 抽象接口必须用 ABC + @abstractmethod
 
 ```python
 from abc import ABC, abstractmethod

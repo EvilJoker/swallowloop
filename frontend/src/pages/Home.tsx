@@ -38,12 +38,6 @@ export function Home() {
     setSelectedIssueId(null);
   };
 
-  const handleRefresh = () => {
-    issueApi.getAll().then((data) => {
-      setIssues(data);
-    });
-  };
-
   const handleIssueCreated = (_issue: Issue) => {
     // WebSocket 会自动更新，不需要手动处理
   };
@@ -53,6 +47,19 @@ export function Home() {
     issueApi.getAll().then((data) => {
       setIssues(data);
     });
+  };
+
+  const handleRefresh = () => {
+    // 优先刷新选中的 issue（通过 getById 获取最新状态）
+    if (selectedIssueId) {
+      issueApi.getById(selectedIssueId).then((updatedIssue) => {
+        useIssueStore.getState().updateIssue(updatedIssue);
+      });
+    } else {
+      issueApi.getAll().then((data) => {
+        setIssues(data);
+      });
+    }
   };
 
   if (loading) {

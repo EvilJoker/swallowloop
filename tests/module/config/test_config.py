@@ -124,8 +124,8 @@ class TestConfigGet:
         assert config.get("test_key") == "value"
         assert config.get("Test_Key") == "value"
 
-    def test_get_github_repos(self, tmp_path):
-        """get_github_repos()"""
+    def test_get_repos(self, tmp_path):
+        """get_repos()"""
         env_file = tmp_path / ".env"
         env_file.write_text("REPOS=owner/repo1,owner/repo2,owner/repo3\n")
 
@@ -133,7 +133,7 @@ class TestConfigGet:
 
         assert config.get_github_repos() == ["owner/repo1", "owner/repo2", "owner/repo3"]
 
-    def test_get_github_repos_empty(self, tmp_path):
+    def test_get_repos_empty(self, tmp_path):
         """get_github_repos() 空值"""
         config = Config.load(config_dir=tmp_path)
         assert config.get_github_repos() == []

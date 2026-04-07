@@ -72,6 +72,7 @@ class IssueService:
             repo_url = repo_config.get("url", "")
             repo_branch = repo_config.get("branch", "main")
 
+        # 创建 Issue（Pipeline 在 Issue.__post_init__ 中自动创建）
         issue = Issue(
             id=issue_id,
             title=title,
@@ -81,6 +82,12 @@ class IssueService:
             created_at=datetime.now(),
             repo_url=repo_url,
         )
+        # 更新 pipeline.context 的属性
+        issue.pipeline.set_context_value("repo_url", repo_url)
+        issue.pipeline.set_context_value("branch", repo_branch)
+        issue.pipeline.get_context().extra["issue_title"] = title
+        issue.pipeline.get_context().extra["issue_description"] = description
+
         # 创建环境准备阶段（状态为 NEW，由 StageLoop 自动触发 AI）
         issue.create_stage(Stage.ENVIRONMENT)
         self._repo.save(issue)
@@ -233,6 +240,10 @@ class IssueService:
         issue.mark_in_progress()
         self._repo.save(issue)
 
+        # 必须是当前阶段才能触发
+        if issue.current_stage != stage:
+            return {"status": "error", "message": f"只能触发当前阶段，当前阶段是 {issue.current_stage.value}"}
+
         stage_state = issue.get_stage_state(stage)
         if stage_state.status not in [StageStatus.NEW, StageStatus.REJECTED, StageStatus.ERROR]:
             return {"status": "error", "message": f"当前状态 {stage_state.status.value} 不能触发 AI"}
@@ -241,7 +252,12 @@ class IssueService:
         if not await self._executor.prepare_workspace(issue, stage):
             return {"status": "error", "message": "workspace 准备失败"}
 
-        # 2. 环境准备阶段使用 Pipeline 执行
+        # 2. 同步 workspace 信息到 pipeline.context
+        if issue.thread_path:
+            issue.pipeline.set_context_value("workspace_path", issue.thread_path)
+            issue.pipeline.set_context_value("thread_id", issue.thread_id)
+
+        # 3. 环境准备阶段使用 Pipeline 执行
         if stage == Stage.ENVIRONMENT:
             return await self._execute_environment_stage(issue, stage)
 
@@ -251,62 +267,40 @@ class IssueService:
 
     async def _execute_environment_stage(self, issue: Issue, stage: Stage) -> dict:
         """执行环境准备阶段 - 使用 Pipeline"""
-        from ...domain.pipeline import PipelineContext
-        from urllib.parse import urlparse
-
-        # 从 repo_url 提取仓库名
-        repo_name = "repo"
-        if issue.repo_url:
-            parsed = urlparse(issue.repo_url)
-            path_parts = parsed.path.strip("/").split("/")
-            if len(path_parts) >= 2:
-                repo_name = path_parts[-1].replace(".git", "")
-
-        # 构建 context
-        context = PipelineContext(
-            issue_id=str(issue.id),
-            workspace_path=issue.thread_path or "",
-            repo_url=issue.repo_url or "",
-            repo_name=repo_name,
-            branch=str(issue.id),
-            thread_id=issue.thread_id or "",
-        ).to_dict()
-
-        # 获取 stage_state 和 pipeline stage
         stage_state = issue.get_stage_state(stage)
-        pipeline = IssuePipeline()
-        stage_obj = pipeline.stages[0]  # environment 是第一个 stage
 
-        # 按顺序执行每个任务，实时更新状态
-        all_success = True
-        for i, task in enumerate(stage_obj.tasks):
-            # 更新任务状态为执行中
-            if stage_state.todo_list and i < len(stage_state.todo_list):
-                stage_state.todo_list[i].status = TodoStatus.IN_PROGRESS
-            self._repo.save(issue)
-            await self._broadcast("issue_updated", {"issue": self._issue_to_dict(issue)})
+        # 状态转换 NEW/REJECTED/ERROR → RUNNING
+        if stage_state.status == StageStatus.NEW:
+            stage_state.status = StageStatus.RUNNING
+            stage_state.started_at = datetime.now()
+        elif stage_state.status in [StageStatus.REJECTED, StageStatus.ERROR]:
+            stage_state.status = StageStatus.RUNNING
+            stage_state.started_at = datetime.now()
 
-            # 执行任务
-            context, task_result = task.execute(context)
+        # 更新任务状态为执行中
+        if stage_state.todo_list:
+            for todo in stage_state.todo_list:
+                todo.status = TodoStatus.IN_PROGRESS
+        self._repo.save(issue)
+        await self._broadcast("issue_updated", {"issue": self._issue_to_dict(issue)})
 
-            # 更新任务状态为完成/失败
-            if stage_state.todo_list and i < len(stage_state.todo_list):
-                if task_result.success:
-                    stage_state.todo_list[i].status = TodoStatus.COMPLETED
+        # 调用 Pipeline 执行环境准备
+        # 设置 agent 以便 Pipeline 注入 agent 到 tasks
+        agent = getattr(self._executor, '_agent', None)
+        if agent is not None:
+            issue.pipeline.set_agent(agent)
+        result = issue.pipeline.execute_environment()
+
+        # 更新任务状态
+        if stage_state.todo_list:
+            for i, todo in enumerate(stage_state.todo_list):
+                if result.get("success"):
+                    todo.status = TodoStatus.COMPLETED
                 else:
-                    stage_state.todo_list[i].status = TodoStatus.FAILED
-                    all_success = False
-
-            # 保存并广播
-            self._repo.save(issue)
-            await self._broadcast("issue_updated", {"issue": self._issue_to_dict(issue)})
-
-            # 如果任务失败，停止执行
-            if not task_result.success:
-                break
+                    todo.status = TodoStatus.FAILED
 
         # 更新阶段状态
-        if all_success:
+        if result.get("success"):
             stage_state.status = StageStatus.PENDING
         else:
             stage_state.status = StageStatus.ERROR
@@ -314,7 +308,7 @@ class IssueService:
         self._repo.save(issue)
         await self._broadcast("issue_updated", {"issue": self._issue_to_dict(issue)})
 
-        return {"success": all_success, "message": f"环境准备阶段{'完成' if all_success else '失败'}"}
+        return result
 
     def update_issue(self, issue_id: str, **kwargs) -> Issue | None:
         """更新 Issue"""

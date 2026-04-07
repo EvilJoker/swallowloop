@@ -59,20 +59,6 @@ function App() {
     setIssues(data);
   };
 
-  // 刷新单个 Issue
-  const refreshIssue = async (issueId: string) => {
-    try {
-      const updated = await issueApi.getById(issueId);
-      useIssueStore.getState().updateIssue(updated);
-      // 同时更新 tab 中的 issue
-      setTabs((prev) =>
-        prev.map((t) => (t.issue?.id === issueId ? { ...t, issue: updated } : t))
-      );
-    } catch (err) {
-      // ignore
-    }
-  };
-
   // 初始化 WebSocket 和加载数据
   useEffect(() => {
     initIssueWebSocket();
@@ -126,7 +112,7 @@ function App() {
         return <KanbanBoard issues={issues} onIssueClick={openIssueTab} onIssueCreated={handleIssueCreated} onIssueRefresh={refreshIssues} />;
       case 'issue':
         return activeTab.issue ? (
-          <IssueDetail issue={activeTab.issue} onRefresh={() => refreshIssue(activeTab.issue!.id)} />
+          <IssueDetail issue={activeTab.issue} />
         ) : null;
       default:
         return null;

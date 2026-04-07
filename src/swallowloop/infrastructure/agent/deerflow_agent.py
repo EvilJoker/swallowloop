@@ -15,18 +15,21 @@ from .base import AgentResult, AgentStatus, BaseAgent
 from ...domain.model.workspace import Workspace
 from ...infrastructure.deerflow import DeerFlowClient
 from ...infrastructure.llm import get_llm_instance
+from ..constants import (
+    DEFAULT_DEERFLOW_BASE_URL,
+    HttpTimeout,
+    POLL_INTERVAL_SECONDS,
+    MAX_EXECUTE_TIMEOUT_SECONDS,
+)
+from ..logging_utils import sanitize_log_message
 
 logger = logging.getLogger(__name__)
-
-# 轮询配置
-POLL_INTERVAL_SECONDS = 20  # 轮询间隔
-MAX_EXECUTE_TIMEOUT_SECONDS = 1800  # 最大执行时间 30 分钟
 
 
 class DeerFlowAgent(BaseAgent):
     """DeerFlow Agent - 通过 HTTP API 与 DeerFlow 通信"""
 
-    def __init__(self, base_url: str = "http://localhost:2026"):
+    def __init__(self, base_url: str = DEFAULT_DEERFLOW_BASE_URL):
         """
         Args:
             base_url: DeerFlow LangGraph API 地址（默认 http://localhost:2026）
@@ -50,10 +53,14 @@ class DeerFlowAgent(BaseAgent):
         """创建 HTTP 客户端（同步，每次调用创建新实例）"""
         return httpx.Client(timeout=300.0)
 
+    def _create_async_client(self) -> httpx.AsyncClient:
+        """创建异步 HTTP 客户端"""
+        return httpx.AsyncClient(timeout=300.0)
+
     async def initialize(self) -> None:
         """检查 DeerFlow 连接"""
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with self._create_async_client() as client:
                 response = await client.get(f"{self._base_url}/api/threads")
                 logger.info(f"DeerFlow 连接检查完成: {response.status_code}")
         except Exception as e:
@@ -99,7 +106,7 @@ class DeerFlowAgent(BaseAgent):
     async def _check_deerflow_health(self) -> tuple[bool, Optional[str]]:
         """检查 DeerFlow 服务状态"""
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
+            async with httpx.AsyncClient(timeout=HttpTimeout.HEALTH_CHECK) as client:
                 response = await client.get(f"{self._base_url}/api/langgraph/info")
                 if response.status_code == 200:
                     data = response.json()
@@ -111,7 +118,7 @@ class DeerFlowAgent(BaseAgent):
     async def _get_deerflow_model(self) -> tuple[Optional[str], Optional[str]]:
         """获取 DeerFlow 当前使用的模型"""
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
+            async with httpx.AsyncClient(timeout=HttpTimeout.HEALTH_CHECK) as client:
                 response = await client.get(f"{self._base_url}/api/models")
                 if response.status_code == 200:
                     data = response.json()
@@ -241,7 +248,7 @@ class DeerFlowAgent(BaseAgent):
             return AgentResult(success=False, output="", error="stage_file 和 result_file 必须提供")
 
         try:
-            async with httpx.AsyncClient(timeout=300.0) as client:
+            async with self._create_async_client() as client:
                 # 发送消息到 Thread
                 response = await client.post(
                     f"{self._base_url}/api/threads/{thread_id}/runs",

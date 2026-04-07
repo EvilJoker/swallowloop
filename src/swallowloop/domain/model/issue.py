@@ -80,9 +80,20 @@ class Issue:
     # 泳道状态（人工管理）
     running_status: IssueRunningStatus = IssueRunningStatus.NEW
 
+    # Pipeline 实例（延迟初始化）
+    pipeline: Optional["IssuePipeline"] = field(default=None, init=False)
+
     def __post_init__(self):
         if not self.stages:
             self.stages = self._create_default_stages()
+        # 初始化 Pipeline（延迟导入避免循环依赖）
+        from ..pipeline.issue_pipeline import IssuePipeline
+        self.pipeline = IssuePipeline(
+            issue_id=str(self.id),
+            issue_title=self.title,
+            issue_description=self.description,
+            repo_url=self.repo_url,
+        )
 
     def init_state_models(self, services: "StageServices") -> None:
         """
@@ -105,6 +116,11 @@ class Issue:
             TodoItem(id="env-4", content="准备环境"),
         ]
         stages[Stage.ENVIRONMENT].todo_list = env_todos
+        # 头脑风暴阶段设置默认任务
+        brainstorm_todos = [
+            TodoItem(id="brain-1", content="执行头脑风暴"),
+        ]
+        stages[Stage.BRAINSTORM].todo_list = brainstorm_todos
         return stages
 
     def get_stage_state(self, stage: Stage) -> StageState:

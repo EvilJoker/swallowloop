@@ -96,7 +96,7 @@ class TestDeerFlowAgent:
             "error": ""
         }
 
-        with patch.object(agent, '_create_client', return_value=mock_client):
+        with patch.object(agent, '_create_async_client', return_value=mock_client):
             with patch('os.path.exists', return_value=True):
                 with patch('builtins.open', mock_open(read_data=json.dumps(result_data))):
                     result = await agent.execute(

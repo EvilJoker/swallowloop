@@ -51,9 +51,9 @@ class ExecutorWorkerPool:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                # 获取 issue
+                # 获取 issue（使用公共接口）
                 from swallowloop.domain.model import IssueId
-                issue = self._executor._repo.get(IssueId(issue_id))
+                issue = self._executor.get_issue(IssueId(issue_id))
                 if not issue:
                     logger.error(f"Issue 不存在: {issue_id}")
                     return

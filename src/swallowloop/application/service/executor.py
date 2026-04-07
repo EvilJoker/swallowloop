@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ....domain.model import Issue, Stage
+    from ....domain.model import Issue, Stage, IssueId
 
 class IExecutor(ABC):
     """Executor 服务接口"""
@@ -25,4 +25,9 @@ class IExecutor(ABC):
         Returns:
             dict with keys: success, output, error
         """
+        pass
+
+    @abstractmethod
+    def get_issue(self, issue_id: "IssueId") -> "Issue | None":
+        """获取 Issue"""
         pass

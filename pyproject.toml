@@ -36,6 +36,9 @@ addopts = "-v --tb=short"
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]
+markers = [
+    "integration: integration tests that require network access",
+]
 
 [build-system]
 requires = ["hatchling"]

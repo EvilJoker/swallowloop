@@ -133,7 +133,7 @@ export const STATUS_COLORS: Record<StageStatus, { bg: string; text: string; dot:
 
 // 状态标签
 export const STATUS_LABELS: Record<StageStatus, string> = {
-  new: '新建',
+  new: '未开始',
   pending: '待审批',
   approved: '已通过',
   rejected: '已打回',

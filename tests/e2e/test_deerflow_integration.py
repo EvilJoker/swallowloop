@@ -116,8 +116,14 @@ class TestDeerFlowAgentIntegration:
         assert issue.title == "Test Issue"
         assert issue.current_stage == Stage.ENVIRONMENT
 
+        # 设置有效的 repo_url（Pipeline context 需要这个来 clone）
+        issue.repo_url = "https://github.com/test/repo.git"
+        issue.pipeline.context["repo_url"] = "https://github.com/test/repo.git"
+        repo.save(issue)
+
         # 3. 触发 AI（使用 MockAgent 不实际调用 DeerFlow）
-        result = await issue_service.trigger_ai(str(issue.id), Stage.BRAINSTORM)
+        # 先触发 ENVIRONMENT 阶段（当前阶段）
+        result = await issue_service.trigger_ai(str(issue.id), Stage.ENVIRONMENT)
 
         # 验证 trigger 返回成功
         assert result.get("success") is True or result.get("output") == ""

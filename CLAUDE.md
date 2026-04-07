@@ -26,13 +26,24 @@ uv run swallowloop
 pytest tests/ -v
 
 # 运行单个测试文件
-pytest tests/test_task_lifecycle.py -v
+pytest tests/module/agent/test_deerflow_agent.py -v
 
 # 运行单个测试函数
-pytest tests/test_task_lifecycle.py::TestTaskLifecycle::test_task_state_transitions -v
+pytest tests/module/config/test_config.py::TestConfigLoad::test_load_yaml_file -v
 ```
 
 **重要**：优先使用 `run.sh` 管理服务，如果脚本有问题必须优先修复。
+
+## 文档索引
+
+| 文档 | 说明 |
+|------|------|
+| `docs/architecture.md` | 系统架构、数据流、模块职责 |
+| `docs/CODING_STANDARDS.md` | **代码规范**（命名、Git、测试、禁止事项） |
+| `docs/GLOSSARY.md` | **术语表**（核心概念、状态机流转） |
+| `docs/data_models.md` | 数据模型详细定义 |
+| `docs/vision.md` | 项目愿景和设计思想 |
+| `docs/lessons/` | 经验教训（问题复盘和解决方案） |
 
 ## 架构
 
@@ -100,18 +111,6 @@ MODULE_NAME = "infrastructure.persistence"
 3. `__all__` 列表中必须包含 `"MODULE_NAME"`
 4. **新增模块必须经过开发者确认**，不能自行创建
 
-## 任务状态机
-
-Task 使用 transitions 库实现状态机，核心状态流转：
-
-```
-new → assigned → pending → in_progress → submitted → completed
-                              ↑               ↓
-                              └─── retry ◄───┘
-```
-
-状态定义在 `domain/model/enums.py` 的 `TaskState`。
-
 ## Agent 系统
 
 两种 Agent 类型，通过 `AGENT_TYPE` 配置：
@@ -122,7 +121,7 @@ DeerFlow Agent 通过 HTTP API 与独立部署的 DeerFlow 通信，每个 Issue
 
 ## 多仓库支持
 
-支持多仓库监听，通过 `GITHUB_REPOS` 配置（逗号分隔）。每个仓库有独立的 GitHubClient 和 SourceControlAdapter。
+支持多仓库监听，通过 `REPOS` 配置（逗号分隔，格式 `owner/repo`）。
 
 ## LLM 配置
 
@@ -130,15 +129,57 @@ LLM 配置与 Agent 类型独立，支持通过 `LLM_PROVIDER`/`LLM_API_KEY`/`LL
 
 ## 关键设计
 
-1. **Worker 进程**: 使用 `multiprocessing.Process` 执行任务，结果通过文件系统传递（`result-{issue_number}` 文件）
-2. **并发控制**: Orchestrator 控制最大 Worker 数量，超出任务排队
+1. **Worker 线程池**: 使用 `ThreadPoolExecutor` 执行异步任务
+2. **并发控制**: ExecutorWorkerPool 控制最大 Worker 数量
 3. **资源清理**: 任务完成后自动删除本地工作空间和远端分支
-4. **持久化**: 使用 JSON 文件存储任务和工作空间，带文件锁
+4. **持久化**: 使用内存存储，线程安全
 
 ## Git Workflow
 
 - Always confirm before running git push operations - show pending commits first
-- **提交代码前必须确保 `run.sh test` 测试通过**
+- **提交代码前必须确保 `pytest tests/ -v` 全部通过**
+
+## 前后端代码改动验证规范
+
+当代码改动**涉及前端或后端 API 接口**时（包括但不限于）：
+- 修改了 API 响应格式
+- 新增/修改了前端组件
+- 修改了状态机或业务流程
+
+**必须执行 E2E 验证流程**：
+
+1. **启动完整环境**（后端+前端）：
+   ```bash
+   ./run.sh
+   ```
+
+2. **使用浏览器验证**（使用 chrome-devtools MCP 工具）：
+   - 访问 http://localhost:9501/
+   - 验证看板正确显示（新建/进行中/已完成 三列）
+   - 创建 Issue 验证完整流程
+   - 点击 Issue 卡片验证 Pipeline 详情 Tab 正确显示
+
+3. **API 验证**（确保后端 API 正确）：
+   ```bash
+   # 创建 Issue
+   curl -X POST http://localhost:9501/api/issues \
+     -H "Content-Type: application/json" \
+     -d '{"title":"测试","description":"描述"}'
+
+   # 触发 AI 执行
+   curl -X POST "http://localhost:9501/api/issues/{issue_id}/trigger" \
+     -H "Content-Type: application/json" \
+     -d '{"stage":"environment"}'
+
+   # 验证状态
+   curl http://localhost:9501/api/issues/{issue_id} \
+     | python3 -c "import sys,json; d=json.load(sys.stdin); ..."
+   ```
+
+4. **关键验证点**：
+   - [ ] `runningStatus` 正确转换（new → in_progress → done）
+   - [ ] `pipeline` 信息包含完整的 stage/task 状态
+   - [ ] 前端看板正确分组显示
 
 ## Configuration
 
@@ -149,10 +190,6 @@ LLM 配置与 Agent 类型独立，支持通过 `LLM_PROVIDER`/`LLM_API_KEY`/`LL
 
 - Before attempting browser/URL access, ask if I want to use web_search or WebFetch tools
 - If my requested method isn't possible, say: "I can't do [X], but I can [alternative approach]. Want me to try that?"
-
-## Tool Installation
-
-- Before recommending plugins/tools: "Let me check your [tool] version first: [command]"
 
 ## 经验教训
 

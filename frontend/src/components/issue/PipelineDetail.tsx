@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import type { Issue, PipelineStageInfo, PipelineTaskInfo, StageStatus } from '@/types';
-import { CheckCircle2, Circle, Clock, XCircle, Loader2, PlayCircle, GitBranch, Folder, Hash, ListTodo } from 'lucide-react';
+import { CheckCircle2, Circle, Clock, XCircle, Loader2, GitBranch, Folder, Hash, ListTodo, Check, RotateCcw } from 'lucide-react';
 import { issueApi } from '@/lib/api';
 
 interface PipelineDetailProps {
   issue: Issue;
+  onApprove?: (issue: Issue) => void;
+  onRetry?: (issue: Issue, comment?: string) => void;
   onRefresh?: () => void;
   className?: string;
 }
@@ -80,12 +82,16 @@ function TaskList({ tasks }: { tasks: PipelineTaskInfo[] }) {
   );
 }
 
-function EnvironmentStageItem({ stage, isCurrent, workspace }: {
+function EnvironmentStageItem({ stage, isCurrent, workspace, onApprove, onRetry }: {
   stage: PipelineStageInfo;
   isCurrent: boolean;
   workspace?: { repo_url?: string; branch?: string; thread_id?: string; workspace_path?: string } | null;
+  onApprove?: () => void;
+  onRetry?: () => void;
 }) {
   const config = STAGE_STATUS_CONFIG[stage.status as StageStatus] || STAGE_STATUS_CONFIG.new;
+  const isPending = stage.status === 'pending';
+  const isError = stage.status === 'error';
 
   return (
     <div className="border border-slate-200 rounded-lg p-3 bg-white mb-2">
@@ -96,9 +102,32 @@ function EnvironmentStageItem({ stage, isCurrent, workspace }: {
         <span className={cn('text-sm font-medium', getTitleClass(isCurrent))}>
           {stage.label}
         </span>
-        <span className={cn('text-xs px-2 py-1 rounded-full font-medium ml-auto', config.bgColor)}>
-          {config.label}
-        </span>
+        {/* 状态标签和操作按钮 */}
+        <div className="flex items-center gap-1.5 ml-auto">
+          {(isPending || isError) && (
+            <>
+              {isPending && (
+                <button
+                  onClick={onApprove}
+                  className="p-1 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded transition-colors"
+                  title="通过"
+                >
+                  <Check className="h-3.5 w-3.5" />
+                </button>
+              )}
+              <button
+                onClick={onRetry}
+                className="p-1 text-amber-600 hover:text-amber-700 hover:bg-amber-50 rounded transition-colors"
+                title="重试"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+              </button>
+            </>
+          )}
+          <span className={cn('text-xs px-2 py-1 rounded-full font-medium', config.bgColor)}>
+            {config.label}
+          </span>
+        </div>
       </div>
       {workspace && workspace.workspace_path && (
         <div className="space-y-1 text-xs mb-2">
@@ -125,8 +154,10 @@ function EnvironmentStageItem({ stage, isCurrent, workspace }: {
   );
 }
 
-export function PipelineDetail({ issue, onRefresh, className }: PipelineDetailProps) {
+export function PipelineDetail({ issue, onApprove, onRetry, onRefresh, className }: PipelineDetailProps) {
   const pipeline = issue.pipeline;
+  const [showRetryDialog, setShowRetryDialog] = useState(false);
+  const [retryComment, setRetryComment] = useState('');
   const [isRetrying, setIsRetrying] = useState(false);
 
   if (!pipeline) {
@@ -137,10 +168,25 @@ export function PipelineDetail({ issue, onRefresh, className }: PipelineDetailPr
     );
   }
 
-  const handleRetry = async () => {
-    setIsRetrying(true);
+  const handleApprove = async () => {
     try {
+      await issueApi.approveStage(issue.id, 'environment', '审批通过');
+      onApprove?.(issue);
+      onRefresh?.();
+    } catch (err) {
+      console.error('审批失败:', err);
+    }
+  };
+
+  const handleRetryWithComment = async () => {
+    if (!retryComment.trim()) return;
+    setIsRetrying(true);
+    setShowRetryDialog(false);
+    try {
+      await issueApi.approveStage(issue.id, 'environment', retryComment);
       await issueApi.trigger(issue.id, 'environment');
+      setRetryComment('');
+      onRetry?.(issue, retryComment);
       onRefresh?.();
     } catch (err) {
       console.error('重试环境准备失败:', err);
@@ -184,7 +230,13 @@ export function PipelineDetail({ issue, onRefresh, className }: PipelineDetailPr
                   )}
                 </div>
                 <div className="flex-1">
-                  <EnvironmentStageItem stage={stage} isCurrent={isCurrent} workspace={issue.workspace} />
+                  <EnvironmentStageItem
+                    stage={stage}
+                    isCurrent={isCurrent}
+                    workspace={issue.workspace}
+                    onApprove={handleApprove}
+                    onRetry={() => setShowRetryDialog(true)}
+                  />
                 </div>
               </div>
             );
@@ -232,30 +284,56 @@ export function PipelineDetail({ issue, onRefresh, className }: PipelineDetailPr
         })}
       </div>
 
-      {/* 重试按钮 - 仅在 environment 阶段失败状态显示 */}
-      {issue.stages.environment.status === 'error' && (
-        <button
-          onClick={handleRetry}
-          disabled={isRetrying}
-          className={cn(
-            'w-full mt-4 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all',
-            isRetrying
-              ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-              : 'bg-red-500 text-white hover:bg-red-600'
-          )}
-        >
-          {isRetrying ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              重试中...
-            </>
-          ) : (
-            <>
-              <PlayCircle className="w-4 h-4" />
-              重试环境准备
-            </>
-          )}
-        </button>
+      {/* 重试弹窗 */}
+      {showRetryDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-4 w-80 shadow-xl">
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              请输入改进意见（将传递给 AI 作为上下文）
+            </label>
+            <textarea
+              value={retryComment}
+              onChange={(e) => setRetryComment(e.target.value)}
+              placeholder="例如：需要更好的错误处理、添加更多日志..."
+              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm text-slate-800 placeholder:text-slate-400"
+              rows={3}
+              autoFocus
+            />
+            <div className="flex justify-end gap-2 mt-3">
+              <button
+                onClick={() => {
+                  setShowRetryDialog(false);
+                  setRetryComment('');
+                }}
+                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors font-medium"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleRetryWithComment}
+                disabled={!retryComment.trim() || isRetrying}
+                className={cn(
+                  'flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg transition-colors font-medium',
+                  retryComment.trim() && !isRetrying
+                    ? 'bg-blue-500 text-white hover:bg-blue-600'
+                    : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                )}
+              >
+                {isRetrying ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    重试中...
+                  </>
+                ) : (
+                  <>
+                    <RotateCcw className="w-4 h-4" />
+                    确认重试
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

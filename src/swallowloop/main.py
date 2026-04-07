@@ -14,6 +14,7 @@ from .domain.repository import IssueRepository
 from .application.service.worker_pool import ExecutorWorkerPool
 from .infrastructure.persistence import InMemoryIssueRepository
 from .interfaces.web.issue_api import run_server
+from .infrastructure.constants import DEFAULT_DEERFLOW_BASE_URL
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +63,7 @@ def create_services():
 
     # Agent
     agent_type = config.get("AGENT_TYPE", "mock") if config else os.getenv("AGENT_TYPE", "mock")
-    deerflow_base_url = config.get("DEERFLOW_BASE_URL", "http://localhost:2026") if config else os.getenv("DEERFLOW_BASE_URL", "http://localhost:2026")
+    deerflow_base_url = config.get("DEERFLOW_BASE_URL", DEFAULT_DEERFLOW_BASE_URL) if config else os.getenv("DEERFLOW_BASE_URL", DEFAULT_DEERFLOW_BASE_URL)
     if agent_type == "deerflow":
         agent = DeerFlowAgent(base_url=deerflow_base_url)
     else:
