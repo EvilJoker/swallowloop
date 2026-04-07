@@ -94,7 +94,7 @@ class Task:
         return self._result
 
     def execute(self, context: dict) -> tuple[dict, TaskResult]:
-        """执行 Task
+        """执行 Task（支持同步/异步 handler）
 
         Args:
             context: 执行上下文
@@ -110,7 +110,18 @@ class Task:
             return context, self._result
 
         try:
+            import asyncio
+            import concurrent.futures
+
+            # 先调用 handler 获取结果
             result = self.handler(context)
+
+            # 检查结果是否是协程（适用于 bound async method 的情况）
+            if asyncio.iscoroutine(result):
+                # 异步 handler：使用线程池执行（避免 event loop 嵌套问题）
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                    result = pool.submit(asyncio.run, result).result()
+
             if result is None:
                 result = TaskResult(success=False, message="Task handler 未返回结果")
 

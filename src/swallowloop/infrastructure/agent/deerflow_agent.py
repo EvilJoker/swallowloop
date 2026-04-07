@@ -224,28 +224,23 @@ class DeerFlowAgent(BaseAgent):
 
     async def execute(self, task: str, context: dict[str, Any]) -> AgentResult:
         """
-        执行任务 - 发送消息给 DeerFlow Thread 并轮询 result.json
+        执行任务 - 发送消息给 DeerFlow Thread 并获取响应结果
 
         Args:
             task: 任务指令（如 "请读取并执行..."）
             context: {
                 "thread_id": "UUID",
-                "stage_file": "/path/to/1-prepare.md",
-                "result_file": "/path/to/1-prepare-result.json"
+                "stage_file": "/path/to/1-prepare.md"（可选，仅用于兼容性）,
+                "result_file": "/path/to/1-prepare-result.json"（可选，仅用于兼容性）
             }
 
         Returns:
             AgentResult: 执行结果
         """
         thread_id = context.get("thread_id")
-        stage_file = context.get("stage_file", "")
-        result_file = context.get("result_file", "")
 
         if not thread_id:
             return AgentResult(success=False, output="", error="thread_id required")
-
-        if not stage_file or not result_file:
-            return AgentResult(success=False, output="", error="stage_file 和 result_file 必须提供")
 
         try:
             async with self._create_async_client() as client:
@@ -271,33 +266,22 @@ class DeerFlowAgent(BaseAgent):
                 run_id = run_data.get("run_id")
                 logger.info(f"DeerFlow Run 已提交: {run_id}，等待执行完成...")
 
-                # 轮询等待 result.json
-                result_data = await self._wait_for_result(result_file)
+                # 等待 run 完成（轮询 status）
+                output = await self._wait_for_run_complete(client, thread_id, run_id)
 
-                if result_data is None:
+                if output is None:
                     return AgentResult(
                         success=False,
                         output="",
-                        error=f"执行超时或读取 result.json 失败: {result_file}"
+                        error="执行超时或 DeerFlow 执行失败"
                     )
 
-                # 解析 result.json
-                status = result_data.get("status", "unknown")
-                output = result_data.get("output", "")
-                error = result_data.get("error", "")
-
-                if status == "success":
-                    return AgentResult(
-                        success=True,
-                        output=output,
-                        error=None
-                    )
-                else:
-                    return AgentResult(
-                        success=False,
-                        output=output,
-                        error=error or "执行失败"
-                    )
+                logger.info(f"DeerFlow 执行完成，获取到 {len(output)} 字符的输出")
+                return AgentResult(
+                    success=True,
+                    output=output,
+                    error=None
+                )
 
         except httpx.TimeoutException:
             logger.error("DeerFlow 请求超时")
@@ -305,6 +289,120 @@ class DeerFlowAgent(BaseAgent):
         except Exception as e:
             logger.error(f"DeerFlow 执行失败: {e}")
             return AgentResult(success=False, output="", error=str(e))
+
+    async def _wait_for_run_complete(self, client: httpx.AsyncClient, thread_id: str, run_id: str) -> str | None:
+        """轮询等待 DeerFlow Run 完成，从响应中提取输出"""
+        timeout = 300.0  # 5分钟超时
+        start_time = time.monotonic()
+        poll_interval = POLL_INTERVAL_SECONDS
+
+        while True:
+            elapsed = time.monotonic() - start_time
+            if elapsed > timeout:
+                logger.error(f"等待 DeerFlow Run 超时（{timeout}秒）")
+                return None
+
+            try:
+                # 获取 run 状态
+                status_response = await client.get(
+                    f"{self._base_url}/api/threads/{thread_id}/runs/{run_id}",
+                    timeout=30.0
+                )
+
+                if status_response.status_code != 200:
+                    logger.warning(f"获取 Run 状态失败: {status_response.status_code}")
+                    await asyncio.sleep(poll_interval)
+                    continue
+
+                run_status = status_response.json()
+                status = run_status.get("status", "")
+
+                if status in ["completed", "success"]:
+                    # Run 完成，从 thread 的 values.messages 中提取最终输出
+                    thread_response = await client.get(
+                        f"{self._base_url}/api/threads/{thread_id}",
+                        timeout=30.0
+                    )
+
+                    if thread_response.status_code == 200:
+                        thread_data = thread_response.json()
+                        # DeerFlow 返回结果在 values.messages 中
+                        values = thread_data.get("values", {})
+                        if isinstance(values, dict):
+                            messages = values.get("messages", [])
+                        else:
+                            messages = []
+
+                        # 从 messages 中找到 AI 的最后一条有效回复
+                        for msg in reversed(messages):
+                            msg_type = msg.get("type", "")
+                            content = msg.get("content", "")
+
+                            # 跳过 tool 调用类型的消息
+                            if msg_type in ["tool", "stop"]:
+                                continue
+
+                            # 跳过 thinking 类型消息（显式的 thinking 消息）
+                            if msg_type == "thinking":
+                                continue
+
+                            # 处理 content 可能是字符串或数组的情况
+                            if isinstance(content, str):
+                                output = content.strip()
+                            elif isinstance(content, list):
+                                # content 是片段数组，拼接文本
+                                output = ""
+                                for item in content:
+                                    if isinstance(item, dict) and item.get("type") == "text":
+                                        output += item.get("text", "")
+                                    elif isinstance(item, dict) and item.get("type") == "output_text":
+                                        output += item.get("text", "")
+                                output = output.strip()
+                            else:
+                                output = str(content)
+
+                            if not output:
+                                continue
+
+                            # 如果是 AI 消息，可能包含 <think> 思考标签，尝试提取其中的 JSON
+                            if msg_type == "ai" and "<think>" in output:
+                                # 移除思考标签，尝试提取 JSON
+                                import re
+                                # 方法1：提取 <think> 和 ]] 之间的高亮/思考内容
+                                thinking_match = re.search(r'</think>\s*([\s\S]+?)\s*$', output)
+                                if thinking_match:
+                                    extracted = thinking_match.group(1).strip()
+                                    # 尝试找 JSON 对象
+                                    json_match = re.search(r'\{[\s\S]+\}', extracted)
+                                    if json_match:
+                                        output = json_match.group()
+                                        logger.info(f"从 AI 思考内容中提取到 JSON（{len(output)} 字符）")
+                                    else:
+                                        # 如果没找到 JSON，使用清理后的思考内容
+                                        output = extracted
+
+                            if output:
+                                logger.info(f"从 messages 中提取到输出（{len(output)} 字符）")
+                                return output
+
+                        # 如果没有找到有效输出
+                        logger.warning("Run 完成但未找到有效输出")
+                        return ""
+
+                    return ""
+
+                elif status in ["failed", "cancelled", "expired"]:
+                    error_msg = run_status.get("error", "Run 执行失败")
+                    logger.error(f"DeerFlow Run {status}: {error_msg}")
+                    return None
+
+                # 还在进行中，继续等待
+                logger.debug(f"Run 状态: {status}，继续等待...")
+                await asyncio.sleep(poll_interval)
+
+            except Exception as e:
+                logger.warning(f"轮询检查 Run 状态时出错: {e}")
+                await asyncio.sleep(poll_interval)
 
     async def cleanup(self, thread_id: str, workspace_path: str | None = None) -> None:
         """

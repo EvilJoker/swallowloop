@@ -4,15 +4,16 @@ from enum import Enum
 
 
 class Stage(Enum):
-    """Issue 流水线阶段"""
-    ENVIRONMENT = "environment"
-    BRAINSTORM = "brainstorm"
-    PLAN_FORMED = "planFormed"
-    DETAILED_DESIGN = "detailedDesign"
-    TASK_SPLIT = "taskSplit"
-    EXECUTION = "execution"
-    UPDATE_DOCS = "updateDocs"
-    SUBMIT = "submit"
+    """Issue 流水线阶段（SDD 9 阶段）"""
+    ENVIRONMENT = "environment"      # 环境准备
+    SPECIFY = "specify"             # 规范定义
+    CLARIFY = "clarify"             # 需求澄清
+    PLAN = "plan"                   # 技术规划
+    CHECKLIST = "checklist"         # 质量检查
+    TASKS = "tasks"                 # 任务拆分
+    ANALYZE = "analyze"             # 一致性分析
+    IMPLEMENT = "implement"         # 编码实现
+    SUBMIT = "submit"               # 提交发布
 
 
 class StageStatus(Enum):

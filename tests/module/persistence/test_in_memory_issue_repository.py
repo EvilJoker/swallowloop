@@ -23,7 +23,7 @@ class TestInMemoryIssueRepository:
             title="测试",
             description="测试描述",
             status=IssueStatus.ACTIVE,
-            current_stage=Stage.BRAINSTORM,
+            current_stage=Stage.SPECIFY,
             created_at=datetime.now(),
         )
         repo.save(issue)
@@ -45,7 +45,7 @@ class TestInMemoryIssueRepository:
             title="Issue 1",
             description="",
             status=IssueStatus.ACTIVE,
-            current_stage=Stage.BRAINSTORM,
+            current_stage=Stage.SPECIFY,
             created_at=datetime.now(),
         )
         issue2 = Issue(
@@ -53,7 +53,7 @@ class TestInMemoryIssueRepository:
             title="Issue 2",
             description="",
             status=IssueStatus.ACTIVE,
-            current_stage=Stage.BRAINSTORM,
+            current_stage=Stage.SPECIFY,
             created_at=datetime.now(),
         )
         repo.save(issue1)
@@ -69,7 +69,7 @@ class TestInMemoryIssueRepository:
             title="活跃 Issue",
             description="",
             status=IssueStatus.ACTIVE,
-            current_stage=Stage.BRAINSTORM,
+            current_stage=Stage.SPECIFY,
             created_at=datetime.now(),
         )
         archived_issue = Issue(
@@ -77,7 +77,7 @@ class TestInMemoryIssueRepository:
             title="已归档 Issue",
             description="",
             status=IssueStatus.ARCHIVED,
-            current_stage=Stage.BRAINSTORM,
+            current_stage=Stage.SPECIFY,
             created_at=datetime.now(),
             archived_at=datetime.now(),
         )
@@ -95,7 +95,7 @@ class TestInMemoryIssueRepository:
             title="待删除",
             description="",
             status=IssueStatus.ACTIVE,
-            current_stage=Stage.BRAINSTORM,
+            current_stage=Stage.SPECIFY,
             created_at=datetime.now(),
         )
         repo.save(issue)
@@ -118,7 +118,7 @@ class TestInMemoryIssueRepository:
             title="原始标题",
             description="",
             status=IssueStatus.ACTIVE,
-            current_stage=Stage.BRAINSTORM,
+            current_stage=Stage.SPECIFY,
             created_at=datetime.now(),
         )
         repo.save(issue)
@@ -139,7 +139,7 @@ class TestInMemoryIssueRepository:
             title="Workspace 测试",
             description="",
             status=IssueStatus.ACTIVE,
-            current_stage=Stage.BRAINSTORM,
+            current_stage=Stage.SPECIFY,
             created_at=datetime.now(),
             workspace=Workspace(
                 id="workspace-test",
@@ -169,7 +169,7 @@ class TestInMemoryIssueRepository:
             title="清理测试",
             description="",
             status=IssueStatus.ARCHIVED,
-            current_stage=Stage.BRAINSTORM,
+            current_stage=Stage.SPECIFY,
             created_at=datetime.now(),
             archived_at=datetime.now(),
             cleaned=True,
@@ -189,7 +189,7 @@ class TestInMemoryIssueRepository:
             title="运行中 Issue",
             description="",
             status=IssueStatus.ACTIVE,
-            current_stage=Stage.BRAINSTORM,
+            current_stage=Stage.SPECIFY,
             created_at=datetime.now(),
         )
         issue2 = Issue(
@@ -197,18 +197,18 @@ class TestInMemoryIssueRepository:
             title="待处理 Issue",
             description="",
             status=IssueStatus.ACTIVE,
-            current_stage=Stage.BRAINSTORM,
+            current_stage=Stage.SPECIFY,
             created_at=datetime.now(),
         )
         repo.save(issue1)
         repo.save(issue2)
 
         # 设置 issue1 的 brainstorm 为 RUNNING
-        issue1.get_stage_state(Stage.BRAINSTORM).status = StageStatus.RUNNING
+        issue1.get_stage_state(Stage.SPECIFY).status = StageStatus.RUNNING
         repo.save(issue1)
 
         # 设置 issue2 的 brainstorm 为 PENDING
-        issue2.get_stage_state(Stage.BRAINSTORM).status = StageStatus.PENDING
+        issue2.get_stage_state(Stage.SPECIFY).status = StageStatus.PENDING
         repo.save(issue2)
 
         running_stages = repo.list_stages_by_status(StageStatus.RUNNING)

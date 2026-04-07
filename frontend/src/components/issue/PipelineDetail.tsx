@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
-import type { Issue, PipelineStageInfo, PipelineTaskInfo, StageStatus } from '@/types';
+import type { Issue, PipelineStageInfo, PipelineTaskInfo, StageStatus, Stage } from '@/types';
 import { CheckCircle2, Circle, Clock, XCircle, Loader2, GitBranch, Folder, Hash, ListTodo, Check, RotateCcw } from 'lucide-react';
 import { issueApi } from '@/lib/api';
 
@@ -84,14 +84,16 @@ function TaskList({ tasks }: { tasks: PipelineTaskInfo[] }) {
   );
 }
 
-function EnvironmentStageItem({ stage, isCurrent, workspace, onApprove, onRetry }: {
+function EnvironmentStageItem({ stage, isCurrent, workspace, onApprove, onRetry, onTrigger }: {
   stage: PipelineStageInfo;
   isCurrent: boolean;
   workspace?: { repo_url?: string; branch?: string; thread_id?: string; workspace_path?: string } | null;
   onApprove?: () => void;
   onRetry?: () => void;
+  onTrigger?: () => void;
 }) {
   const config = STAGE_STATUS_CONFIG[stage.status as StageStatus] || STAGE_STATUS_CONFIG.new;
+  const isNew = stage.status === 'new';
   const isPending = stage.status === 'pending';
   const isError = stage.status === 'error';
 
@@ -106,6 +108,15 @@ function EnvironmentStageItem({ stage, isCurrent, workspace, onApprove, onRetry 
         </span>
         {/* 状态标签和操作按钮 */}
         <div className="flex items-center gap-1.5 ml-auto">
+          {isNew && isCurrent && (
+            <button
+              onClick={onTrigger}
+              className="p-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors"
+              title="触发AI执行"
+            >
+              <Loader2 className="h-3.5 w-3.5" />
+            </button>
+          )}
           {(isPending || isError) && (
             <>
               {isPending && (
@@ -156,11 +167,78 @@ function EnvironmentStageItem({ stage, isCurrent, workspace, onApprove, onRetry 
   );
 }
 
+// SDD 阶段组件（包含审批/拒绝按钮）
+function SddStageItem({ stage, isCurrent, onApprove, onReject, onTrigger }: {
+  stage: PipelineStageInfo;
+  isCurrent: boolean;
+  onApprove?: () => void;
+  onReject?: (reason: string) => void;
+  onTrigger?: () => void;
+}) {
+  const config = STAGE_STATUS_CONFIG[stage.status as StageStatus] || STAGE_STATUS_CONFIG.new;
+  const isNew = stage.status === 'new';
+  const isPending = stage.status === 'pending';
+
+  return (
+    <div className={cn('rounded-lg p-3 mb-2', getCardClass(isCurrent))}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {isCurrent && (
+            <span className="text-xs bg-blue-500 text-white px-1.5 py-0.5 rounded">当前</span>
+          )}
+          <span className={cn('text-sm font-medium', getTitleClass(isCurrent))}>
+            {stage.label}
+          </span>
+        </div>
+        {/* 操作按钮 */}
+        <div className="flex items-center gap-1.5">
+          {isNew && isCurrent && (
+            <button
+              onClick={onTrigger}
+              className="p-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors"
+              title="触发AI执行"
+            >
+              <Loader2 className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {isPending && (
+            <>
+              <button
+                onClick={onApprove}
+                className="p-1 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded transition-colors"
+                title="通过"
+              >
+                <Check className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => onReject?.('')}
+                className="p-1 text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
+                title="打回"
+              >
+                <XCircle className="h-3.5 w-3.5" />
+              </button>
+            </>
+          )}
+          <span className={cn('text-xs px-2 py-1 rounded-full font-medium', config.bgColor)}>
+            {config.label}
+          </span>
+        </div>
+      </div>
+      {/* 任务列表 */}
+      <TaskList tasks={stage.tasks} />
+    </div>
+  );
+}
+
 export function PipelineDetail({ issue, onApprove, onRetry, onRefresh, className }: PipelineDetailProps) {
   const pipeline = issue.pipeline;
   const [showRetryDialog, setShowRetryDialog] = useState(false);
   const [retryComment, setRetryComment] = useState('');
   const [isRetrying, setIsRetrying] = useState(false);
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+  const [isRejecting, setIsRejecting] = useState(false);
+  const [currentRejectStage, setCurrentRejectStage] = useState<string | null>(null);
 
   if (!pipeline) {
     return (
@@ -180,6 +258,41 @@ export function PipelineDetail({ issue, onApprove, onRetry, onRefresh, className
     }
   };
 
+  // 审批 SDD 阶段
+  const handleApproveSdd = async (stageName: string) => {
+    try {
+      await issueApi.approveStage(issue.id, stageName as Stage, '审批通过');
+      onRefresh?.();
+    } catch (err) {
+      console.error('审批失败:', err);
+    }
+  };
+
+  // 打回 SDD 阶段
+  const handleRejectSdd = async () => {
+    if (!rejectReason.trim()) return;
+    setIsRejecting(true);
+    setShowRejectDialog(false);
+    try {
+      if (currentRejectStage) {
+        await issueApi.rejectStage(issue.id, currentRejectStage as Stage, rejectReason);
+        setRejectReason('');
+        setCurrentRejectStage(null);
+        onRefresh?.();
+      }
+    } catch (err) {
+      console.error('打回失败:', err);
+    } finally {
+      setIsRejecting(false);
+    }
+  };
+
+  // 打开打回弹窗
+  const openRejectDialog = (stageName: string) => {
+    setCurrentRejectStage(stageName);
+    setShowRejectDialog(true);
+  };
+
   const handleRetryWithComment = async () => {
     if (!retryComment.trim()) return;
     setIsRetrying(true);
@@ -194,6 +307,16 @@ export function PipelineDetail({ issue, onApprove, onRetry, onRefresh, className
       console.error('重试环境准备失败:', err);
     } finally {
       setIsRetrying(false);
+    }
+  };
+
+  // 触发 AI 执行
+  const handleTrigger = async (stageName: string) => {
+    try {
+      await issueApi.trigger(issue.id, stageName as Stage);
+      onRefresh?.();
+    } catch (err) {
+      console.error('触发AI失败:', err);
     }
   };
 
@@ -238,6 +361,7 @@ export function PipelineDetail({ issue, onApprove, onRetry, onRefresh, className
                     workspace={issue.workspace}
                     onApprove={handleApprove}
                     onRetry={() => setShowRetryDialog(true)}
+                    onTrigger={() => handleTrigger('environment')}
                   />
                 </div>
               </div>
@@ -260,26 +384,13 @@ export function PipelineDetail({ issue, onApprove, onRetry, onRefresh, className
                 )}
               </div>
               <div className="flex-1">
-                <div className={cn('rounded-lg p-3 mb-2', getCardClass(isCurrent))}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      {isCurrent && (
-                        <span className="text-xs bg-blue-500 text-white px-1.5 py-0.5 rounded">当前</span>
-                      )}
-                      <span className={cn('text-sm font-medium', getTitleClass(isCurrent))}>
-                        {stage.label}
-                      </span>
-                    </div>
-                    <span className={cn(
-                      'text-xs px-2 py-1 rounded-full font-medium',
-                      STAGE_STATUS_CONFIG[stage.status as StageStatus]?.bgColor || 'bg-slate-100'
-                    )}>
-                      {STAGE_STATUS_CONFIG[stage.status as StageStatus]?.label || '未开始'}
-                    </span>
-                  </div>
-                  {/* 任务列表 */}
-                  <TaskList tasks={stage.tasks} />
-                </div>
+                <SddStageItem
+                  stage={stage}
+                  isCurrent={isCurrent}
+                  onApprove={() => handleApproveSdd(stage.name)}
+                  onReject={() => openRejectDialog(stage.name)}
+                  onTrigger={() => handleTrigger(stage.name)}
+                />
               </div>
             </div>
           );
@@ -330,6 +441,59 @@ export function PipelineDetail({ issue, onApprove, onRetry, onRefresh, className
                   <>
                     <RotateCcw className="w-4 h-4" />
                     确认重试
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 打回弹窗 */}
+      {showRejectDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-4 w-80 shadow-xl">
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              请输入打回原因（必填）
+            </label>
+            <textarea
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              placeholder="例如：方案不够详细、缺少关键步骤..."
+              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-red-500 text-sm text-slate-800 placeholder:text-slate-400"
+              rows={3}
+              autoFocus
+            />
+            <div className="flex justify-end gap-2 mt-3">
+              <button
+                onClick={() => {
+                  setShowRejectDialog(false);
+                  setRejectReason('');
+                  setCurrentRejectStage(null);
+                }}
+                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors font-medium"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleRejectSdd}
+                disabled={!rejectReason.trim() || isRejecting}
+                className={cn(
+                  'flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg transition-colors font-medium',
+                  rejectReason.trim() && !isRejecting
+                    ? 'bg-red-500 text-white hover:bg-red-600'
+                    : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                )}
+              >
+                {isRejecting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    打回中...
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="w-4 h-4" />
+                    确认打回
                   </>
                 )}
               </button>

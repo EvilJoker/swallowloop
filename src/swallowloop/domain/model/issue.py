@@ -116,11 +116,11 @@ class Issue:
             TodoItem(id="env-4", content="准备环境"),
         ]
         stages[Stage.ENVIRONMENT].todo_list = env_todos
-        # 头脑风暴阶段设置默认任务
-        brainstorm_todos = [
-            TodoItem(id="brain-1", content="执行头脑风暴"),
+        # 规范定义阶段设置默认任务
+        specify_todos = [
+            TodoItem(id="specify-1", content="执行规范定义"),
         ]
-        stages[Stage.BRAINSTORM].todo_list = brainstorm_todos
+        stages[Stage.SPECIFY].todo_list = specify_todos
         return stages
 
     def get_stage_state(self, stage: Stage) -> StageState:

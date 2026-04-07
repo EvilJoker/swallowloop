@@ -120,6 +120,17 @@ class ExecutorService:
                     branch=pipeline_context.branch or str(issue.id),
                 )
 
+        # 6.5. 同步 SDD 阶段结果到 stage_state.stage_content
+        sdd_result_keys = ["specify_result", "clarify_result", "plan_result",
+                          "checklist_result", "tasks_result", "analyze_result",
+                          "implement_result"]
+        for key in sdd_result_keys:
+            if result.get("success") and result.get(key):
+                stage_content = result.get(key, "")
+                stage_state.stage_content = stage_content
+                logger.info(f"{stage.value} 结果已存储: {len(stage_content)} 字符")
+                break
+
         # 7. 更新任务状态
         if stage_state.todo_list:
             for i, todo in enumerate(stage_state.todo_list):

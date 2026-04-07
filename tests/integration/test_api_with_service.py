@@ -99,17 +99,17 @@ class TestAPIWithService:
         issue_id = create_response.json()["issue"]["id"]
 
         # 触发 AI 执行
-        api_client.post(f"/issues/{issue_id}/trigger", json={"stage": "brainstorm"})
+        api_client.post(f"/issues/{issue_id}/trigger", json={"stage": "specify"})
 
         # 审批通过
         response = api_client.post(
-            f"/issues/{issue_id}/stages/brainstorm/approve",
+            f"/issues/{issue_id}/stages/specify/approve",
             json={"comment": "通过"}
         )
         assert response.status_code == 200
         data = response.json()["issue"]
-        assert data["stages"]["brainstorm"]["status"] == "approved"
-        assert data["currentStage"] == "planFormed"
+        assert data["stages"]["specify"]["status"] == "approved"
+        assert data["currentStage"] == "clarify"
 
     def test_reject_stage_workflow(self, api_client):
         """打回流程"""
@@ -117,13 +117,13 @@ class TestAPIWithService:
         issue_id = create_response.json()["issue"]["id"]
 
         # 触发 AI 执行
-        api_client.post(f"/issues/{issue_id}/trigger", json={"stage": "brainstorm"})
+        api_client.post(f"/issues/{issue_id}/trigger", json={"stage": "specify"})
 
         # 打回
         response = api_client.post(
-            f"/issues/{issue_id}/stages/brainstorm/reject",
+            f"/issues/{issue_id}/stages/specify/reject",
             json={"reason": "方案不够详细"}
         )
         assert response.status_code == 200
         data = response.json()["issue"]
-        assert data["stages"]["brainstorm"]["status"] == "rejected"
+        assert data["stages"]["specify"]["status"] == "rejected"

@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from ...infrastructure.agent import BaseAgent
     from ...infrastructure.config import Config
 
-from ...domain.model import Issue, IssueId, Stage, IssueStatus, IssueRunningStatus, Workspace, StageStatus, TodoStatus
+from ...domain.model import Issue, IssueId, Stage, IssueStatus, IssueRunningStatus, Workspace, StageStatus, TodoStatus, ReviewComment
 from ...domain.repository import IssueRepository
 from ...domain.pipeline import IssuePipeline
 from ..dto import issue_to_dict, build_pipeline_info
@@ -92,7 +92,7 @@ class IssueService:
         issue.create_stage(Stage.ENVIRONMENT)
         self._repo.save(issue)
         logger.info(f"创建 Issue: {issue_id} - {title}，current_stage={issue.current_stage.value}, "
-                    f"BRAINSTORM.status={issue.get_stage_state(Stage.BRAINSTORM).status.value}")
+                    f"SPECIFY.status={issue.get_stage_state(Stage.SPECIFY).status.value}")
 
         # 广播创建事件
         await self._broadcast("issue_created", {"issue": issue_to_dict(issue)})
@@ -104,7 +104,12 @@ class IssueService:
         if not issue:
             return None
 
-        # 直接更新阶段状态
+        # 同步 Pipeline Stage 的审批状态
+        pipeline_stage = issue.pipeline.get_stage(stage.value)
+        if pipeline_stage:
+            pipeline_stage.approve(comment)
+
+        # 更新 Issue 阶段状态
         stage_state = issue.get_stage_state(stage)
         stage_state.status = StageStatus.APPROVED
         stage_state.completed_at = datetime.now()
@@ -120,9 +125,15 @@ class IssueService:
         if not issue:
             return None
 
-        # 直接更新阶段状态
+        # 同步 Pipeline Stage 的审批状态
+        pipeline_stage = issue.pipeline.get_stage(stage.value)
+        if pipeline_stage:
+            pipeline_stage.reject(reason)
+
+        # 更新 Issue 阶段状态
         stage_state = issue.get_stage_state(stage)
         stage_state.status = StageStatus.REJECTED
+        stage_state.comments.append(ReviewComment.create(stage=stage, action="reject", content=reason))
 
         logger.info(f"Issue {issue_id} 阶段 {stage.value} 已打回: {reason}")
         await self._broadcast("issue_updated", {"issue": issue_to_dict(issue)})

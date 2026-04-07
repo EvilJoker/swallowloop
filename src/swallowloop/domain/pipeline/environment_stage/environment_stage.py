@@ -20,13 +20,16 @@ class EnvironmentStage(Stage):
     """环境准备阶段"""
 
     def __init__(self):
-        super().__init__(name="environment")
-        self.tasks = [
-            EnvironmentCreateWorkspaceTask(),
-            EnvironmentCloneRepoTask(),
-            EnvironmentSwitchBranchTask(),
-            EnvironmentPrepareEnvTask(),
-        ]
+        super().__init__(
+            name="environment",
+            tasks=[
+                EnvironmentCreateWorkspaceTask(),
+                EnvironmentCloneRepoTask(),
+                EnvironmentSwitchBranchTask(),
+                EnvironmentPrepareEnvTask(),
+            ],
+            requires_approval=False,
+        )
         self._agent: "BaseAgent | None" = None
 
     def set_agent(self, agent: "BaseAgent"):

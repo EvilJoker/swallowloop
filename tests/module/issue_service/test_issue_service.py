@@ -67,17 +67,17 @@ class TestIssueService:
         issue_id = str(issue.id)
 
         # 设置阶段为 PENDING 状态（模拟 AI 执行完成）
-        stage_state = issue.get_stage_state(Stage.BRAINSTORM)
+        stage_state = issue.get_stage_state(Stage.SPECIFY)
         stage_state.status = StageStatus.PENDING
         stage_state.started_at = datetime.now()
         repo.save(issue)
 
         # 审批通过
-        updated = await service.approve_stage(issue_id, Stage.BRAINSTORM, "通过")
+        updated = await service.approve_stage(issue_id, Stage.SPECIFY, "通过")
 
-        assert updated.get_stage_state(Stage.BRAINSTORM).status == StageStatus.APPROVED
-        assert updated.current_stage == Stage.PLAN_FORMED
-        assert updated.get_stage_state(Stage.PLAN_FORMED).status == StageStatus.NEW
+        assert updated.get_stage_state(Stage.SPECIFY).status == StageStatus.APPROVED
+        assert updated.current_stage == Stage.CLARIFY
+        assert updated.get_stage_state(Stage.CLARIFY).status == StageStatus.NEW
 
     @pytest.mark.asyncio
     async def test_approve_stage_completed_at_is_set(self, repo, executor, service):
@@ -85,18 +85,18 @@ class TestIssueService:
         issue = await service.create_issue("测试", "描述")
         issue_id = str(issue.id)
 
-        stage_state = issue.get_stage_state(Stage.BRAINSTORM)
+        stage_state = issue.get_stage_state(Stage.SPECIFY)
         stage_state.status = StageStatus.PENDING
         repo.save(issue)
 
-        updated = await service.approve_stage(issue_id, Stage.BRAINSTORM, "通过")
+        updated = await service.approve_stage(issue_id, Stage.SPECIFY, "通过")
 
-        assert updated.get_stage_state(Stage.BRAINSTORM).completed_at is not None
+        assert updated.get_stage_state(Stage.SPECIFY).completed_at is not None
 
     @pytest.mark.asyncio
     async def test_approve_nonexistent_issue_returns_none(self, repo, executor, service):
         """测试审批不存在的 Issue 返回 None"""
-        result = await service.approve_stage("nonexistent-id", Stage.BRAINSTORM, "通过")
+        result = await service.approve_stage("nonexistent-id", Stage.SPECIFY, "通过")
         assert result is None
 
     @pytest.mark.asyncio
@@ -106,19 +106,19 @@ class TestIssueService:
         issue_id = str(issue.id)
 
         # 设置阶段为 PENDING 状态
-        stage_state = issue.get_stage_state(Stage.BRAINSTORM)
+        stage_state = issue.get_stage_state(Stage.SPECIFY)
         stage_state.status = StageStatus.PENDING
         repo.save(issue)
 
         # 打回
-        updated = await service.reject_stage(issue_id, Stage.BRAINSTORM, "方案不够详细")
+        updated = await service.reject_stage(issue_id, Stage.SPECIFY, "方案不够详细")
 
-        assert updated.get_stage_state(Stage.BRAINSTORM).status == StageStatus.REJECTED
+        assert updated.get_stage_state(Stage.SPECIFY).status == StageStatus.REJECTED
 
     @pytest.mark.asyncio
     async def test_reject_nonexistent_issue_returns_none(self, repo, executor, service):
         """测试打回不存在的 Issue 返回 None"""
-        result = await service.reject_stage("nonexistent-id", Stage.BRAINSTORM, "原因")
+        result = await service.reject_stage("nonexistent-id", Stage.SPECIFY, "原因")
         assert result is None
 
     @pytest.mark.asyncio
@@ -262,5 +262,5 @@ class TestIssueLifecycle:
 
             # 验证进入下一阶段
             updated_issue = repo.get(IssueId(issue_id))
-            assert updated_issue.current_stage == Stage.BRAINSTORM
-            assert updated_issue.get_stage_state(Stage.BRAINSTORM).status == StageStatus.NEW
+            assert updated_issue.current_stage == Stage.SPECIFY
+            assert updated_issue.get_stage_state(Stage.SPECIFY).status == StageStatus.NEW

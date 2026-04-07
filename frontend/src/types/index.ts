@@ -1,12 +1,13 @@
 // 阶段类型
 export type Stage =
   | 'environment'
-  | 'brainstorm'
-  | 'planFormed'
-  | 'detailedDesign'
-  | 'taskSplit'
-  | 'execution'
-  | 'updateDocs'
+  | 'specify'
+  | 'clarify'
+  | 'plan'
+  | 'checklist'
+  | 'tasks'
+  | 'analyze'
+  | 'implement'
   | 'submit';
 
 // 阶段状态
@@ -112,13 +113,14 @@ export interface Issue {
 // 阶段显示配置
 export const STAGES: { key: Stage; label: string }[] = [
   { key: 'environment', label: '环境准备' },
-  { key: 'brainstorm', label: '头脑风暴' },
-  { key: 'planFormed', label: '方案制定' },
-  { key: 'detailedDesign', label: '详细设计' },
-  { key: 'taskSplit', label: '任务拆分' },
-  { key: 'execution', label: '执行' },
-  { key: 'updateDocs', label: '更新文档' },
-  { key: 'submit', label: '提交' },
+  { key: 'specify', label: '规范定义' },
+  { key: 'clarify', label: '需求澄清' },
+  { key: 'plan', label: '技术规划' },
+  { key: 'checklist', label: '质量检查' },
+  { key: 'tasks', label: '任务拆分' },
+  { key: 'analyze', label: '一致性分析' },
+  { key: 'implement', label: '编码实现' },
+  { key: 'submit', label: '提交发布' },
 ];
 
 // 状态颜色配置

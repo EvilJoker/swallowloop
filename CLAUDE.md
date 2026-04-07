@@ -198,3 +198,10 @@ LLM 配置与 Agent 类型独立，支持通过 `LLM_PROVIDER`/`LLM_API_KEY`/`LL
 **重要原则**：发现问题并解决后，必须反思为什么测试用例没有发现，并将根因分析记录到经验目录。
 
 参考：`docs/lessons/README.md`
+
+## Active Technologies
+- Python 3.11+ + FastAPI, httpx, DeerFlow Agent (HTTP API) (001-sdd-stage-migration)
+- 内存存储（Issue 模型 + PipelineContext） (001-sdd-stage-migration)
+
+## Recent Changes
+- 001-sdd-stage-migration: Added Python 3.11+ + FastAPI, httpx, DeerFlow Agent (HTTP API)

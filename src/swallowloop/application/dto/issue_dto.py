@@ -11,13 +11,14 @@ if TYPE_CHECKING:
 # 阶段中文标签
 _STAGE_LABELS = {
     "environment": "环境准备",
-    "brainstorm": "头脑风暴",
-    "planFormed": "方案制定",
-    "detailedDesign": "详细设计",
-    "taskSplit": "任务拆分",
-    "execution": "执行",
-    "updateDocs": "更新文档",
-    "submit": "提交",
+    "specify": "规范定义",
+    "clarify": "需求澄清",
+    "plan": "技术规划",
+    "checklist": "质量检查",
+    "tasks": "任务拆分",
+    "analyze": "一致性分析",
+    "implement": "编码实现",
+    "submit": "提交发布",
 }
 
 
@@ -29,14 +30,14 @@ def get_stage_label(stage_value: str) -> str:
 def build_pipeline_info(issue: "Issue") -> dict:
     """构建 Pipeline 展示信息
 
-    状态从 issue.pipeline.get_status() 获取
+    状态从 issue.stages 获取（真实执行状态）
     """
     from ...domain.model import Stage
 
     pipeline_status = issue.pipeline.get_status()
     stages_info = []
 
-    # 遍历 Pipeline 中的 stage，从 get_status() 获取状态
+    # 遍历 Pipeline 中的 stage，从 issue.stages 获取真实状态
     for i, stage_obj in enumerate(issue.pipeline._stages):
         # stage_obj.name 是驼峰式 (如 'planFormed')，需要通过 value 匹配
         stage_enum = next((s for s in Stage if s.value == stage_obj.name), None)
@@ -44,16 +45,23 @@ def build_pipeline_info(issue: "Issue") -> dict:
             continue
 
         stage_state = issue.stages.get(stage_enum)
-        stage_status = pipeline_status.stages_status[i] if i < len(pipeline_status.stages_status) else None
 
-        # 从 Pipeline Stage 获取任务信息
+        # 从 issue.stages.todoList 获取真实 task 状态
+        # todoList 是 SDD 阶段执行时真正更新的状态
         tasks = []
-        for j, task in enumerate(stage_obj.tasks):
-            task_status = stage_status.tasks_status[j] if stage_status and j < len(stage_status.tasks_status) else None
-            tasks.append({
-                "name": task.name,
-                "status": task_status.state.value if task_status else "pending",
-            })
+        if stage_state and stage_state.todo_list:
+            for todo in stage_state.todo_list:
+                tasks.append({
+                    "name": todo.content,
+                    "status": todo.status.value,
+                })
+        else:
+            # 如果没有 todoList，使用 Pipeline Stage 的任务信息
+            for j, task in enumerate(stage_obj.tasks):
+                tasks.append({
+                    "name": task.name,
+                    "status": "pending",
+                })
 
         # 从 issue.stages 获取时间信息
         started_at = stage_state.started_at.isoformat() if stage_state and stage_state.started_at else None

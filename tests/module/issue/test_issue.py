@@ -66,7 +66,7 @@ class TestIssue:
             title="测试",
             description="测试描述",
             status=IssueStatus.ACTIVE,
-            current_stage=Stage.BRAINSTORM,
+            current_stage=Stage.SPECIFY,
             created_at=datetime.now(),
         )
 
@@ -95,7 +95,7 @@ class TestIssue:
             title="测试",
             description="测试描述",
             status=IssueStatus.ACTIVE,
-            current_stage=Stage.BRAINSTORM,
+            current_stage=Stage.SPECIFY,
             created_at=datetime.now(),
         )
 

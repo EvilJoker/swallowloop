@@ -31,10 +31,10 @@ def issue(repo):
         title="测试",
         description="测试描述",
         status=IssueStatus.ACTIVE,
-        current_stage=Stage.BRAINSTORM,
+        current_stage=Stage.SPECIFY,
         created_at=datetime.now(),
     )
-    issue.create_stage(Stage.BRAINSTORM)
+    issue.create_stage(Stage.SPECIFY)
     repo.save(issue)
     return issue
 
@@ -44,34 +44,34 @@ class TestExecutorWorkerPool:
 
     def test_submit_success(self, worker_pool, repo, issue):
         """成功提交任务"""
-        result = worker_pool.submit(str(issue.id), Stage.BRAINSTORM)
+        result = worker_pool.submit(str(issue.id), Stage.SPECIFY)
         assert result is True
 
     def test_submit_duplicate_returns_false(self, worker_pool, repo, issue):
         """重复提交返回 False"""
         # 第一次提交
-        result1 = worker_pool.submit(str(issue.id), Stage.BRAINSTORM)
+        result1 = worker_pool.submit(str(issue.id), Stage.SPECIFY)
         assert result1 is True
 
         # 第二次提交同一个任务
-        result2 = worker_pool.submit(str(issue.id), Stage.BRAINSTORM)
+        result2 = worker_pool.submit(str(issue.id), Stage.SPECIFY)
         assert result2 is False
 
     def test_is_running(self, worker_pool, repo, issue):
         """检查任务是否运行中"""
         # 初始不是运行中
-        assert worker_pool.is_running(str(issue.id), Stage.BRAINSTORM) is False
+        assert worker_pool.is_running(str(issue.id), Stage.SPECIFY) is False
 
         # 提交后是运行中
-        worker_pool.submit(str(issue.id), Stage.BRAINSTORM)
-        assert worker_pool.is_running(str(issue.id), Stage.BRAINSTORM) is True
+        worker_pool.submit(str(issue.id), Stage.SPECIFY)
+        assert worker_pool.is_running(str(issue.id), Stage.SPECIFY) is True
 
     def test_is_running_different_stages(self, worker_pool, repo, issue):
         """不同阶段任务互不影响"""
         # 提交 BRAINSTORM
-        worker_pool.submit(str(issue.id), Stage.BRAINSTORM)
-        assert worker_pool.is_running(str(issue.id), Stage.BRAINSTORM) is True
-        assert worker_pool.is_running(str(issue.id), Stage.PLAN_FORMED) is False
+        worker_pool.submit(str(issue.id), Stage.SPECIFY)
+        assert worker_pool.is_running(str(issue.id), Stage.SPECIFY) is True
+        assert worker_pool.is_running(str(issue.id), Stage.CLARIFY) is False
 
     def test_shutdown(self, worker_pool):
         """关闭线程池"""
@@ -85,10 +85,10 @@ class TestExecutorWorkerPool:
             title="测试1",
             description="描述1",
             status=IssueStatus.ACTIVE,
-            current_stage=Stage.BRAINSTORM,
+            current_stage=Stage.SPECIFY,
             created_at=datetime.now(),
         )
-        issue1.create_stage(Stage.BRAINSTORM)
+        issue1.create_stage(Stage.SPECIFY)
         repo.save(issue1)
 
         issue2 = Issue(
@@ -96,14 +96,14 @@ class TestExecutorWorkerPool:
             title="测试2",
             description="描述2",
             status=IssueStatus.ACTIVE,
-            current_stage=Stage.BRAINSTORM,
+            current_stage=Stage.SPECIFY,
             created_at=datetime.now(),
         )
-        issue2.create_stage(Stage.BRAINSTORM)
+        issue2.create_stage(Stage.SPECIFY)
         repo.save(issue2)
 
-        result1 = worker_pool.submit("issue-1", Stage.BRAINSTORM)
-        result2 = worker_pool.submit("issue-2", Stage.BRAINSTORM)
+        result1 = worker_pool.submit("issue-1", Stage.SPECIFY)
+        result2 = worker_pool.submit("issue-2", Stage.SPECIFY)
 
         assert result1 is True
         assert result2 is True

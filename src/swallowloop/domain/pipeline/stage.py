@@ -1,6 +1,7 @@
 """Stage - Pipeline 中的阶段，包含多个 Task"""
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
 from typing import Optional, Callable
 from .task import Task, TaskResult, TaskStatus
@@ -10,8 +11,19 @@ class StageState(Enum):
     """Stage 执行状态枚举"""
     PENDING = "pending"
     RUNNING = "running"
+    WAITING_APPROVAL = "waiting_approval"
+    APPROVED = "approved"
+    REJECTED = "rejected"
     COMPLETED = "completed"
     FAILED = "failed"
+
+
+class ApprovalState(Enum):
+    """审批状态枚举"""
+    NOT_REQUIRED = "not_required"  # 不需要审批（如环境准备阶段）
+    PENDING = "pending"  # 待审批
+    APPROVED = "approved"  # 已通过
+    REJECTED = "rejected"  # 已打回
 
 
 @dataclass
@@ -34,6 +46,15 @@ class StageStatus:
     def is_running(self) -> bool:
         return self.state == StageState.RUNNING
 
+    def is_waiting_approval(self) -> bool:
+        return self.state == StageState.WAITING_APPROVAL
+
+    def is_approved(self) -> bool:
+        return self.state == StageState.APPROVED
+
+    def is_rejected(self) -> bool:
+        return self.state == StageState.REJECTED
+
     def is_completed(self) -> bool:
         return self.state == StageState.COMPLETED
 
@@ -49,18 +70,80 @@ class Stage:
         name: str,
         tasks: list[Task] = None,
         description: str = "",
+        requires_approval: bool = True,
     ):
         """
         Args:
             name: Stage 名称
             tasks: Task 列表
             description: Stage 描述
+            requires_approval: 是否需要人类审批（环境准备阶段不需要）
         """
         self.name = name
         self.tasks = tasks or []
         self.description = description
+        self.requires_approval = requires_approval
         self._status = StageStatus()
         self._last_result: TaskResult | None = None
+        # 审批相关字段
+        self._approval_state: ApprovalState = (
+            ApprovalState.NOT_REQUIRED if not requires_approval else ApprovalState.PENDING
+        )
+        self._approved_at: datetime | None = None
+        self._approver_comments: str | None = None
+
+    @property
+    def approval_state(self) -> ApprovalState:
+        """获取审批状态"""
+        return self._approval_state
+
+    @property
+    def approved_at(self) -> datetime | None:
+        """获取审批时间"""
+        return self._approved_at
+
+    @property
+    def approver_comments(self) -> str | None:
+        """获取审批意见"""
+        return self._approver_comments
+
+    def approve(self, comments: str = "") -> None:
+        """审批通过
+
+        Args:
+            comments: 审批意见
+        """
+        self._approval_state = ApprovalState.APPROVED
+        self._approved_at = datetime.now()
+        self._approver_comments = comments
+        self._status.state = StageState.APPROVED
+        self._status.reason = "已审批通过"
+
+    def reject(self, comments: str) -> None:
+        """审批打回
+
+        Args:
+            comments: 审批意见（必填）
+        Raises:
+            ValueError: 如果 comments 为空
+        """
+        if not comments:
+            raise ValueError("打回时必须填写审批意见")
+        self._approval_state = ApprovalState.REJECTED
+        self._approved_at = datetime.now()
+        self._approver_comments = comments
+        self._status.state = StageState.REJECTED
+        self._status.reason = f"已打回: {comments}"
+
+    def set_waiting_approval(self, reason: str = "等待审批") -> None:
+        """设置阶段为等待审批状态
+
+        Args:
+            reason: 状态描述
+        """
+        self._approval_state = ApprovalState.PENDING
+        self._status.state = StageState.WAITING_APPROVAL
+        self._status.reason = reason
 
     @property
     def status(self) -> StageStatus:

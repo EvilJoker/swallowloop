@@ -45,21 +45,21 @@ class TestExecuteStage:
     """execute_stage 统一 Pipeline 执行测试"""
 
     @pytest.mark.asyncio
-    async def test_execute_stage_brainstorm_success(self, repo, executor, agent):
-        """测试成功执行 BRAINSTORM 阶段（通过 Pipeline）"""
+    async def test_execute_stage_specify_success(self, repo, executor, agent):
+        """测试成功执行 SPECIFY 阶段（通过 Pipeline）"""
         issue = Issue(
             id=IssueId("test-issue"),
             title="测试",
             description="描述",
             status=IssueStatus.ACTIVE,
-            current_stage=Stage.BRAINSTORM,
+            current_stage=Stage.SPECIFY,
             created_at=datetime.now(),
         )
         issue.thread_id = "thread-123"
         issue.thread_path = "/tmp/test-workspace"
         repo.save(issue)
 
-        result = await executor.execute_stage(issue, Stage.BRAINSTORM)
+        result = await executor.execute_stage(issue, Stage.SPECIFY)
 
         assert result["success"] is True
         assert agent.execute.called
@@ -78,17 +78,17 @@ class TestExecuteStage:
             title="测试",
             description="描述",
             status=IssueStatus.ACTIVE,
-            current_stage=Stage.BRAINSTORM,
+            current_stage=Stage.SPECIFY,
             created_at=datetime.now(),
         )
         issue.thread_id = "thread-123"
         issue.thread_path = "/tmp/test-workspace"
         repo.save(issue)
 
-        result = await executor.execute_stage(issue, Stage.BRAINSTORM)
+        result = await executor.execute_stage(issue, Stage.SPECIFY)
 
         assert result["success"] is False
-        assert "Agent 执行失败" in result["error"]
+        assert "Agent 执行失败" in result["message"]
 
     @pytest.mark.asyncio
     async def test_execute_stage_updates_issue_status(self, repo, executor, agent):
@@ -98,17 +98,17 @@ class TestExecuteStage:
             title="测试",
             description="描述",
             status=IssueStatus.ACTIVE,
-            current_stage=Stage.BRAINSTORM,
+            current_stage=Stage.SPECIFY,
             created_at=datetime.now(),
         )
         issue.thread_id = "thread-123"
         issue.thread_path = "/tmp/test-workspace"
         repo.save(issue)
 
-        await executor.execute_stage(issue, Stage.BRAINSTORM)
+        await executor.execute_stage(issue, Stage.SPECIFY)
 
         updated = repo.get(IssueId("test-issue"))
-        assert updated.get_stage_state(Stage.BRAINSTORM).status == StageStatus.PENDING
+        assert updated.get_stage_state(Stage.SPECIFY).status == StageStatus.PENDING
 
 
 class TestEnvironmentStageWorkspaceSync:

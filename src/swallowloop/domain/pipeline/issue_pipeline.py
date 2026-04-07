@@ -10,95 +10,68 @@ if TYPE_CHECKING:
 from .context import PipelineContext
 from .pipeline import Pipeline, PipelineStatus, PipelineState
 from .environment_stage.environment_stage import EnvironmentStage
-from .brainstorm_stage.brainstorm_stage import BrainstormStage
-from .plan_formed_stage.plan_formed_stage import PlanFormedStage
-from .detailed_design_stage.detailed_design_stage import DetailedDesignStage
-from .task_split_stage.task_split_stage import TaskSplitStage
-from .execution_stage.execution_stage import ExecutionStage
-from .update_docs_stage.update_docs_stage import UpdateDocsStage
+from .specify_stage.specify_stage import SpecifyStage
+from .clarify_stage.clarify_stage import ClarifyStage
+from .plan_stage.plan_stage import PlanStage
+from .checklist_stage.checklist_stage import ChecklistStage
+from .tasks_stage.tasks_stage import TasksStage
+from .analyze_stage.analyze_stage import AnalyzeStage
+from .implement_stage.implement_stage import ImplementStage
 from .submit_stage.submit_stage import SubmitStage
 
 logger = logging.getLogger(__name__)
 
 
-# 内置阶段指令
+# SDD 阶段指令（备用，如果 stage 没有实现 Task）
 STAGE_INSTRUCTIONS: dict[str, str] = {
-    "brainstorm": """请对这个问题进行头脑风暴：
+    "specify": """请对 Issue 进行规范定义：
 
-1. 分析问题的背景和需求
-2. 提出 3-5 个可能的解决方案
-3. 评估每个方案的优缺点
-4. 给出推荐方案及理由
+1. 明确需求范围和目标
+2. 定义验收标准
+3. 识别关键约束条件
+4. 确定质量要求""",
+    "clarify": """请对 Issue 进行需求澄清：
 
-输出格式：
-- 解决方案列表（带序号）
-- 每个方案的优缺点
-- 推荐方案及理由""",
-    "planFormed": """请根据头脑风暴的结果，制定详细方案：
+1. 澄清模糊需求
+2. 补充遗漏细节
+3. 确认优先级
+4. 与现有系统一致性分析""",
+    "plan": """请对 Issue 进行技术规划：
 
-1. 确定最终推荐的解决方案
-2. 给出详细的实施步骤
-3. 预估时间和资源需求
-4. 识别潜在风险和应对措施
+1. 提出技术方案
+2. 评估方案优劣
+3. 制定实施计划
+4. 预估时间和资源""",
+    "checklist": """请对技术规划进行质量检查：
 
-输出格式：
-- 推荐方案
-- 详细实施步骤
-- 时间预估
-- 风险评估""",
-    "detailedDesign": """请进行详细设计：
+1. 检查方案完整性
+2. 验证代码规范符合度
+3. 检查测试覆盖度
+4. 验证文档完整性""",
+    "tasks": """请将任务拆分为可执行的小任务：
 
-1. 定义数据结构和接口
-2. 设计模块结构和职责
-3. 制定关键算法
-4. 考虑边界情况和错误处理
+1. 识别所有子任务
+2. 确定任务依赖关系
+3. 预估每个任务复杂度
+4. 确定任务执行顺序""",
+    "analyze": """请进行一致性分析：
 
-输出格式：
-- 数据结构设计
-- 模块设计
-- 关键算法
-- 边界情况""",
-    "taskSplit": """请将任务拆分为可执行的小任务：
+1. 验证需求与方案一致性
+2. 验证方案与任务拆分一致性
+3. 检查依赖关系正确性
+4. 识别潜在冲突""",
+    "implement": """请执行编码实现任务：
 
-1. 列出所有需要执行的子任务
-2. 确定任务间的依赖关系
-3. 预估每个子任务的复杂度
-
-输出格式：
-- 子任务列表（带序号和描述）
-- 依赖关系
-- 复杂度评估""",
-    "execution": """请执行任务：
-
-1. 按照计划执行任务
-2. 记录执行过程中的关键发现
-3. 解决遇到的问题
-4. 保持代码质量
-
-输出格式：
-- 执行进度
-- 关键发现
-- 遇到的问题及解决方案
-- 代码变更""",
-    "updateDocs": """请更新文档：
-
-1. 更新必要的代码文档
-2. 更新 README 或其他项目文档
-3. 确保文档与代码一致
-
-输出格式：
-- 更新的文档列表
-- 关键变更说明""",
+1. 按照任务拆分顺序执行开发
+2. 编写代码实现功能
+3. 编写单元测试
+4. 确保代码符合规范
+5. 提交代码变更""",
     "submit": """请提交代码：
 
 1. 确保所有更改已提交
 2. 创建 PR（如果适用）
-3. 列出所有变更
-
-输出格式：
-- 变更摘要
-- PR 链接（如果有）
-- 后续待办""",
+3. 列出所有变更""",
 }
 
 
@@ -124,14 +97,15 @@ class IssuePipeline(Pipeline):
             "issue_description": issue_description,
         }
         self._stages = [
-            EnvironmentStage(),
-            BrainstormStage(),
-            PlanFormedStage(),
-            DetailedDesignStage(),
-            TaskSplitStage(),
-            ExecutionStage(),
-            UpdateDocsStage(),
-            SubmitStage(),
+            EnvironmentStage(),     # 0: 环境准备（不需要审批）
+            SpecifyStage(),         # 1: 规范定义
+            ClarifyStage(),         # 2: 需求澄清
+            PlanStage(),            # 3: 技术规划
+            ChecklistStage(),       # 4: 质量检查
+            TasksStage(),           # 5: 任务拆分
+            AnalyzeStage(),         # 6: 一致性分析
+            ImplementStage(),       # 7: 编码实现
+            SubmitStage(),          # 8: 提交发布
         ]
         # agent 引用
         self._agent = None
@@ -145,6 +119,20 @@ class IssuePipeline(Pipeline):
     def get_context(self) -> PipelineContext:
         """获取 PipelineContext（只读）"""
         return self._context
+
+    def get_stage(self, name: str):
+        """获取指定名称的 Stage
+
+        Args:
+            name: Stage 名称
+
+        Returns:
+            Stage 对象，如果未找到返回 None
+        """
+        for stage in self._stages:
+            if stage.name == name:
+                return stage
+        return None
 
     def set_context_value(self, key: str, value):
         """设置 context 中的字段值
@@ -272,8 +260,12 @@ class IssuePipeline(Pipeline):
             context_dict, task_result = stage_obj.execute(context_dict)
             all_success = task_result.success
 
-            # 更新 PipelineStatus
-            self._status.state = PipelineState.COMPLETED if all_success else PipelineState.FAILED
+            # 如果阶段需要审批且执行成功，设置等待审批状态
+            if all_success and stage_obj.requires_approval:
+                stage_obj.set_waiting_approval(task_result.message)
+                self._status.state = PipelineState.RUNNING  # Pipeline 仍在运行，等待审批
+            else:
+                self._status.state = PipelineState.COMPLETED if all_success else PipelineState.FAILED
             self._status.reason = task_result.message
 
             # 更新 context
@@ -283,12 +275,24 @@ class IssuePipeline(Pipeline):
                 self._context.repo_name = context_dict["repo_name"]
             if context_dict.get("thread_id"):
                 self._context.thread_id = context_dict["thread_id"]
+            # 同步 SDD 阶段结果到 extra
+            sdd_results = ["specify_result", "clarify_result", "plan_result",
+                          "checklist_result", "tasks_result", "analyze_result",
+                          "implement_result"]
+            for key in sdd_results:
+                if context_dict.get(key):
+                    self._context.extra[key] = context_dict[key]
 
-            return {
+            return_result = {
                 "success": all_success,
                 "message": task_result.message,
                 "stage_status": stage_obj.status,
             }
+            # 返回 SDD 阶段结果
+            for key in sdd_results:
+                if context_dict.get(key):
+                    return_result[key] = context_dict[key]
+            return return_result
 
         # 空实现阶段：直接调用 agent 执行阶段指令
         if not self._agent:
