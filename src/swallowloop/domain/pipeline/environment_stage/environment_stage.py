@@ -130,23 +130,59 @@ class EnvironmentStage(Stage):
         """
         logger.info("开始执行环境准备阶段...")
 
+        # 收集所有任务状态
+        tasks_status = []
+
         # 执行创建工作空间
         context, result = self.execute_create_workspace(context)
+        tasks_status.append(self.tasks[0].status)
         if not result.success:
+            self._status = StageStatus(
+                state=StageState.FAILED,
+                reason=f"创建工作空间失败: {result.message}",
+                tasks_status=tasks_status
+            )
             return context, result
 
         # 执行克隆仓库
         context, result = self.execute_clone_repo(context)
+        tasks_status.append(self.tasks[1].status)
         if not result.success:
+            self._status = StageStatus(
+                state=StageState.FAILED,
+                reason=f"克隆仓库失败: {result.message}",
+                tasks_status=tasks_status
+            )
             return context, result
 
         # 执行切换分支
         context, result = self.execute_switch_branch(context)
+        tasks_status.append(self.tasks[2].status)
         if not result.success:
+            self._status = StageStatus(
+                state=StageState.FAILED,
+                reason=f"切换分支失败: {result.message}",
+                tasks_status=tasks_status
+            )
             return context, result
 
         # 执行准备环境
         context, result = self.execute_prepare_env(context)
+        tasks_status.append(self.tasks[3].status)
+
+        # 最终状态
+        if result.success:
+            self._status = StageStatus(
+                state=StageState.COMPLETED,
+                reason="环境准备完成",
+                tasks_status=tasks_status
+            )
+        else:
+            self._status = StageStatus(
+                state=StageState.FAILED,
+                reason=f"准备环境失败: {result.message}",
+                tasks_status=tasks_status
+            )
 
         logger.info("环境准备阶段执行完成")
         return context, result

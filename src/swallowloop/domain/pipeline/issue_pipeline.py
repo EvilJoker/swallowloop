@@ -34,6 +34,71 @@ STAGE_INSTRUCTIONS: dict[str, str] = {
 - 解决方案列表（带序号）
 - 每个方案的优缺点
 - 推荐方案及理由""",
+    "planFormed": """请根据头脑风暴的结果，制定详细方案：
+
+1. 确定最终推荐的解决方案
+2. 给出详细的实施步骤
+3. 预估时间和资源需求
+4. 识别潜在风险和应对措施
+
+输出格式：
+- 推荐方案
+- 详细实施步骤
+- 时间预估
+- 风险评估""",
+    "detailedDesign": """请进行详细设计：
+
+1. 定义数据结构和接口
+2. 设计模块结构和职责
+3. 制定关键算法
+4. 考虑边界情况和错误处理
+
+输出格式：
+- 数据结构设计
+- 模块设计
+- 关键算法
+- 边界情况""",
+    "taskSplit": """请将任务拆分为可执行的小任务：
+
+1. 列出所有需要执行的子任务
+2. 确定任务间的依赖关系
+3. 预估每个子任务的复杂度
+
+输出格式：
+- 子任务列表（带序号和描述）
+- 依赖关系
+- 复杂度评估""",
+    "execution": """请执行任务：
+
+1. 按照计划执行任务
+2. 记录执行过程中的关键发现
+3. 解决遇到的问题
+4. 保持代码质量
+
+输出格式：
+- 执行进度
+- 关键发现
+- 遇到的问题及解决方案
+- 代码变更""",
+    "updateDocs": """请更新文档：
+
+1. 更新必要的代码文档
+2. 更新 README 或其他项目文档
+3. 确保文档与代码一致
+
+输出格式：
+- 更新的文档列表
+- 关键变更说明""",
+    "submit": """请提交代码：
+
+1. 确保所有更改已提交
+2. 创建 PR（如果适用）
+3. 列出所有变更
+
+输出格式：
+- 变更摘要
+- PR 链接（如果有）
+- 后续待办""",
 }
 
 
@@ -160,108 +225,123 @@ class IssuePipeline(Pipeline):
             "stage_status": stage_obj.status,  # 返回 StageStatus 给前端
         }
 
-    def execute_brainstorm(self) -> dict:
-        """执行头脑风暴阶段
+    async def execute_stage(self, stage_name: str) -> dict:
+        """执行指定阶段
 
-        从 self._context 读取环境信息，调用 DeerFlow 执行
-        执行后更新 self._context（brainstorm_output 等）
+        - 如果阶段有 tasks，执行 tasks
+        - 如果阶段没有 tasks（空实现），直接调用 agent 执行阶段指令
+        - 更新 self._context
+
+        Args:
+            stage_name: 阶段名称（如 "brainstorm", "planFormed"）
+
+        Returns:
+            dict with keys: success, message, stage_status
         """
-        logger.info("执行头脑风暴阶段...")
+        logger.info(f"执行阶段: {stage_name}")
 
+        # 更新 PipelineStatus
+        self._status.state = PipelineState.RUNNING
+        self._status.current_stage = stage_name
+        self._status.current_task = ""
+        self._status.reason = f"执行 {stage_name} 阶段"
+
+        # 找到对应的 stage 对象
+        stage_obj = None
+        for s in self._stages:
+            if s.name == stage_name:
+                stage_obj = s
+                break
+
+        if stage_obj is None:
+            logger.error(f"未找到阶段: {stage_name}")
+            return {
+                "success": False,
+                "message": f"未找到阶段: {stage_name}",
+                "stage_status": None,
+            }
+
+        # 如果阶段有 tasks，执行 tasks
+        if stage_obj.tasks:
+            context_dict = self._context.to_dict()
+            # 注入 agent 到需要它的 task
+            if self._agent:
+                for task in stage_obj.tasks:
+                    if hasattr(task, 'set_agent'):
+                        task.set_agent(self._agent)
+            context_dict, task_result = stage_obj.execute(context_dict)
+            all_success = task_result.success
+
+            # 更新 PipelineStatus
+            self._status.state = PipelineState.COMPLETED if all_success else PipelineState.FAILED
+            self._status.reason = task_result.message
+
+            # 更新 context
+            if context_dict.get("workspace_path"):
+                self._context.workspace_path = context_dict["workspace_path"]
+            if context_dict.get("repo_name"):
+                self._context.repo_name = context_dict["repo_name"]
+            if context_dict.get("thread_id"):
+                self._context.thread_id = context_dict["thread_id"]
+
+            return {
+                "success": all_success,
+                "message": task_result.message,
+                "stage_status": stage_obj.status,
+            }
+
+        # 空实现阶段：直接调用 agent 执行阶段指令
         if not self._agent:
-            return {"success": False, "error": "agent 未设置"}
+            logger.error("Agent 未配置")
+            return {
+                "success": False,
+                "message": "Agent 未配置",
+                "stage_status": stage_obj.status,
+            }
 
-        # 获取 workspace 信息
-        workspace_path = self._context.workspace_path
-        thread_id = self._context.thread_id
-        repo_url = self._context.repo_url
-        repo_branch = self._context.branch
-        issue_id = self._context.issue_id
+        # 获取阶段指令
+        instruction = STAGE_INSTRUCTIONS.get(stage_name, "")
+        if not instruction:
+            logger.warning(f"阶段 {stage_name} 没有内置指令")
+            instruction = f"请执行 {stage_name} 阶段的任务"
+
+        # 构建任务指令
         issue_title = self._context.extra.get("issue_title", "")
         issue_description = self._context.extra.get("issue_description", "")
+        task_message = f"""# Issue 信息
+标题: {issue_title}
+描述: {issue_description}
 
-        if not workspace_path:
-            return {"success": False, "error": "workspace_path 未设置"}
-
-        # 生成 stage 文件
-        stage_file = Path(workspace_path) / "brainstorm.md"
-        result_file = Path(workspace_path) / "brainstorm-result.json"
-
-        # 读取内置指令
-        instruction = """请对这个问题进行头脑风暴：
-
-1. 分析问题的背景和需求
-2. 提出 3-5 个可能的解决方案
-3. 评估每个方案的优缺点
-4. 给出推荐方案及理由
-
-输出格式：
-- 解决方案列表（带序号）
-- 每个方案的优缺点
-- 推荐方案及理由"""
-
-        # 构建 context 文件内容
-        context_content = f"""# Stage brainstorm
-
-## Issue 信息
-- 标题: {issue_title}
-- 描述: {issue_description or "无"}
-- ID: {issue_id}
-
-## 环境信息（来自 pipeline.context）
-- 仓库: {repo_url or "N/A"}
-- 分支: {repo_branch or "N/A"}
-- Issue 分支: {issue_id}
-- 仓库路径: {workspace_path}
-
-## 阶段指令
+# 任务
 {instruction}
 
-## 期望输出
-完成 brainstorm 任务后，将结果写入 brainstorm-result.json
-结果使用 JSON 格式：
+请完成任务后将结果以 JSON 格式返回：
 {{
   "status": "success" | "failed",
-  "output": "执行摘要",
-  "files": ["生成的文件列表"],
+  "output": "执行结果摘要",
   "error": "错误信息（如果有）"
-}}
-"""
-
-        stage_file.write_text(context_content, encoding="utf-8")
-
-        # 构建任务消息
-        task_message = f"""请读取并执行任务文件 {stage_file}，完成后将结果写入 {result_file}。"""
+}}"""
 
         context = {
-            "thread_id": thread_id,
-            "stage_file": str(stage_file),
-            "result_file": str(result_file),
+            "thread_id": self._context.thread_id,
+            "stage": stage_name,
         }
 
-        # 调用 DeerFlow 执行
-        import asyncio
-        result = asyncio.run(self._agent.execute(task_message, context))
+        logger.info(f"调用 Agent 执行阶段 {stage_name}: thread_id={self._context.thread_id}")
 
-        # 读取结果
-        if result.success:
-            try:
-                if result_file.exists():
-                    import json
-                    with open(result_file, "r", encoding="utf-8") as f:
-                        result_data = json.load(f)
-                        self._context.stages_context["brainstorm_output"] = result_data.get("output", result.output or "")
-                    result_file.unlink(missing_ok=True)
-                else:
-                    self._context.stages_context["brainstorm_output"] = result.output or ""
-            except Exception as e:
-                logger.warning(f"读取 brainstorm-result.json 失败: {e}")
-                self._context.stages_context["brainstorm_output"] = result.output or ""
+        # 调用 Agent 执行
+        result = await self._agent.execute(task_message, context)
+
+        # 更新 PipelineStatus
+        self._status.state = PipelineState.COMPLETED if result.success else PipelineState.FAILED
+        self._status.reason = result.output or result.error or ""
 
         return {
             "success": result.success,
+            "message": result.output or result.error or "",
             "output": result.output,
             "error": result.error,
+            "stage_status": stage_obj.status,
         }
 
 
@@ -269,6 +349,7 @@ class IssuePipeline(Pipeline):
 __all__ = [
     "IssuePipeline",
     "execute_environment",
+    "execute_stage",
     "get_status",
     "get_context",
     "set_context_value",

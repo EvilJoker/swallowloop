@@ -149,7 +149,7 @@ class TestConfigGet:
     def test_get_agent_type_default(self, tmp_path):
         """get_agent_type() 默认值"""
         config = Config.load(config_dir=tmp_path)
-        assert config.get_agent_type() == "mock"
+        assert config.get_agent_type() == "deerflow"
 
     def test_get_deerflow_base_url(self, tmp_path):
         """get_deerflow_base_url()"""

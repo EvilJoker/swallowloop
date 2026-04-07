@@ -70,7 +70,7 @@ class TestTask:
         ctx, result = task.execute({})
 
         assert result.success is False
-        assert result.message == "Task 未返回结果"
+        assert result.message == "Task handler 未返回结果"
 
     def test_task_execute_returns_nothing(self):
         """Task 不返回"""
@@ -81,7 +81,7 @@ class TestTask:
         ctx, result = task.execute({})
 
         assert result.success is False
-        assert result.message == "Task 未返回结果"
+        assert result.message == "Task handler 未返回结果"
 
 
 class TestStage:
@@ -269,7 +269,7 @@ class TestEnvironmentCloneRepoTask:
 
     def test_normalize_repo_url_shorthand(self):
         """测试简写格式 owner/repo 转换"""
-        from swallowloop.domain.pipeline.tasks.environment_clone_repo_task import EnvironmentCloneRepoTask
+        from swallowloop.domain.pipeline.environment_stage.environment_clone_repo_task import EnvironmentCloneRepoTask
 
         task = EnvironmentCloneRepoTask()
 
@@ -286,7 +286,7 @@ class TestEnvironmentCloneRepoTask:
 
     def test_normalize_repo_url_full_https(self):
         """测试完整 HTTPS URL 不变"""
-        from swallowloop.domain.pipeline.tasks.environment_clone_repo_task import EnvironmentCloneRepoTask
+        from swallowloop.domain.pipeline.environment_stage.environment_clone_repo_task import EnvironmentCloneRepoTask
 
         task = EnvironmentCloneRepoTask()
 
@@ -295,7 +295,7 @@ class TestEnvironmentCloneRepoTask:
 
     def test_normalize_repo_url_git_ssh_format(self):
         """测试 SSH 格式转换"""
-        from swallowloop.domain.pipeline.tasks.environment_clone_repo_task import EnvironmentCloneRepoTask
+        from swallowloop.domain.pipeline.environment_stage.environment_clone_repo_task import EnvironmentCloneRepoTask
 
         task = EnvironmentCloneRepoTask()
 

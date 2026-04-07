@@ -6,12 +6,7 @@ import httpx
 
 from .LLMProviderBase import LLMProviderBase, LLMConfig, LLMUsage, LLMProviderEnum
 from ..config import Config
-
-# MiniMax 配额刷新周期（小时）
-MINIMAX_QUOTA_REFRESH_HOURS = 5
-
-# MiniMax 默认配额
-DEFAULT_MINIMAX_QUOTA = 1500
+from ..constants import MINIMAX_QUOTA_REFRESH_HOURS, DEFAULT_MINIMAX_QUOTA
 
 
 class LLMProviderMinimax(LLMProviderBase):

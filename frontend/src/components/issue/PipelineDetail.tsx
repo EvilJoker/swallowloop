@@ -20,6 +20,8 @@ const STAGE_STATUS_CONFIG: Record<StageStatus, { icon: typeof Circle; color: str
   approved: { icon: CheckCircle2, color: 'text-emerald-600', bgColor: 'bg-emerald-500 text-white', label: '完成' },
   rejected: { icon: XCircle, color: 'text-purple-600', bgColor: 'bg-purple-400 text-white', label: '失败' },
   error: { icon: XCircle, color: 'text-red-600', bgColor: 'bg-red-500 text-white', label: '失败' },
+  completed: { icon: CheckCircle2, color: 'text-emerald-600', bgColor: 'bg-emerald-500 text-white', label: '完成' },
+  failed: { icon: XCircle, color: 'text-red-600', bgColor: 'bg-red-500 text-white', label: '失败' },
 };
 
 // 任务状态配置

@@ -11,6 +11,7 @@ from swallowloop.infrastructure.logger import (
     get_logger,
     DailyRotatingFileHandler,
     ColoredFormatter,
+    sanitize_log_message,
 )
 
 
@@ -104,3 +105,43 @@ class TestGetLogger:
         """返回 Logger 实例"""
         logger = get_logger("test")
         assert isinstance(logger, logging.Logger)
+
+
+class TestSanitizeLogMessage:
+    """sanitize_log_message 测试"""
+
+    def test_sanitize_api_key(self):
+        """脱敏 api_key"""
+        msg = "Request failed: api_key=sk-1234567890abcdef"
+        result = sanitize_log_message(msg)
+        assert "sk-1234567890abcdef" not in result
+        assert "api_key=[REDACTED]" in result
+
+    def test_sanitize_token(self):
+        """脱敏 token"""
+        msg = "Auth header: token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
+        result = sanitize_log_message(msg)
+        assert "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9" not in result
+        assert "token=[REDACTED]" in result
+
+    def test_sanitize_json_format(self):
+        """脱敏 JSON 格式的敏感信息"""
+        msg = '{"api_key": "secret123", "password": "mypassword"}'
+        result = sanitize_log_message(msg)
+        assert "secret123" not in result
+        assert "mypassword" not in result
+        assert "[REDACTED]" in result
+
+    def test_sanitize_no_sensitive_data(self):
+        """无敏感信息时保持原样"""
+        msg = "Normal log message without sensitive data"
+        result = sanitize_log_message(msg)
+        assert result == msg
+
+    def test_sanitize_multiple_keys(self):
+        """同时脱敏多个敏感字段"""
+        msg = "api_key=key1 token=token1 secret=secret1"
+        result = sanitize_log_message(msg)
+        assert "key1" not in result
+        assert "token1" not in result
+        assert "secret1" not in result

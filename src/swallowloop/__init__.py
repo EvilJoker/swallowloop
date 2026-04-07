@@ -22,20 +22,18 @@ from .domain import (
 )
 
 # 应用层
-from .application import IssueService, ExecutorService, StageLoop, ExecutorWorkerPool, IssueDTO, WorkspaceDTO
+from .application import IssueService, ExecutorService, LoopService, ExecutorWorkerPool, IssueDTO, WorkspaceDTO
 
 # 基础设施层
 from .infrastructure import (
     InMemoryIssueRepository,
     BaseAgent,
-    MockAgent,
     AgentResult,
     Config,
     LLMConfig,
     LLMProviderEnum,
     setup_logging,
     get_logger,
-    SelfUpdater,
 )
 
 # 接口层
@@ -65,7 +63,7 @@ __all__ = [
     # 应用层
     "IssueService",
     "ExecutorService",
-    "StageLoop",
+    "LoopService",
     "ExecutorWorkerPool",
     "IssueDTO",
     "WorkspaceDTO",
@@ -73,7 +71,6 @@ __all__ = [
     "InMemoryIssueRepository",
     # 基础设施层 - Agent
     "BaseAgent",
-    "MockAgent",
     "AgentResult",
     # 基础设施层 - 配置
     "Config",
@@ -82,8 +79,6 @@ __all__ = [
     # 基础设施层 - 日志
     "setup_logging",
     "get_logger",
-    # 基础设施层 - 自更新
-    "SelfUpdater",
     # 接口层
     "app",
     "run_server",

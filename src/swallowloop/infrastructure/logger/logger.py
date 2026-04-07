@@ -1,9 +1,12 @@
 """日志模块 - 支持按日期滚动的文件日志，支持彩色终端输出"""
 
 import logging
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
+
+from ..constants import SENSITIVE_KEYS
 
 
 class DailyRotatingFileHandler(logging.Handler):
@@ -153,13 +156,36 @@ def setup_logging(log_dir: Path | None = None, level: int = logging.INFO) -> Non
 def get_logger(name: str) -> logging.Logger:
     """
     获取日志器
-    
+
     Args:
         name: 日志器名称，通常使用 __name__
-    
+
     Returns:
         配置好的日志器实例
     """
     if not name.startswith("swallowloop"):
         name = f"swallowloop.{name}"
     return logging.getLogger(name)
+
+
+def sanitize_log_message(msg: str) -> str:
+    """
+    脱敏日志消息，隐藏敏感信息
+
+    Args:
+        msg: 原始日志消息
+
+    Returns:
+        脱敏后的消息
+    """
+    result = msg
+    for key in SENSITIVE_KEYS:
+        # 匹配各种敏感格式: api_key=xxx, "api_key": "xxx", apiKey: xxx
+        patterns = [
+            rf'{key}=["\']?[^"\'\s]+["\']?',
+            rf'"{key}":\s*"[^"]+"',
+            rf'"{key}":\s*\'[^\']+\'',
+        ]
+        for pattern in patterns:
+            result = re.sub(pattern, f'{key}=[REDACTED]', result, flags=re.IGNORECASE)
+    return result

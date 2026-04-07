@@ -16,7 +16,6 @@ class MockExecutor:
         self.called = []
         self.fail_probability = fail_probability
         # 用于模拟失败场景
-        self._prepare_workspace_should_fail = False
         self._execute_should_fail = False
         self._execute_error_message = "mock execution failed"
         # 注入的 agent（用于 Pipeline 执行）
@@ -28,32 +27,10 @@ class MockExecutor:
             return None
         return self._repo.get(issue_id)
 
-    def set_prepare_workspace_fail(self, should_fail: bool):
-        """设置 prepare_workspace 是否失败"""
-        self._prepare_workspace_should_fail = should_fail
-
     def set_execute_fail(self, should_fail: bool, error_message: str = "mock execution failed"):
         """设置 execute 是否失败"""
         self._execute_should_fail = should_fail
         self._execute_error_message = error_message
-
-    def execute_stage(self, issue, stage):
-        self.called.append((str(issue.id), stage))
-        return {"status": "success", "output": "mock output"}
-
-    async def prepare_workspace(self, issue, stage) -> bool:
-        """模拟 prepare_workspace - 正确设置 thread_id 和 thread_path"""
-        self.called.append(("prepare_workspace", str(issue.id), stage))
-        if self._prepare_workspace_should_fail:
-            return False
-
-        # 模拟真实的 prepare_workspace 行为 - 设置 thread_id 和 thread_path
-        if not issue.thread_id:
-            issue.thread_id = f"thread-{issue.id}"
-        if not issue.thread_path:
-            issue.thread_path = f"/tmp/mock-workspace/{issue.thread_id}"
-
-        return True
 
     async def execute_stage(self, issue, stage):
         """异步版本 - 正确模拟状态转换"""

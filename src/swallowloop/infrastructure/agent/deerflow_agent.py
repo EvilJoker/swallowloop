@@ -21,7 +21,7 @@ from ..constants import (
     POLL_INTERVAL_SECONDS,
     MAX_EXECUTE_TIMEOUT_SECONDS,
 )
-from ..logging_utils import sanitize_log_message
+from ..logger import sanitize_log_message
 
 logger = logging.getLogger(__name__)
 

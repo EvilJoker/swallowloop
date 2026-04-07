@@ -27,7 +27,7 @@ class EnvironmentSwitchBranchTask(Task):
         import os
         git_dir = os.path.join(repo_path, ".git")
         if not os.path.exists(git_dir):
-            # 如果不是 git 仓库（由 MockAgent 创建的测试目录），创建假的 git 结构
+            # 如果不是 git 仓库（测试场景），创建假的 git 结构
             try:
                 os.makedirs(git_dir, exist_ok=True)
                 # 创建一个假的 HEAD 文件

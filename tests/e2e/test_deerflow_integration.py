@@ -11,7 +11,7 @@ from swallowloop.application.service.issue_service import IssueService
 from swallowloop.application.service.executor_service import ExecutorService
 from swallowloop.domain.model import Issue, IssueId, Stage, StageStatus
 from swallowloop.domain.repository import IssueRepository
-from swallowloop.infrastructure.agent import DeerFlowAgent, MockAgent, Workspace
+from swallowloop.infrastructure.agent import DeerFlowAgent, Workspace
 
 
 class MockIssueRepository(IssueRepository):
@@ -118,10 +118,10 @@ class TestDeerFlowAgentIntegration:
 
         # 设置有效的 repo_url（Pipeline context 需要这个来 clone）
         issue.repo_url = "https://github.com/test/repo.git"
-        issue.pipeline.context["repo_url"] = "https://github.com/test/repo.git"
+        issue.pipeline.set_context_value("repo_url", "https://github.com/test/repo.git")
         repo.save(issue)
 
-        # 3. 触发 AI（使用 MockAgent 不实际调用 DeerFlow）
+        # 3. 触发 AI
         # 先触发 ENVIRONMENT 阶段（当前阶段）
         result = await issue_service.trigger_ai(str(issue.id), Stage.ENVIRONMENT)
 
@@ -151,47 +151,3 @@ class TestDeerFlowAgentIntegration:
             assert workspace.id == "test-thread-123"
             assert workspace.ready is True
             assert ".deer-flow/threads/test-thread-123" in workspace.workspace_path
-
-
-class TestMockAgentIntegration:
-    """MockAgent 集成测试"""
-
-    @pytest.fixture
-    def mock_agent(self):
-        """创建 MockAgent"""
-        return MockAgent(delay_seconds=0.1)
-
-    @pytest.mark.asyncio
-    async def test_mock_agent_prepare(self):
-        """测试 MockAgent.prepare() 创建本地 workspace"""
-        agent = MockAgent(delay_seconds=0.1)
-
-        workspace = agent.prepare(
-            issue_id="issue-789",
-            context={
-                "repo_url": "https://github.com/test/repo",
-                "branch": "issue-789"
-            }
-        )
-
-        assert workspace.id == "issue-789"
-        assert workspace.ready is True
-        assert ".swallowloop" in workspace.workspace_path
-
-    @pytest.mark.asyncio
-    async def test_mock_agent_execute(self):
-        """测试 MockAgent.execute() 返回成功"""
-        agent = MockAgent(delay_seconds=0.1)
-
-        result = await agent.execute(
-            task="Test task",
-            context={
-                "thread_id": "test-thread",
-                "stage_file": "/tmp/stage.md",
-                "result_file": "/tmp/result.json"
-            }
-        )
-
-        assert result.success is True
-        assert "MockAgent" in result.output
-        assert "任务已完成" in result.output

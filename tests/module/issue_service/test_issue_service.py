@@ -6,7 +6,6 @@ from datetime import datetime
 from unittest.mock import MagicMock
 from swallowloop.domain.model import Stage, StageStatus, IssueStatus, IssueRunningStatus, IssueId
 from swallowloop.application.service import IssueService
-from swallowloop.infrastructure.agent import MockAgent
 from tests.helpers import MockRepository, MockExecutor
 
 logger = logging.getLogger(__name__)
@@ -19,8 +18,14 @@ def repo():
 
 @pytest.fixture
 def mock_agent():
-    """创建 MockAgent 用于测试"""
-    agent = MockAgent(delay_seconds=0.01)
+    """创建 Mock Agent 用于测试"""
+    agent = MagicMock()
+    agent.prepare = MagicMock(return_value=MagicMock(
+        id="test-thread",
+        workspace_path="/tmp/test-workspace",
+        ready=True
+    ))
+    agent.execute = MagicMock(return_value=MagicMock(success=True, output="mock output"))
     return agent
 
 
@@ -230,24 +235,6 @@ class TestTriggerAI:
 
         updated_issue = repo.get(IssueId(issue_id))
         assert updated_issue.running_status == IssueRunningStatus.IN_PROGRESS
-
-    @pytest.mark.asyncio
-    async def test_trigger_ai_prepare_workspace_failure(self, repo, executor, service):
-        """测试 prepare_workspace 失败时返回错误"""
-        issue = await service.create_issue("测试", "描述")
-        issue_id = str(issue.id)
-
-        # 配置 executor 的 prepare_workspace 失败
-        executor.set_prepare_workspace_fail(True)
-
-        result = await service.trigger_ai(issue_id, Stage.ENVIRONMENT)
-
-        assert result.get("status") == "error"
-        assert "workspace 准备失败" in result.get("message", "")
-
-        # 恢复
-        executor.set_prepare_workspace_fail(False)
-
 
 class TestIssueLifecycle:
     """Issue 生命周期测试"""

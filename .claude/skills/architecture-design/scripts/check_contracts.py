@@ -117,7 +117,6 @@ class ContractChecker:
 
         # 检查每个 Agent 实现类
         agent_files = [
-            agent_dir / "mock_agent.py",
             agent_dir / "deerflow_agent.py",
         ]
 
@@ -191,19 +190,6 @@ class ContractChecker:
         print("\n📋 检查具体实现注入...")
 
         # 检查 ExecutorService
-        executor_file = SRC_ROOT / "application" / "service" / "executor_service.py"
-        if executor_file.exists():
-            try:
-                content = executor_file.read_text()
-                if "def __init__" in content:
-                    if "MockAgent" in content and "BaseAgent" not in content:
-                        self.warnings.append(
-                            "ExecutorService 可能直接使用了具体实现而非接口"
-                        )
-                        print(f"   ⚠️  ExecutorService 可能直接使用了具体实现")
-            except Exception:
-                pass
-
         print("   ✅ 没有发现具体实现直接注入")
 
     def report(self):

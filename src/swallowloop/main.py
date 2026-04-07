@@ -6,7 +6,7 @@ import os
 import threading
 from pathlib import Path
 
-from .application.service.stage_loop import StageLoop
+from .application.service.loop_service import LoopService
 from .infrastructure.llm import init_llm
 from .application.service.executor_service import ExecutorService
 from .application.service.clean_service import CleanService
@@ -34,7 +34,7 @@ def create_services():
     """创建共享服务实例"""
     from .infrastructure.instance_registry import register_instance
     from .interfaces.web.api.websockets import manager
-    from .infrastructure.agent import MockAgent, DeerFlowAgent
+    from .infrastructure.agent import DeerFlowAgent
     from .infrastructure.config import Config
 
     # Repository
@@ -62,20 +62,13 @@ def create_services():
         register_instance("llm", None)
 
     # Agent
-    agent_type = config.get("AGENT_TYPE", "mock") if config else os.getenv("AGENT_TYPE", "mock")
+    agent_type = config.get("AGENT_TYPE", "deerflow") if config else os.getenv("AGENT_TYPE", "deerflow")
     deerflow_base_url = config.get("DEERFLOW_BASE_URL", DEFAULT_DEERFLOW_BASE_URL) if config else os.getenv("DEERFLOW_BASE_URL", DEFAULT_DEERFLOW_BASE_URL)
-    if agent_type == "deerflow":
-        agent = DeerFlowAgent(base_url=deerflow_base_url)
-    else:
-        agent = MockAgent(delay_seconds=5.0)
+    agent = DeerFlowAgent(base_url=deerflow_base_url)
     register_instance("agent", agent)
 
-    # CleanService (仅 DeerFlow 模式需要)
-    if agent_type == "deerflow":
-        clean_service = CleanService(repository=repository, agent=agent, interval_hours=1)
-        register_instance("clean_service", clean_service)
-    else:
-        clean_service = None
+    # CleanService
+    clean_service = CleanService(repository=repository, agent=agent, interval_hours=1)
     register_instance("clean_service", clean_service)
 
     # Executor (注入 ws_manager 用于广播)
@@ -103,8 +96,8 @@ def main(port: int = 9500):
     # 1. 创建共享服务
     repository, executor, worker_pool, agent, config, clean_service = create_services()
 
-    # 2. 创建 StageLoop
-    stage_loop = StageLoop(
+    # 2. 创建 LoopService
+    loop_service = LoopService(
         repository=repository,
         worker_pool=worker_pool,
         executor=executor,
@@ -132,10 +125,10 @@ def main(port: int = 9500):
     web_thread.start()
     logger.info(f"Web 服务器已启动（端口 {port}）")
 
-    # 4. 主线程运行 StageLoop（阻塞）
-    logger.info("StageLoop 启动，每 5 秒扫描一次")
+    # 4. 主线程运行 LoopService（阻塞）
+    logger.info("LoopService 启动，每 5 秒扫描一次")
     try:
-        stage_loop.start()
+        loop_service.start()
     except KeyboardInterrupt:
         logger.info("接收到停止信号")
     finally:

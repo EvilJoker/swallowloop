@@ -1,4 +1,4 @@
-"""StageLoop - 后台主循环，定期扫描并触发 NEW 状态的阶段"""
+"""LoopService - 后台主循环，定期扫描并触发 NEW 状态的阶段"""
 import asyncio
 import logging
 import time
@@ -17,8 +17,8 @@ logger = logging.getLogger(__name__)
 AGENT_STATUS_INTERVAL_SECONDS = 30
 
 
-class StageLoop:
-    """Stage 后台循环 - 定期扫描 NEW 状态并触发 AI 执行"""
+class LoopService:
+    """后台主循环 - 定期扫描 NEW 状态并触发 AI 执行"""
 
     def __init__(
         self,
@@ -91,13 +91,7 @@ class StageLoop:
         for issue, stage in all_triggerable:
             can_trigger, reason = self._can_trigger(issue, stage)
             if can_trigger:
-                # 1. 先准备 workspace (async)
-                logger.info(f"准备 workspace: {issue.id}/{stage.value}")
-                if not await self._executor.prepare_workspace(issue, stage):
-                    logger.error(f"workspace 准备失败，跳过: {issue.id}/{stage.value}")
-                    continue
-
-                # 2. 提交到 worker pool
+                # Pipeline 自己会在执行时创建 workspace，不需要提前准备
                 logger.info(f"触发 AI 执行: {issue.id}/{stage.value}")
                 submitted = self._worker_pool.submit(str(issue.id), stage)
                 if not submitted:

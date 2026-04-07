@@ -18,8 +18,8 @@ class Config:
         self._data: dict[str, Any] = {}
         self._env_vars: dict[str, str] = {}
 
-    # 默认 .env 模板
-    DEFAULT_ENV_TEMPLATE = """# SwallowLoop 配置
+    # 默认 .env 模板（内部使用）
+    _DEFAULT_ENV_TEMPLATE = """# SwallowLoop 配置
 
 # ============ 必需配置 ============
 
@@ -42,8 +42,8 @@ LLM_MODEL=openai/MiniMax-M2.5-highspeed
 
 # ============ Worker Agent 配置 ============
 
-# Agent 类型 (mock: 模拟 Agent，deerflow: 使用 DeerFlow)
-AGENT_TYPE=mock
+# Agent 类型 (deerflow: 使用 DeerFlow)
+AGENT_TYPE=deerflow
 
 # 最大 Worker 数量
 MAX_WORKERS=5
@@ -60,8 +60,8 @@ BASE_BRANCH=main
 DEERFLOW_BASE_URL=http://localhost:2026
 """
 
-    # 默认 config.yaml 模板
-    DEFAULT_CONFIG_YAML = """# SwallowLoop 业务配置
+    # 默认 config.yaml 模板（内部使用）
+    _DEFAULT_CONFIG_YAML = """# SwallowLoop 业务配置
 # 此文件中的值可以使用 ${ENV_VAR} 引用环境变量
 
 # 工作目录
@@ -77,7 +77,7 @@ deerflow:
 
 # Agent 配置
 agent:
-  type: ${AGENT_TYPE:mock}
+  type: ${AGENT_TYPE:deerflow}
   max_workers: ${MAX_WORKERS:5}
 
 # GitHub 配置
@@ -143,13 +143,13 @@ base_branch: ${BASE_BRANCH:main}
     def _generate_default_env(cls, path: Path) -> None:
         """生成默认 .env 文件"""
         with open(path, "w", encoding="utf-8") as f:
-            f.write(cls.DEFAULT_ENV_TEMPLATE)
+            f.write(cls._DEFAULT_ENV_TEMPLATE)
 
     @classmethod
     def _generate_default_config_yaml(cls, path: Path) -> None:
         """生成默认 config.yaml 文件"""
         with open(path, "w", encoding="utf-8") as f:
-            f.write(cls.DEFAULT_CONFIG_YAML)
+            f.write(cls._DEFAULT_CONFIG_YAML)
 
     def _load_env_file(self, path: Path) -> None:
         """加载 .env 文件"""
@@ -244,7 +244,7 @@ base_branch: ${BASE_BRANCH:main}
 
     def get_agent_type(self) -> str:
         """获取 Agent 类型"""
-        return self.get("AGENT_TYPE", "mock")
+        return self.get("AGENT_TYPE", "deerflow")
 
     def get_deerflow_base_url(self) -> str:
         """获取 DeerFlow API 地址"""

@@ -10,7 +10,7 @@ export type Stage =
   | 'submit';
 
 // 阶段状态
-export type StageStatus = 'new' | 'pending' | 'approved' | 'rejected' | 'running' | 'error';
+export type StageStatus = 'new' | 'pending' | 'approved' | 'rejected' | 'running' | 'error' | 'completed' | 'failed';
 
 // Issue 状态
 export type IssueStatus = 'active' | 'archived' | 'discarded';
@@ -129,6 +129,8 @@ export const STATUS_COLORS: Record<StageStatus, { bg: string; text: string; dot:
   rejected: { bg: 'bg-purple-100', text: 'text-purple-800', dot: 'bg-purple-500' },
   running: { bg: 'bg-blue-100', text: 'text-blue-800', dot: 'bg-blue-500' },
   error: { bg: 'bg-red-100', text: 'text-red-800', dot: 'bg-red-500' },
+  completed: { bg: 'bg-green-100', text: 'text-green-800', dot: 'bg-green-500' },
+  failed: { bg: 'bg-red-100', text: 'text-red-800', dot: 'bg-red-500' },
 };
 
 // 状态标签
@@ -139,4 +141,6 @@ export const STATUS_LABELS: Record<StageStatus, string> = {
   rejected: '已打回',
   running: '运行中',
   error: '异常',
+  completed: '完成',
+  failed: '失败',
 };

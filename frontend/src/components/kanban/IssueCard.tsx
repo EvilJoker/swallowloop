@@ -26,6 +26,8 @@ const STATUS_COLOR_CONFIG: Record<StageStatus, { bg: string; text: string }> = {
   approved: { bg: 'bg-emerald-100', text: 'text-emerald-600' },
   rejected: { bg: 'bg-purple-100', text: 'text-purple-600' },
   error: { bg: 'bg-red-100', text: 'text-red-600' },
+  completed: { bg: 'bg-emerald-100', text: 'text-emerald-600' },
+  failed: { bg: 'bg-red-100', text: 'text-red-600' },
 };
 
 export function IssueCard({ issue, onClick, onDelete, draggable, className }: IssueCardProps) {

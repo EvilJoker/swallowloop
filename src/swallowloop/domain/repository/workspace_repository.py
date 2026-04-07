@@ -1,4 +1,5 @@
 """工作空间仓库接口"""
+from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from datetime import datetime

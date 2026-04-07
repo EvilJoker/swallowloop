@@ -92,7 +92,7 @@
 | | service | 应用服务：IssueService、ExecutorService、StageLoop |
 | **Infrastructure** | persistence | 持久化：InMemoryIssueRepository、JsonIssueRepository |
 | | executor | 执行器：ExecutorWorkerPool（线程池） |
-| | agent | AI Agent：BaseAgent、MockAgent |
+| | agent | AI Agent：BaseAgent、DeerFlowAgent |
 | | config | 配置管理：Settings |
 | | llm | 大模型配置：LLMConfig、LLMProvider |
 | | logging | 日志：setup_logging、get_logger |

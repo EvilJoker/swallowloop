@@ -98,7 +98,7 @@
 | 属性 | 说明 |
 |------|------|
 | 定义 | 与 DeerFlow 交互执行 AI 任务的组件 |
-| 类型 | MockAgent（模拟）、DeerFlowAgent（真实） |
+| 类型 | DeerFlowAgent（真实） |
 
 ### Thread（DeerFlow 线程）
 | 属性 | 说明 |
